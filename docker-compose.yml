@@ -75,6 +75,8 @@ services:
       # Solo los usa la semilla, y solo si la ejecutas a mano (ver encabezado).
       SEED_ADMIN_LOGIN: ${SEED_ADMIN_LOGIN:-admin}
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
+      # Solo la usa la semilla con `--demo` (gerente.demo / operario.demo). Jamás en producción.
+      SEED_DEMO_PASSWORD: ${SEED_DEMO_PASSWORD:-}
     # Sin `ports`: el backend NO se expone al exterior. El único que necesita hablarle es el
     # frontend, y lo hace por la red interna. Menos superficie expuesta, y obliga a que todo
     # el tráfico pase por el proxy `/api/*` con su cookie first-party (research R14).
@@ -103,9 +105,16 @@ services:
       backend:
         condition: service_healthy
     environment:
-      # `BACKEND_URL` NO va aquí a propósito: en ejecución no tendría ningún efecto sobre el
-      # proxy `/api/*` (queda fijado al compilar — ver `args` arriba). Ponerla como variable de
-      # entorno daría la falsa impresión de que se puede cambiar sin reconstruir la imagen.
+      # `BACKEND_URL` hace falta en LOS DOS momentos, por dos consumidores distintos:
+      #   - en BUILD (ver `args` arriba) para el proxy `/api/*` del navegador, que Next congela
+      #     en el manifiesto de rutas al compilar;
+      #   - en EJECUCIÓN, aquí, porque los Server Components llaman al backend directamente
+      #     (`frontend/src/lib/api/servidor.ts`), sin pasar por ese proxy.
+      # Quitarla de aquí —creyendo que solo servía para el proxy— dejaba el frontend llamándose
+      # a sí mismo en `localhost:4000`: el login devolvía 204, pero al navegar el layout no
+      # lograba resolver el perfil y rebotaba a `/login`. Es decir, "no se podía entrar" aunque
+      # las credenciales fueran correctas.
+      BACKEND_URL: http://backend:4000
       NODE_ENV: production
     ports:
       - "${PUERTO_PUBLICO:-3000}:3000"

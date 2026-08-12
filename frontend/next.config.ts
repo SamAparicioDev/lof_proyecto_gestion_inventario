@@ -22,6 +22,13 @@
  * construyó. Si algún día se necesita una sola imagen para varios entornos, hay que sustituir
  * esta reescritura por un manejador de ruta (`app/api/[...ruta]/route.ts`) que sí lea la
  * variable en cada petición.
+ *
+ * OJO: esto vale SOLO para esta reescritura, que es el camino del NAVEGADOR. Los Server
+ * Components llaman al backend por su cuenta desde `lib/api/servidor.ts`, y ahí `BACKEND_URL`
+ * SÍ se lee en cada petición — así que la variable debe existir también como entorno del
+ * contenedor, no solo como argumento de build. Darla por prescindible en ejecución dejaba el
+ * inicio de sesión aparentemente roto: la API respondía 204 y aun así la aplicación devolvía a
+ * `/login`.
  */
 import path from 'node:path';
 import type { NextConfig } from 'next';
