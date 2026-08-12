@@ -39,6 +39,24 @@ endpoints:
 | `POST /api/auth/logout` | A,G,O | — | `204` + limpia cookie | — |
 | `GET /api/auth/perfil` | A,G,O | — | `{ id, nombreCompleto, rol: {id, nombre}, permisos: string[], debeCambiarPassword }` (T106 — ver § Roles y permisos) | `401` |
 | `PUT /api/auth/password` | A,G,O | `esquemaCambiarPassword` {passwordActual, passwordNueva} | `204`; limpia `debeCambiarPassword` | `400` campos; `409` password actual incorrecta |
+| `PUT /api/auth/perfil` | A,G,O | `esquemaActualizarMiPerfil` {nombreCompleto, email} | `204` (US14, FR-080) | `400` email duplicado o campos inválidos |
+
+**Por qué los datos propios viven en `/api/auth` y no en `/api/usuarios/:id`** (US14): son dos
+capacidades distintas y conviene que no se confundan. `/api/usuarios` es ADMINISTRAR A OTROS y
+exige el permiso `usuarios.gestionar`; `/api/auth/*` es SOBRE UNO MISMO y no exige ninguno —
+igual que `PUT /api/auth/password`, que ya seguía este criterio desde la fase Foundational.
+
+Reglas de `PUT /api/auth/perfil`, todas verificadas en el servidor:
+- El usuario afectado sale SIEMPRE del token de sesión, nunca del cuerpo ni de la URL
+  (FR-081). Por eso la ruta no lleva `:id`: no hay forma de dirigirla a otra persona.
+- Solo se aplican `nombreCompleto` y `email`. `login`, `rol` y `estado` NO son editables por
+  esta vía (FR-082) y el esquema Zod ni siquiera los admite, así que enviarlos no tiene efecto:
+  cambiar el propio rol sería escalada de privilegios y cambiar el propio estado, darse de baja.
+- `email` conserva su unicidad (FR-083): duplicado → `400` con el campo señalado, sin aplicar
+  nada, mismo criterio que el alta de usuarios en US6.
+- La contraseña NO se toca aquí: ya existe `PUT /api/auth/password`, que exige la contraseña
+  actual. Duplicarla en este endpoint la debilitaría (permitiría cambiarla sin conocer la
+  anterior).
 
 ## Usuarios (`/api/usuarios`) — solo Administrador (FR-005…FR-009)
 

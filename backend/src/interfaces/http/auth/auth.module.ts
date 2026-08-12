@@ -13,6 +13,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
+import { ActualizarMiPerfilCasoUso } from '../../../aplicacion/usuarios/actualizar-mi-perfil.caso-uso';
 import { CambiarMiPasswordCasoUso } from '../../../aplicacion/usuarios/cambiar-mi-password.caso-uso';
 import { HASHEADOR } from '../../../dominio/puertos/hasheador';
 import { REPOSITORIO_USUARIOS } from '../../../dominio/puertos/repositorio-usuarios';
@@ -40,6 +41,7 @@ import { ControladorAuth } from './controlador-auth';
     { provide: HASHEADOR, useClass: AdaptadorHashBcrypt },
     { provide: REPOSITORIO_USUARIOS, useClass: RepositorioUsuariosPrisma },
     CambiarMiPasswordCasoUso,
+    ActualizarMiPerfilCasoUso,
   ],
   // JwtModule se reexporta para que los guards globales de app.module.ts (JwtAuthGuard,
   // que firma la renovación deslizante) puedan inyectar JwtService. REPOSITORIO_USUARIOS se

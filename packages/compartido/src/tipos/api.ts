@@ -62,6 +62,16 @@ export interface PerfilSesion {
   id: number;
   nombreCompleto: string;
   /**
+   * Correo del propio usuario (US14/FR-080). Se incorporó para poder precargar la pantalla de
+   * datos personales sin pedir otro endpoint: es un dato de uno mismo, y quien recibe este
+   * perfil es exactamente esa persona. No expone información de terceros — el correo de OTROS
+   * usuarios sigue viviendo solo en `/api/usuarios`, que exige `usuarios.gestionar`.
+   */
+  email: string;
+  /** Nombre de usuario propio (US14): se muestra en solo lectura en la pantalla de datos
+   *  personales — identifica los registros históricos de esa persona y por eso no se edita. */
+  login: string;
+  /**
    * Rol del usuario IDENTIFICADO (`{id, nombre}`, T106): un rol propio puede renombrarse, así
    * que su nombre no es un identificador estable, y su id es lo que el formulario de usuarios
    * envía como `rolId`. Es una ETIQUETA para la interfaz — quién puede qué lo dicen

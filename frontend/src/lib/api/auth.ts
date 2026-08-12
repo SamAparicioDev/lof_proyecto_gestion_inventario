@@ -6,7 +6,12 @@
  * workspace (frontend/CLAUDE.md). Las consumen: la página de login (T023), la de cambio de
  * contraseña (T024) y el proveedor de sesión de Client Components (T026).
  */
-import type { DatosCambiarPassword, DatosLogin, PerfilSesion } from '@trazo/compartido';
+import type {
+  DatosActualizarMiPerfil,
+  DatosCambiarPassword,
+  DatosLogin,
+  PerfilSesion,
+} from '@trazo/compartido';
 import { api } from './cliente';
 
 /**
@@ -43,6 +48,19 @@ export function obtenerPerfil(): Promise<PerfilSesion> {
  */
 export function cambiarPassword(datos: DatosCambiarPassword): Promise<void> {
   return api<void>('/api/auth/password', {
+    method: 'PUT',
+    body: JSON.stringify(datos),
+  });
+}
+
+/**
+ * PUT /api/auth/perfil — el usuario edita SUS PROPIOS datos personales (US14, FR-080).
+ * Éxito: `204`. Error: `400` con `campos` si el correo ya está en uso o los datos no son
+ * válidos. Solo viajan nombre y correo: el rol y el estado no se editan por esta vía
+ * (FR-082), y la contraseña tiene su propia función arriba.
+ */
+export function actualizarMiPerfil(datos: DatosActualizarMiPerfil): Promise<void> {
+  return api<void>('/api/auth/perfil', {
     method: 'PUT',
     body: JSON.stringify(datos),
   });

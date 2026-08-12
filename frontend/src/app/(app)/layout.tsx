@@ -25,6 +25,7 @@
  *  4. Expone el perfil ya resuelto a los Client Components vía `ProveedorSesion` (T026),
  *     evitando que cada uno vuelva a pedir `GET /api/auth/perfil` por su cuenta.
  */
+import Link from 'next/link';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { CubeTransparent } from '@phosphor-icons/react/dist/ssr';
@@ -69,9 +70,14 @@ export default async function LayoutApp({ children }: { children: React.ReactNod
           <NavegacionLateral permisos={perfil.permisos} />
 
           <div id="sideuser" className="mt-auto flex flex-col gap-2">
-            <div
-              className="flex items-center gap-2.5 px-1.5 py-2"
-              style={{ borderTop: '1px solid var(--color-divider)' }}
+            {/* El bloque de usuario es el enlace a los datos personales (US14): es donde el
+                usuario ya mira su propio nombre, así que es donde espera poder corregirlo. Sin
+                permiso asociado a propósito — son sus datos, no la administración de otros. */}
+            <Link
+              href="/mi-perfil"
+              title="Ver y editar mis datos personales"
+              className="flex items-center gap-2.5 rounded-md px-1.5 py-2 no-underline transition-colors hover:bg-white/[0.06]"
+              style={{ borderTop: '1px solid var(--color-divider)', color: 'var(--color-text)' }}
             >
               <div
                 className="grid size-7.5 flex-none place-items-center rounded-full text-xs"
@@ -87,7 +93,7 @@ export default async function LayoutApp({ children }: { children: React.ReactNod
                     Quién puede qué lo dicen `perfil.permisos` y el guard del servidor. */}
                 <div className="text-muted text-[11px]">{perfil.rol.nombre}</div>
               </div>
-            </div>
+            </Link>
             <BotonCerrarSesion />
           </div>
 

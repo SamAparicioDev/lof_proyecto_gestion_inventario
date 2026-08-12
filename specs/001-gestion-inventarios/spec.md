@@ -224,6 +224,24 @@ Cualquier usuario acota un listado por los campos con los que realmente piensa s
 
 ---
 
+### User Story 14 - Editar mis propios datos personales (Priority: P3)
+
+Cualquier usuario con sesión iniciada abre su perfil y corrige su nombre completo y su correo electrónico, sin depender de que un Administrador lo haga por él. Desde la misma pantalla puede cambiar su contraseña, que ya era posible.
+
+**Why this priority**: hoy un usuario que se casa, cambia de correo o al que escribieron mal el nombre al darlo de alta tiene que pedirle a un Administrador que lo corrija; y su nombre aparece en cada movimiento de inventario que registra, así que un dato mal escrito se propaga a toda la trazabilidad. No es P1 porque el sistema opera perfectamente sin ello y la corrección ya es posible por la vía administrativa (US6).
+
+**Independent Test**: Se prueba entrando con un usuario cualquiera, cambiando su nombre y su correo, y verificando que el cambio se refleja de inmediato en la aplicación (por ejemplo, en el bloque de usuario de la navegación) y en los movimientos que ese usuario ya había registrado. Entrega valor por sí sola: autonomía sobre los datos propios.
+
+**Acceptance Scenarios**:
+
+1. **Given** un usuario con sesión iniciada en su perfil, **When** corrige su nombre completo y su correo y guarda, **Then** los cambios quedan aplicados, se ven de inmediato en la aplicación sin volver a iniciar sesión, y sus movimientos históricos pasan a mostrar el nombre corregido.
+2. **Given** un usuario que escribe un correo ya usado por otra persona, **When** guarda, **Then** el sistema lo rechaza indicando el campo del error en español y no aplica ningún cambio.
+3. **Given** un usuario en su perfil, **When** observa la pantalla, **Then** ve su usuario y su rol como datos de solo lectura: el nombre de usuario identifica sus registros históricos y el rol define lo que puede hacer, así que ninguno se cambia desde aquí.
+4. **Given** un usuario que intenta modificar su propio rol o su estado enviando esos datos directamente a la API, **When** lo hace, **Then** el sistema los ignora por completo y solo aplica nombre y correo.
+5. **Given** un usuario en su perfil, **When** cambia su contraseña, **Then** funciona igual que siempre (exige la contraseña actual) sin duplicar esa funcionalidad en otra pantalla.
+
+---
+
 ### Edge Cases
 
 - **Salida mayor al disponible**: debe rechazarse siempre, incluida la carrera entre dos usuarios simultáneos sobre el mismo producto (solo una confirmación puede ganar).
@@ -362,6 +380,13 @@ Cualquier usuario acota un listado por los campos con los que realmente piensa s
 - **FR-078**: Cuando un listado tiene al menos un filtro activo, DEBE mostrarlos en pantalla con su valor legible y ofrecer una acción única para limpiarlos todos: el usuario nunca debe quedarse mirando pocos resultados sin saber por qué.
 - **FR-079**: El estado vacío de un listado DEBE distinguir "no hay registros todavía" de "no hay registros que cumplan los filtros aplicados"; ambos textos en español.
 
+**Datos personales del propio usuario (US14)**
+
+- **FR-080**: Todo usuario autenticado DEBE poder consultar y editar sus propios datos personales —nombre completo y correo electrónico— sin necesidad de un permiso especial ni de intervención de un Administrador.
+- **FR-081**: El usuario sobre el que se aplica el cambio DEBE resolverse SIEMPRE desde la sesión, nunca desde un dato enviado por el cliente: nadie puede editar a otro por esta vía (para eso existe la gestión de usuarios, que sí exige permiso).
+- **FR-082**: Por esta vía NO se pueden modificar el nombre de usuario (identifica los registros históricos), el rol (definiría los propios permisos) ni el estado (nadie se da de baja a sí mismo); enviarlos no DEBE tener ningún efecto.
+- **FR-083**: El correo DEBE seguir siendo único entre usuarios; un correo ya usado se rechaza señalando el campo, sin aplicar ningún cambio.
+
 **Auditoría y trazabilidad (transversal)**
 
 - **FR-045**: Toda operación de creación, edición, cambio de estado o anulación DEBE registrar usuario y fecha/hora; los registros con relevancia de inventario DEBEN conservar además el documento asociado.
@@ -401,6 +426,7 @@ Cualquier usuario acota un listado por los campos con los que realmente piensa s
 - **SC-015**: El 100% de los listados y documentos operativos del sistema (ingresos, salidas y los 4 reportes) se exporta a PDF y Excel conservando filtros y cuadrando con la pantalla; un documento de un cliente con logo cargado sale listo para enviárselo a ese cliente sin edición posterior.
 - **SC-016**: El 100% de los cambios de costo de producto —vengan de carga masiva, edición manual o recepción de mercancía— queda registrado con costo anterior, costo nuevo, usuario y fecha, y es consultable desde la ficha del producto; el stock de un producto sigue siendo exactamente igual a la suma de sus movimientos después de cualquier cambio de costo.
 - **SC-017**: Cada uno de los 5 listados (inventario, ingresos, salidas, clientes, usuarios) se acota por cualquiera de sus campos filtrables sin recorrer páginas a mano: un filtro devuelve EXACTAMENTE el conjunto esperado (verificado con datos conocidos contra la base real), los filtros activos son visibles y se limpian en un solo paso, y ningún filtro nuevo degrada el tiempo de respuesta por debajo del umbral de SC-008.
+- **SC-018**: Un usuario corrige su propio nombre y correo desde su perfil sin intervención de un Administrador, el cambio se refleja de inmediato en la aplicación sin volver a iniciar sesión, y por esa misma vía le resulta imposible alterar su rol, su estado o su nombre de usuario.
 
 ## Assumptions
 

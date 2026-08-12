@@ -369,6 +369,22 @@ carpetas, configs y archivos base ya está creado y documentado en el repositori
 
 ---
 
+## Phase 17: User Story 14 - Editar mis propios datos personales (Priority: P3)
+
+**Goal**: Todo usuario autenticado corrige su nombre y su correo sin depender de un Administrador, sin poder tocar por esa vía su rol, su estado ni su nombre de usuario (FR-080…FR-083)
+
+**Independent Test**: Entrar con cualquier usuario, cambiar nombre y correo, y verificar que se refleja de inmediato en la aplicación y en sus movimientos históricos (US14-AS1…AS5)
+
+- [x] T140 [US14] Esquema `esquemaActualizarMiPerfil` en `packages/compartido/src/esquemas/usuarios.ts` — SOLO `nombreCompleto` y `email`, reutilizando los mismos límites y mensajes que `esquemaActualizarUsuario` (no duplicar reglas). Que el esquema no admita `rol`/`estado`/`login` es la primera barrera de FR-082
+- [x] T141 [US14] Caso de uso `backend/src/aplicacion/usuarios/actualizar-mi-perfil.caso-uso.ts` — recibe el `usuarioId` de la SESIÓN (nunca del cuerpo, FR-081) y solo esos dos campos. Reutiliza `RepositorioUsuarios.actualizar`, que ya traduce el `UNIQUE(email)` a error de campo (FR-083); si su firma exige `rol`, se lee el usuario actual y se conserva el suyo — jamás uno recibido del cliente
+- [x] T142 [US14] `PUT /api/auth/perfil` en `controlador-auth.ts` (roles A,G,O, sin `@RequierePermiso`: son los datos propios), con `@UsuarioActual()` como única fuente del id — mismo patrón que `PUT /api/auth/password`
+- [x] T143 [US14] Frontend `frontend/src/app/(app)/mi-perfil/page.tsx` + `frontend/src/componentes/perfil/formulario-mi-perfil.tsx`: nombre y correo editables; usuario y rol visibles en solo lectura con una nota de por qué no se editan; enlace al cambio de contraseña (reutiliza `/cambiar-password`, no duplicar el formulario). Enlazado desde el bloque de usuario de `(app)/layout.tsx`
+- [ ] T144 [P] [US14] Pruebas de integración en `backend/test/integracion/mi-perfil.spec.ts`: el cambio se aplica y `GET /api/auth/perfil` lo refleja sin re-login; email duplicado → 400 con campo y sin aplicar nada; **enviar `rolId`/`estado`/`login` en el cuerpo NO los cambia** (verificado en BD, FR-082); sin sesión → 401; y un usuario NO puede alterar a otro por esta vía
+
+**Checkpoint**: Cada quien mantiene sus propios datos al día sin pedirle nada al Administrador
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies

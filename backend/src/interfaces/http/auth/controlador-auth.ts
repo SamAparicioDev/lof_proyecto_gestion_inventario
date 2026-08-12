@@ -13,12 +13,15 @@ import { Body, Controller, Get, HttpCode, Inject, Post, Put, Res, UnauthorizedEx
 import { JwtService } from '@nestjs/jwt';
 import type { Response } from 'express';
 import {
+  esquemaActualizarMiPerfil,
   esquemaCambiarPassword,
   esquemaLogin,
+  type DatosActualizarMiPerfil,
   type DatosCambiarPassword,
   type DatosLogin,
   type PerfilSesion,
 } from '@trazo/compartido';
+import { ActualizarMiPerfilCasoUso } from '../../../aplicacion/usuarios/actualizar-mi-perfil.caso-uso';
 import { CambiarMiPasswordCasoUso } from '../../../aplicacion/usuarios/cambiar-mi-password.caso-uso';
 import type { Usuario } from '../../../dominio/entidades/usuario';
 import { HASHEADOR, type Hasheador } from '../../../dominio/puertos/hasheador';
@@ -47,6 +50,7 @@ export class ControladorAuth {
     @Inject(REPOSITORIO_USUARIOS) private readonly repositorioUsuarios: RepositorioUsuarios,
     private readonly jwtService: JwtService,
     private readonly cambiarMiPassword: CambiarMiPasswordCasoUso,
+    private readonly actualizarMiPerfil: ActualizarMiPerfilCasoUso,
   ) {}
 
   /**
@@ -105,6 +109,8 @@ export class ControladorAuth {
     return {
       id: usuario.id,
       nombreCompleto: usuario.nombreCompleto,
+      email: usuario.email,
+      login: usuario.login,
       rol: { id: usuario.rolAsignado.id, nombre: usuario.rolAsignado.nombre },
       permisos: [...usuario.rolAsignado.permisos],
       debeCambiarPassword: usuario.debeCambiarPassword,
@@ -125,6 +131,31 @@ export class ControladorAuth {
       usuarioId: usuario.id,
       passwordActual: datos.passwordActual,
       passwordNueva: datos.passwordNueva,
+    });
+  }
+
+  /**
+   * `PUT /api/auth/perfil` — el usuario edita SUS PROPIOS datos personales (US14, FR-080).
+   *
+   * Sin `@RequierePermiso` a propósito, igual que `PUT /api/auth/password`: administrar a OTROS
+   * exige `usuarios.gestionar` y vive en `/api/usuarios`; esto son los datos de uno mismo, y
+   * exigir un permiso para ellos dejaría a un rol propio sin poder corregir su propio correo.
+   *
+   * La ruta NO lleva `:id`: el usuario afectado sale del token de sesión (FR-081), así que no
+   * existe forma de dirigirla a otra persona. Y `esquemaActualizarMiPerfil` solo admite nombre
+   * y correo, de modo que un `rolId` o un `estado` enviados en el cuerpo se descartan antes de
+   * llegar al caso de uso (FR-082).
+   */
+  @Put('perfil')
+  @HttpCode(204)
+  async actualizarPerfil(
+    @Body(new PipeValidacionZod(esquemaActualizarMiPerfil)) datos: DatosActualizarMiPerfil,
+    @UsuarioActual() usuario: Usuario,
+  ): Promise<void> {
+    await this.actualizarMiPerfil.ejecutar({
+      usuarioId: usuario.id,
+      nombreCompleto: datos.nombreCompleto,
+      email: datos.email,
     });
   }
 }

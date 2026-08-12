@@ -95,6 +95,26 @@ export const esquemaActualizarUsuario = z.object({
 export type DatosActualizarUsuario = z.infer<typeof esquemaActualizarUsuario>;
 
 /**
+ * Body de `PUT /api/auth/perfil` — los datos que un usuario edita DE SÍ MISMO (US14, FR-080).
+ *
+ * Es `esquemaActualizarUsuario` SIN `rolId`, y esa ausencia es la funcionalidad, no un olvido:
+ * `.object()` de Zod DESCARTA las claves que no declara, así que un `rolId`, `estado` o `login`
+ * enviados en el cuerpo no llegan siquiera al caso de uso (FR-082). Cambiarse el propio rol
+ * sería una escalada de privilegios —justo lo que FR-057b impide en la gestión de roles— y
+ * cambiarse el estado, darse de baja a uno mismo.
+ *
+ * Los campos se derivan de `esquemaActualizarUsuario.shape` para que las reglas y los mensajes
+ * sean literalmente los MISMOS: si mañana cambia el límite del nombre, cambia en los dos sitios
+ * a la vez. La contraseña no está aquí: la cambia `esquemaCambiarPassword`, que exige la
+ * actual — permitirla en este endpoint dejaría cambiarla sin conocer la anterior.
+ */
+export const esquemaActualizarMiPerfil = z.object({
+  nombreCompleto: esquemaActualizarUsuario.shape.nombreCompleto,
+  email: esquemaActualizarUsuario.shape.email,
+});
+export type DatosActualizarMiPerfil = z.infer<typeof esquemaActualizarMiPerfil>;
+
+/**
  * Body de `PUT /api/usuarios/:id/restablecer-password` — a diferencia de
  * `esquemaCambiarPassword` (que exige la contraseña actual para que el propio usuario
  * cambie la suya), el Administrador restablece la de OTRO usuario sin conocerla; el caso
