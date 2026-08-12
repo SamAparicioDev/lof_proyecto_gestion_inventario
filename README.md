@@ -72,7 +72,49 @@ backend/src:  interfaces/http → aplicacion → dominio ← infraestructura
 - **Comentarios**: cada caso de uso/puerto/controlador lleva TSDoc con el requisito que
   implementa — `grep -r "FR-028" backend/src` te lleva al código de esa regla.
 
-## Puesta en marcha
+## Puesta en marcha con Docker (la vía corta)
+
+Levanta la aplicación completa —base de datos, backend y frontend— sin instalar Node ni
+PostgreSQL. Verificado de punta a punta el 2026-08-12.
+
+```bash
+cp .env.docker.example .env    # y edita los valores: JWT_SECRET es obligatorio
+docker compose up -d --build
+docker compose run --rm backend node backend/dist-seed/seed.js   # crea el administrador
+```
+
+La aplicación queda en <http://localhost:3000> y se entra con el `SEED_ADMIN_LOGIN` /
+`SEED_ADMIN_PASSWORD` del `.env` (el usuario nace obligado a cambiar la contraseña, FR-005).
+Añade `--demo` al final del comando de semilla para crear además `gerente.demo` y
+`operario.demo`.
+
+Cosas que conviene saber, aprendidas levantándolo:
+
+- **Las migraciones se aplican solas** al arrancar el backend (`prisma migrate deploy`, que
+  nunca borra datos y es idempotente). La semilla **no**: crear un usuario con contraseña
+  conocida debe ser una decisión explícita, no un efecto secundario de `up`.
+- **`JWT_SECRET` no tiene valor por defecto**: si falta, `docker compose up` aborta a
+  propósito. Un secreto de firma con valor por defecto es un secreto público.
+- **El backend no se publica al exterior**: solo habla con el frontend por la red interna de
+  Docker. Todo el tráfico entra por el proxy `/api/*` del frontend, que es lo que mantiene la
+  cookie de sesión como first-party.
+- **Si ya tienes un PostgreSQL nativo ocupando el 5432**, el contenedor publica su base en el
+  puerto `PUERTO_DB` del `.env` (5433 por defecto en un entorno así) para que convivan sin
+  tocar tus datos locales.
+- **La URL del backend queda fijada al construir la imagen del frontend**, no en ejecución:
+  Next serializa el destino de las reescrituras `/api/*` durante el build. Por eso viaja como
+  `args.BACKEND_URL` en `docker-compose.yml`. Si cambias esa URL, hay que reconstruir la
+  imagen; ponerla como variable de entorno no surte efecto.
+- Los secretos se inyectan en tiempo de ejecución y **nunca** quedan dentro de una capa de la
+  imagen (`.dockerignore` excluye todos los `.env`).
+
+```bash
+docker compose logs -f            # ver qué está pasando
+docker compose down               # parar (los datos sobreviven en el volumen)
+docker compose down -v            # parar y BORRAR la base de datos
+```
+
+## Puesta en marcha para desarrollo (sin Docker)
 
 Requisitos: **Node.js 22+** y una instancia de **PostgreSQL 16+** accesible — vía
 `docker compose up -d db` (`docker-compose.yml`, requiere Docker Desktop) o una instalación
