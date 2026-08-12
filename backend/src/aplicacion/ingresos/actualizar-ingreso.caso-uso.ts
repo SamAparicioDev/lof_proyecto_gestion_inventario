@@ -1,0 +1,62 @@
+/**
+ * Caso de uso `ActualizarIngresoCasoUso` — reemplaza cabecera y líneas de un ingreso
+ * (`PUT /api/ingresos/:id`, US1-AS5). Solo editable mientras está `PENDIENTE`: recalcula
+ * totales (FR-014) porque las líneas cambian por completo.
+ *
+ * Carga el ingreso primero y valida el estado ANTES de llamar al repositorio — da un
+ * mensaje de negocio inmediato en el 99% de los casos. La comprobación real y atómica
+ * sigue viviendo en `RepositorioIngresosPrisma.actualizar` (dentro de su propia
+ * transacción, ver T030): si el ingreso pasó a `RECIBIDO` entre esta lectura y la
+ * escritura (carrera con otro usuario), el adaptador vuelve a rechazar con
+ * `EstadoInvalido` — esta capa no sustituye esa garantía, solo mejora el mensaje del
+ * camino feliz.
+ *
+ * Implementa: FR-013/FR-014 (edición de cabecera y líneas con recálculo de totales) y
+ * FR-017 (un ingreso `RECIBIDO` o posterior ya no es editable — US1-AS5).
+ */
+import { Inject, Injectable } from '@nestjs/common';
+import type { CasoDeUso } from '../comunes/caso-de-uso';
+import { EstadoInvalido, NoEncontrado } from '../../dominio/comunes/errores';
+import { REPOSITORIO_INGRESOS, type RepositorioIngresos } from '../../dominio/puertos/repositorio-ingresos';
+import type { LineaCrearIngresoEntrada } from './crear-ingreso.caso-uso';
+
+/** Entrada: datos validados por `esquemaActualizarIngreso` + auditoría (FR-045). */
+export interface ActualizarIngresoEntrada {
+  readonly ingresoId: number;
+  readonly numeroFactura: string;
+  readonly fechaFactura: string;
+  readonly proveedor: string;
+  readonly fechaRecepcion: string;
+  readonly observaciones: string | null;
+  readonly lineas: readonly LineaCrearIngresoEntrada[];
+  /** Quién edita el ingreso — nunca confiar en un valor del body (FR-045). */
+  readonly usuarioId: number;
+}
+
+@Injectable()
+export class ActualizarIngresoCasoUso implements CasoDeUso<ActualizarIngresoEntrada, void> {
+  constructor(@Inject(REPOSITORIO_INGRESOS) private readonly repositorioIngresos: RepositorioIngresos) {}
+
+  async ejecutar(entrada: ActualizarIngresoEntrada): Promise<void> {
+    const ingreso = await this.repositorioIngresos.buscarPorId(entrada.ingresoId);
+    if (!ingreso) {
+      throw new NoEncontrado('El ingreso');
+    }
+    if (ingreso.estado !== 'PENDIENTE') {
+      throw new EstadoInvalido('Solo un ingreso PENDIENTE puede editarse');
+    }
+
+    await this.repositorioIngresos.actualizar(
+      entrada.ingresoId,
+      {
+        numeroFactura: entrada.numeroFactura,
+        fechaFactura: new Date(entrada.fechaFactura),
+        proveedor: entrada.proveedor,
+        fechaRecepcion: new Date(entrada.fechaRecepcion),
+        observaciones: entrada.observaciones,
+        lineas: entrada.lineas.map((linea) => ({ ...linea })),
+      },
+      entrada.usuarioId,
+    );
+  }
+}

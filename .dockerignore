@@ -1,0 +1,47 @@
+# Contexto de build de las imágenes de Trazo.
+#
+# El contexto de AMBOS Dockerfile es la RAÍZ del repositorio (no `backend/` ni `frontend/`),
+# porque esto es un monorepo de npm workspaces: para instalar dependencias hace falta el
+# `package-lock.json` de la raíz y el `package.json` de los tres workspaces. Ver el encabezado
+# de `backend/Dockerfile`.
+#
+# Todo lo que se excluya aquí ni se envía al daemon ni puede colarse en una capa de la imagen.
+
+# Dependencias y artefactos de compilación: cada Dockerfile los reconstruye dentro de la
+# imagen. Copiarlos desde el host además rompería la portabilidad (binarios nativos de
+# Prisma/bcrypt compilados para Windows dentro de una imagen Linux).
+node_modules
+**/node_modules
+backend/dist
+frontend/.next
+packages/compartido/dist
+*.tsbuildinfo
+**/*.tsbuildinfo
+
+# SECRETOS — nunca en una imagen. Las variables se inyectan en tiempo de ejecución
+# (docker compose), no se hornean en la capa.
+.env
+**/.env
+**/.env.local
+**/*.env.local
+
+# Pruebas, artefactos y documentación: no forman parte del artefacto desplegable.
+tests
+**/test
+**/*.spec.ts
+playwright.config.ts
+test-results
+playwright-report
+specs
+docs
+.specify
+.claude
+*.md
+
+# Metadatos del entorno de desarrollo.
+.git
+.gitignore
+.vscode
+.idea
+docker-compose.yml
+.dockerignore

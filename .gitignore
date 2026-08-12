@@ -1,0 +1,32 @@
+# Dependencias
+node_modules/
+
+# Builds
+dist/
+.next/
+out/
+packages/compartido/dist/
+
+# Entornos — NUNCA subir credenciales al repositorio
+.env
+.env.local
+.env*.local
+
+# Bases de datos y logs locales
+*.log
+*.tsbuildinfo
+
+# Prisma (el cliente se genera en cada instalación)
+backend/src/generated/
+
+# Reportes de pruebas
+coverage/
+playwright-report/
+test-results/
+
+# Sistemas operativos / editores
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json

@@ -1,0 +1,304 @@
+/**
+ * Adaptador `RepositorioClientesPrisma` — implementa el puerto `RepositorioClientes` del
+ * dominio con Prisma (patrón Repository/Adapter, docs/arquitectura.md §3). Único punto del
+ * backend donde el modelo `clientes` de Prisma se traduce a la entidad `Cliente` del
+ * dominio: convierte `BigInt` a `number` (el dominio no conoce el tipo de columna de la BD
+ * — docs/arquitectura.md §2).
+ *
+ * CRUD estándar SIN atomicidad de stock ni bloqueo de filas: a diferencia de
+ * `repositorio-ingresos.prisma.ts`, esta historia no tiene invariante de stock que proteger
+ * (Principio V, YAGNI) — cada método es una única operación de Prisma, sin
+ * `UnidadDeTrabajo`.
+ *
+ * Traduce violaciones técnicas de Postgres a errores de dominio tipados: `P2002` (UNIQUE) en
+ * `nit` → `Duplicado('nit', ...)` (FR-035) y `P2025` (registro inexistente) en
+ * `actualizar`/`cambiarEstado` → `NoEncontrado` (contrato: `PUT /api/clientes/:id` → 404).
+ *
+ * Implementa: FR-034 (alta/edición de cliente), FR-035 (unicidad de NIT).
+ */
+import { Injectable } from '@nestjs/common';
+import { Prisma, type EstadoCliente as EstadoClientePrisma } from '@prisma/client';
+import { Duplicado, NoEncontrado } from '../../dominio/comunes/errores';
+import type { Cliente, EstadoCliente, LogoCliente, TipoMimeLogo } from '../../dominio/entidades/cliente';
+import type {
+  DatosCliente,
+  FiltrosListarClientes,
+  PaginaClientes,
+  RepositorioClientes,
+} from '../../dominio/puertos/repositorio-clientes';
+import { PrismaService } from './prisma.service';
+
+/**
+ * Columnas de `clientes` que se leen para construir la entidad `Cliente` del dominio. Es un
+ * `select` EXPLÍCITO, no el `findMany` completo, por una razón concreta de US11: `logo` es una
+ * columna `BYTEA` de hasta 500 KB y un `SELECT *` la traería en CADA fila de CADA listado de
+ * clientes. El booleano `tieneLogo` se deriva de `logoTipoMime` (30 bytes) en vez de los bytes:
+ * el CHECK `clientes_logo_consistente` garantiza que las dos columnas son `NULL` o tienen valor
+ * a la vez, así que preguntar por el tipo responde exactamente lo mismo que preguntar por el
+ * contenido. Los bytes solo cruzan la red cuando alguien los pide de verdad (`obtenerLogo`).
+ */
+const COLUMNAS_CLIENTE = {
+  id: true,
+  nombre: true,
+  nit: true,
+  telefono: true,
+  email: true,
+  direccion: true,
+  ciudad: true,
+  fechaRegistro: true,
+  estado: true,
+  logoTipoMime: true,
+} satisfies Prisma.ClienteSelect;
+
+/** Fila de `clientes` tal como la devuelve `COLUMNAS_CLIENTE` (sin los bytes del logo). */
+type FilaCliente = Prisma.ClienteGetPayload<{ select: typeof COLUMNAS_CLIENTE }>;
+
+@Injectable()
+export class RepositorioClientesPrisma implements RepositorioClientes {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async buscarPorId(id: number): Promise<Cliente | null> {
+    const registro = await this.prisma.cliente.findUnique({ where: { id: BigInt(id) }, select: COLUMNAS_CLIENTE });
+    return registro ? aClienteDominio(registro) : null;
+  }
+
+  async listar(filtros: FiltrosListarClientes): Promise<PaginaClientes> {
+    const where = construirWhereListarClientes(filtros);
+    const [registros, total] = await this.prisma.$transaction([
+      this.prisma.cliente.findMany({
+        where,
+        select: COLUMNAS_CLIENTE,
+        // Desempate por `id`: `nombre` de cliente no es único (el UNIQUE está en el NIT), así
+        // que sin un segundo criterio el orden es inestable y la paginación duplicaría unos
+        // clientes y escondería otros — mismo defecto corregido en salidas e ingresos.
+        orderBy: [{ nombre: 'asc' }, { id: 'asc' }],
+        skip: (filtros.pagina - 1) * filtros.porPagina,
+        take: filtros.porPagina,
+      }),
+      this.prisma.cliente.count({ where }),
+    ]);
+    return { datos: registros.map(aClienteDominio), total };
+  }
+
+  async crear(datos: DatosCliente, usuarioId: number): Promise<Cliente> {
+    try {
+      const registro = await this.prisma.cliente.create({
+        data: {
+          nombre: datos.nombre,
+          nit: datos.nit,
+          telefono: datos.telefono,
+          email: datos.email,
+          direccion: datos.direccion,
+          ciudad: datos.ciudad,
+          usuarioCreacionId: BigInt(usuarioId),
+        },
+        select: COLUMNAS_CLIENTE,
+      });
+      return aClienteDominio(registro);
+    } catch (error) {
+      throw traducirErrorEscrituraCliente(error);
+    }
+  }
+
+  async actualizar(id: number, datos: DatosCliente, usuarioId: number): Promise<void> {
+    try {
+      await this.prisma.cliente.update({
+        where: { id: BigInt(id) },
+        data: {
+          nombre: datos.nombre,
+          nit: datos.nit,
+          telefono: datos.telefono,
+          email: datos.email,
+          direccion: datos.direccion,
+          ciudad: datos.ciudad,
+          usuarioModificacionId: BigInt(usuarioId),
+          fechaModificacion: new Date(),
+        },
+      });
+    } catch (error) {
+      throw traducirErrorEscrituraCliente(error);
+    }
+  }
+
+  async cambiarEstado(id: number, estado: EstadoCliente, usuarioId: number): Promise<void> {
+    try {
+      await this.prisma.cliente.update({
+        where: { id: BigInt(id) },
+        data: {
+          estado: mapearEstadoClienteAPrisma(estado),
+          usuarioModificacionId: BigInt(usuarioId),
+          fechaModificacion: new Date(),
+        },
+      });
+    } catch (error) {
+      throw traducirErrorEscrituraCliente(error);
+    }
+  }
+
+  /**
+   * Ciudades distintas presentes entre los clientes (US13, FR-076) — ver TSDoc del puerto.
+   *
+   * `groupBy` (no `findMany` + `distinct`) para que la deduplicación la haga PostgreSQL y solo
+   * viajen los valores. Sin índice propio a propósito: `clientes` es una tabla pequeña por diseño
+   * del negocio (spec.md § Assumptions proyecta decenas, no miles), donde el planner elige `Seq
+   * Scan` de todas formas — el mismo razonamiento medido en rendimiento.md nota 6.
+   */
+  async ciudades(): Promise<string[]> {
+    const filas = await this.prisma.cliente.groupBy({
+      by: ['ciudad'],
+      where: { ciudad: { not: null } },
+      orderBy: { ciudad: 'asc' },
+    });
+    return filas
+      .map((fila) => fila.ciudad)
+      .filter((ciudad): ciudad is string => ciudad !== null && ciudad.trim() !== '');
+  }
+
+  /**
+   * Bytes del logo (US11, FR-066). Es la ÚNICA lectura del proyecto que trae la columna
+   * `BYTEA`, y por eso es un método propio y no un campo de `buscarPorId` (ver TSDoc de
+   * `COLUMNAS_CLIENTE`).
+   *
+   * Devuelve `null` tanto si el cliente no existe como si no tiene logo: para quien pregunta
+   * —el endpoint que lo sirve y el resolutor de logo de las exportaciones— son el mismo hecho
+   * ("no hay logo que mostrar"), y ninguno de los dos es un error (FR-068).
+   *
+   * El `tipoMime` guardado se acota con el CHECK `clientes_logo_tipo_mime_admitido`, así que
+   * `esTipoMimeLogo` solo puede fallar si alguien escribió en la tabla saltándose la
+   * aplicación Y el CHECK; en ese caso se trata como "sin logo" en vez de servir bytes con un
+   * `Content-Type` que la aplicación no reconoce (fail-closed).
+   */
+  async obtenerLogo(id: number): Promise<LogoCliente | null> {
+    const registro = await this.prisma.cliente.findUnique({
+      where: { id: BigInt(id) },
+      select: { logo: true, logoTipoMime: true },
+    });
+    if (!registro?.logo || !esTipoMimeLogo(registro.logoTipoMime)) return null;
+    return { contenido: registro.logo, tipoMime: registro.logoTipoMime };
+  }
+
+  /** Guarda o reemplaza el logo, escribiendo SIEMPRE las dos columnas juntas (CHECK
+   *  `clientes_logo_consistente`) y poblando la auditoría de modificación (FR-045). */
+  async guardarLogo(
+    id: number,
+    logo: { contenido: Uint8Array; tipoMime: TipoMimeLogo },
+    usuarioId: number,
+  ): Promise<void> {
+    try {
+      await this.prisma.cliente.update({
+        where: { id: BigInt(id) },
+        data: {
+          // `new Uint8Array(...)` copia los bytes a un `ArrayBuffer` propio: el puerto del
+          // dominio expresa el contenido como `Uint8Array` a secas (no conoce Node ni Prisma),
+          // mientras que el tipo `Bytes` de Prisma exige `Uint8Array<ArrayBuffer>`. La copia es
+          // de 500 KB como máximo y ocurre una vez por carga de logo.
+          logo: new Uint8Array(logo.contenido),
+          logoTipoMime: logo.tipoMime,
+          usuarioModificacionId: BigInt(usuarioId),
+          fechaModificacion: new Date(),
+        },
+      });
+    } catch (error) {
+      throw traducirErrorEscrituraCliente(error);
+    }
+  }
+
+  /** Deja ambas columnas del logo en `NULL` (FR-066). Idempotente: quitar un logo que ya no
+   *  estaba deja el cliente exactamente en el estado pedido, que es lo que `DELETE` promete. */
+  async eliminarLogo(id: number, usuarioId: number): Promise<void> {
+    try {
+      await this.prisma.cliente.update({
+        where: { id: BigInt(id) },
+        data: {
+          logo: null,
+          logoTipoMime: null,
+          usuarioModificacionId: BigInt(usuarioId),
+          fechaModificacion: new Date(),
+        },
+      });
+    } catch (error) {
+      throw traducirErrorEscrituraCliente(error);
+    }
+  }
+}
+
+/** Tipos MIME que el sistema admite como logo — mismos que el CHECK de la BD y que
+ *  `TipoMimeLogo` (`dominio/entidades/cliente.ts`). */
+const TIPOS_MIME_LOGO: readonly string[] = ['image/png', 'image/jpeg'];
+
+/** Guarda de tipo sobre el `logo_tipo_mime` leído de la BD (ver TSDoc de `obtenerLogo`). */
+function esTipoMimeLogo(valor: string | null): valor is TipoMimeLogo {
+  return valor !== null && TIPOS_MIME_LOGO.includes(valor);
+}
+
+/** Filtro `buscar` (nombre/NIT, insensible a mayúsculas) + estado (`GET /api/clientes`). */
+function construirWhereListarClientes(filtros: FiltrosListarClientes): Prisma.ClienteWhereInput {
+  const condiciones: Prisma.ClienteWhereInput[] = [];
+  const termino = filtros.buscar?.trim();
+  if (termino) {
+    condiciones.push({
+      OR: [
+        { nombre: { contains: termino, mode: 'insensitive' } },
+        { nit: { contains: termino, mode: 'insensitive' } },
+      ],
+    });
+  }
+  if (filtros.estado) condiciones.push({ estado: mapearEstadoClienteAPrisma(filtros.estado) });
+  // US13 (FR-075/FR-076): igualdad exacta — el valor sale del selector de `ciudades()`, no de
+  // que el usuario acierte la ortografía de un texto libre que capturó otra persona.
+  if (filtros.ciudad) condiciones.push({ ciudad: filtros.ciudad });
+  return condiciones.length > 0 ? { AND: condiciones } : {};
+}
+
+/** Traduce un registro Prisma de `clientes` a la entidad de dominio. `tieneLogo` sale de
+ *  `logoTipoMime`, no de los bytes — ver TSDoc de `COLUMNAS_CLIENTE`. */
+function aClienteDominio(registro: FilaCliente): Cliente {
+  return {
+    id: Number(registro.id),
+    nombre: registro.nombre,
+    nit: registro.nit,
+    telefono: registro.telefono,
+    email: registro.email,
+    direccion: registro.direccion,
+    ciudad: registro.ciudad,
+    fechaRegistro: registro.fechaRegistro,
+    estado: mapearEstadoClienteDeDominio(registro.estado),
+    tieneLogo: registro.logoTipoMime !== null,
+  };
+}
+
+function mapearEstadoClienteDeDominio(estado: EstadoClientePrisma): EstadoCliente {
+  switch (estado) {
+    case 'ACTIVO':
+      return 'ACTIVO';
+    case 'INACTIVO':
+      return 'INACTIVO';
+    default: {
+      const valorInesperado: never = estado;
+      throw new Error(`Estado de cliente de Prisma sin mapeo al dominio: ${String(valorInesperado)}`);
+    }
+  }
+}
+
+function mapearEstadoClienteAPrisma(estado: EstadoCliente): EstadoClientePrisma {
+  switch (estado) {
+    case 'ACTIVO':
+      return 'ACTIVO';
+    case 'INACTIVO':
+      return 'INACTIVO';
+    default: {
+      const valorInesperado: never = estado;
+      throw new Error(`Estado de cliente de dominio sin mapeo a Prisma: ${String(valorInesperado)}`);
+    }
+  }
+}
+
+/** `P2002` (UNIQUE de `nit`) → `Duplicado`; `P2025` (registro inexistente) → `NoEncontrado`;
+ *  cualquier otro error técnico se propaga sin traducir (lo maneja el filtro global). */
+function traducirErrorEscrituraCliente(error: unknown): unknown {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (error.code === 'P2002') return new Duplicado('nit', 'El NIT ya está registrado para otro cliente');
+    if (error.code === 'P2025') return new NoEncontrado('El cliente');
+  }
+  return error;
+}

@@ -1,0 +1,580 @@
+// Esquema de datos de Trazo — modelo COMPLETO (tarea T008).
+//
+// Fuente de verdad: specs/001-gestion-inventarios/data-model.md. Este archivo traduce ESE
+// documento a Prisma; si hay una discrepancia, se corrige aquí, nunca se improvisa (regla
+// del CLAUDE.md raíz: "el contrato se actualiza primero, nunca se improvisa en el código").
+//
+// Convención de nombres (docs/arquitectura.md §5): modelos PascalCase español en singular,
+// campos camelCase español (idiomático de Prisma Client) — se mapean con @map/@@map a
+// tablas/columnas snake_case español en la BD real (@@map plural, columnas snake_case).
+//
+// Tipos (data-model.md, cabecera): IDs BIGINT autoincrementales; montos DECIMAL(14,2);
+// cantidades DECIMAL(12,2); timestamps timestamptz (UTC); fechas puras DATE.
+//
+// Campos de auditoría (fechaCreacion/usuarioCreacionId/fechaModificacion/
+// usuarioModificacionId): se agregan a las tablas "documento/catálogo" que data-model.md
+// lista explícitamente con ellos — usuarios, productos, clientes, proyectos, ingresos,
+// salidas. NO se agregan a:
+//   - detalles_ingresos / detalles_salidas: son líneas hijas cuyo ciclo de vida sigue al
+//     documento padre (se reemplazan completas mientras el padre es editable); data-model.md
+//     no las lista con columnas de auditoría propias.
+//   - movimientos_inventario: tabla INMUTABLE (solo INSERT); su propio esquema ya lleva
+//     fecha_hora + usuario_id, que cumplen el mismo propósito de auditoría sin admitir
+//     fecha_modificacion/usuario_modificacion (no hay modificaciones posibles — FR-046).
+//   - contadores: tabla técnica; data-model.md indica explícitamente "Sin campos de
+//     auditoría (tabla técnica)".
+//   - roles / permisos / roles_permisos (US9): data-model.md § roles/permisos/roles_permisos
+//     tampoco las lista con columnas de auditoría. Además NO deben tenerlas: una FK
+//     `usuario_creacion_id` desde `roles` haría que el `TRUNCATE usuarios ... CASCADE` de las
+//     pruebas de integración (test/integracion/setup.ts) arrastrara también los roles
+//     sembrados por la migración, dejando sin rol a cualquier usuario creado después.
+// En `usuarios`, usuarioCreacionId/usuarioModificacionId son NULLABLE (nota de
+// data-model.md: el administrador semilla no tiene un usuario que lo haya creado).
+//
+// CHECK constraints, trigger de inmutabilidad y fila semilla de `contadores` NO viven aquí:
+// Prisma no los genera declarativamente — se agregan como SQL crudo en la migración inicial
+// (tarea T009, backend/prisma/migrations/).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// Enums
+// ============================================================================
+
+/** Estado de un rol: baja lógica, nunca DELETE (data-model.md § roles — FR-055/FR-057).
+ *  Enum propio (no reutiliza `estado_usuario`) por la misma convención que el resto del
+ *  esquema: cada entidad declara su estado, aunque los valores coincidan. */
+enum EstadoRol {
+  ACTIVO
+  INACTIVO
+
+  @@map("estado_rol")
+}
+
+/** Estado de un usuario: baja lógica, nunca DELETE (FR-006/FR-008). */
+enum EstadoUsuario {
+  ACTIVO
+  INACTIVO
+
+  @@map("estado_usuario")
+}
+
+/** Estado de un producto del catálogo (FR-012: nunca se elimina, se inactiva). */
+enum EstadoProducto {
+  ACTIVO
+  INACTIVO
+
+  @@map("estado_producto")
+}
+
+/** Estado de un cliente (catálogo comercial — FR-034). */
+enum EstadoCliente {
+  ACTIVO
+  INACTIVO
+
+  @@map("estado_cliente")
+}
+
+/** Estado de un proyecto: solo ACTIVO de cliente ACTIVO recibe salidas (FR-036/FR-038). */
+enum EstadoProyecto {
+  ACTIVO
+  COMPLETADO
+  SUSPENDIDO
+
+  @@map("estado_proyecto")
+}
+
+/** Máquina de estados de un ingreso (data-model.md — FR-017/FR-019). */
+enum EstadoIngreso {
+  PENDIENTE
+  RECIBIDO
+  VERIFICADO
+  ANULADO
+
+  @@map("estado_ingreso")
+}
+
+/** Máquina de estados de una salida (data-model.md — FR-029/FR-032). */
+enum EstadoSalida {
+  PENDIENTE
+  CONFIRMADA
+  COMPLETADA
+  ANULADA
+
+  @@map("estado_salida")
+}
+
+/** Tipo de movimiento de inventario; las anulaciones generan los AJUSTE_* (FR-046). */
+enum TipoMovimiento {
+  ENTRADA
+  SALIDA
+  AJUSTE_ENTRADA
+  AJUSTE_SALIDA
+
+  @@map("tipo_movimiento")
+}
+
+/** A qué documento pertenece un movimiento (FR-045: trazabilidad del origen). */
+enum DocumentoTipo {
+  INGRESO
+  SALIDA
+
+  @@map("documento_tipo")
+}
+
+/** De dónde vino un cambio de costo de producto (US12, FR-072) — los TRES caminos por los
+ *  que `productos.ultimo_costo` puede cambiar hoy; ninguno más los muta. */
+enum OrigenCambioCosto {
+  IMPORTACION
+  EDICION_MANUAL
+  RECEPCION_INGRESO
+
+  @@map("origen_cambio_costo")
+}
+
+// ============================================================================
+// Roles y permisos — control de acceso como DATO (US9, FR-054…FR-059, research R16)
+// ============================================================================
+
+/**
+ * Rol asignable a un usuario. Reemplaza al enum `rol` que vivía en `usuarios` hasta US9:
+ * el control de acceso deja de estar fijo en el código y pasa a resolverse contra los
+ * permisos de esta tabla (FR-054/FR-058).
+ *
+ * `esSistema = true` marca los tres roles originales (Administrador/Gerente/Operario),
+ * sembrados por la migración con EXACTAMENTE los permisos que su `@Roles(...)` concedía
+ * (FR-059/SC-013): no se pueden eliminar ni renombrar (FR-057). Baja lógica vía `estado`,
+ * nunca DELETE — un rol eliminado dejaría usuarios sin rol.
+ */
+model Rol {
+  id          BigInt    @id @default(autoincrement())
+  nombre      String    @unique @db.VarChar(50)
+  descripcion String?   @db.VarChar(200)
+  esSistema   Boolean   @default(false) @map("es_sistema")
+  estado      EstadoRol @default(ACTIVO)
+
+  usuarios Usuario[]
+  permisos RolPermiso[]
+
+  @@map("roles")
+}
+
+/**
+ * Catálogo de permisos del sistema — SOLO LECTURA desde la aplicación (FR-056).
+ *
+ * Cada fila corresponde a una verificación real del código (`@RequierePermiso('clave')` en
+ * un endpoint): la lista es, en esencia, una enumeración del código, así que su ciclo de
+ * vida es el del despliegue (semilla + migración), no el de la operación diaria. Permitir
+ * crearlos desde la UI generaría casillas que ningún endpoint consulta — control aparente,
+ * no real (research R16).
+ *
+ * Invariante de nomenclatura: `clave = modulo + '.' + accion` (p. ej. `salidas.confirmar`);
+ * `modulo` es además la clave de agrupación de la pantalla de roles (T107).
+ */
+model Permiso {
+  id          BigInt @id @default(autoincrement())
+  clave       String @unique @db.VarChar(60)
+  modulo      String @db.VarChar(30)
+  descripcion String @db.VarChar(200)
+
+  roles RolPermiso[]
+
+  @@map("permisos")
+}
+
+/**
+ * Matriz rol↔permiso: lo ÚNICO que el Administrador edita realmente al marcar/desmarcar
+ * casillas en la pantalla de roles (FR-055). `onDelete: Cascade` en `rol` porque los
+ * permisos de un rol no tienen sentido sin él; el permiso en cambio es catálogo compartido
+ * y se protege con RESTRICT (borrar un permiso del catálogo exige quitarlo de sus roles).
+ */
+model RolPermiso {
+  rolId     BigInt  @map("rol_id")
+  rol       Rol     @relation(fields: [rolId], references: [id], onDelete: Cascade)
+  permisoId BigInt  @map("permiso_id")
+  permiso   Permiso @relation(fields: [permisoId], references: [id])
+
+  @@id([rolId, permisoId])
+  @@map("roles_permisos")
+}
+
+// ============================================================================
+// Usuarios (FR-001…FR-009)
+// ============================================================================
+
+/**
+ * Cuenta de usuario del sistema. Autenticación por login+password (bcrypt) y autorización
+ * por rol (Principio III). Nunca se elimina físicamente: `estado` es la baja lógica
+ * (FR-008) para preservar la integridad referencial del historial de movimientos
+ * (Principio II) — por eso Usuario es el destino de las relaciones de auditoría de TODAS
+ * las demás tablas de negocio.
+ */
+model Usuario {
+  id                   BigInt        @id @default(autoincrement())
+  nombreCompleto       String        @map("nombre_completo") @db.VarChar(150)
+  email                String        @unique @db.VarChar(150)
+  login                String        @unique @db.VarChar(50)
+  /** Hash bcrypt (costo 12) — NUNCA se serializa hacia la API (FR-007). */
+  passwordHash         String        @map("password_hash") @db.VarChar(100)
+  /** FK al rol (US9, FR-002/FR-058) — reemplaza al enum `rol`: los permisos efectivos se
+   *  resuelven contra `roles_permisos` en cada petición, nunca contra un nombre fijo. */
+  rolId                BigInt        @map("rol_id")
+  rol                  Rol           @relation(fields: [rolId], references: [id])
+  estado               EstadoUsuario @default(ACTIVO)
+  debeCambiarPassword  Boolean       @default(true) @map("debe_cambiar_password")
+
+  // Auditoría (nullable: el admin semilla no tiene creador — nota de data-model.md).
+  fechaCreacion         DateTime  @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
+  usuarioCreacionId     BigInt?   @map("usuario_creacion_id")
+  usuarioCreacion       Usuario?  @relation("UsuarioCreadoPor", fields: [usuarioCreacionId], references: [id])
+  fechaModificacion     DateTime? @map("fecha_modificacion") @db.Timestamptz(6)
+  usuarioModificacionId BigInt?   @map("usuario_modificacion_id")
+  usuarioModificacion   Usuario?  @relation("UsuarioModificadoPor", fields: [usuarioModificacionId], references: [id])
+
+  // Back-relations de auto-referencia (usuarios que este usuario creó/modificó).
+  usuariosCreados     Usuario[] @relation("UsuarioCreadoPor")
+  usuariosModificados Usuario[] @relation("UsuarioModificadoPor")
+
+  // Back-relations de auditoría desde las demás tablas de negocio.
+  productosCreados      Producto[]             @relation("ProductoCreadoPor")
+  productosModificados  Producto[]             @relation("ProductoModificadoPor")
+  clientesCreados       Cliente[]              @relation("ClienteCreadoPor")
+  clientesModificados   Cliente[]              @relation("ClienteModificadoPor")
+  proyectosCreados      Proyecto[]             @relation("ProyectoCreadoPor")
+  proyectosModificados  Proyecto[]             @relation("ProyectoModificadoPor")
+  ingresosRegistrados   Ingreso[]              @relation("IngresoUsuarioRegistra")
+  ingresosCreados       Ingreso[]              @relation("IngresoCreadoPor")
+  ingresosModificados   Ingreso[]              @relation("IngresoModificadoPor")
+  salidasAutorizadas    Salida[]               @relation("SalidaUsuarioAutoriza")
+  salidasCreadas        Salida[]               @relation("SalidaCreadoPor")
+  salidasModificadas    Salida[]               @relation("SalidaModificadoPor")
+  movimientosGenerados  MovimientoInventario[] @relation("MovimientoUsuario")
+  cambiosDeCosto        HistorialCostoProducto[] @relation("CambioCostoUsuario")
+
+  @@map("usuarios")
+}
+
+// ============================================================================
+// Productos e inventario (FR-010…FR-012, FR-020…FR-024)
+// ============================================================================
+
+/**
+ * Producto del catálogo. `stockActual` SOLO se muta dentro de la UnidadDeTrabajo
+ * (transacción + FOR UPDATE, research R4) — jamás con un update suelto (Principio I).
+ * `comprometido`/`disponible` son valores derivados (no columnas): se calculan agregando
+ * `detalles_salidas` de salidas PENDIENTE (data-model.md).
+ */
+model Producto {
+  id                    BigInt         @id @default(autoincrement())
+  sku                   String         @unique @db.VarChar(50)
+  descripcion           String         @db.VarChar(300)
+  /** Texto libre, opcional; agregado en US8 (FR-052) — sin catálogo propio de categorías en v1. */
+  categoria             String?        @db.VarChar(100)
+  ubicacion             String?        @db.VarChar(100)
+  umbralStockBajo       Decimal        @default(0) @map("umbral_stock_bajo") @db.Decimal(12, 2)
+  stockActual           Decimal        @default(0) @map("stock_actual") @db.Decimal(12, 2)
+  /** Nació como "último costo pagado al recibir mercancía"; desde US12 admite además edición
+   *  manual y masiva (FR-071), así que su lectura correcta es "costo de referencia vigente".
+   *  Su procedencia exacta siempre se puede reconstruir en `historial_costos_producto`. */
+  ultimoCosto           Decimal        @default(0) @map("ultimo_costo") @db.Decimal(14, 2)
+  fechaUltimoMovimiento DateTime?      @map("fecha_ultimo_movimiento") @db.Timestamptz(6)
+  estado                EstadoProducto @default(ACTIVO)
+
+  fechaCreacion         DateTime  @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
+  usuarioCreacionId     BigInt    @map("usuario_creacion_id")
+  usuarioCreacion       Usuario   @relation("ProductoCreadoPor", fields: [usuarioCreacionId], references: [id])
+  fechaModificacion     DateTime? @map("fecha_modificacion") @db.Timestamptz(6)
+  usuarioModificacionId BigInt?   @map("usuario_modificacion_id")
+  usuarioModificacion   Usuario?  @relation("ProductoModificadoPor", fields: [usuarioModificacionId], references: [id])
+
+  detallesIngresos DetalleIngreso[]
+  detallesSalidas  DetalleSalida[]
+  movimientos      MovimientoInventario[]
+  historialCostos  HistorialCostoProducto[]
+
+  @@index([descripcion])
+  @@index([estado])
+  // US13 (T132): sostienen el filtro por categoría/ubicación de `/inventario` y el
+  // `SELECT DISTINCT` que alimenta sus selectores (FR-075/FR-076).
+  @@index([categoria])
+  @@index([ubicacion])
+  @@map("productos")
+}
+
+/**
+ * Historial INMUTABLE de cambios de costo de un producto (US12, FR-071…FR-074).
+ *
+ * Por qué una tabla propia y NO `movimientos_inventario` (FR-073, data-model.md § Por qué una
+ * tabla propia): un cambio de costo no mueve cantidades. Registrarlo como movimiento rompería
+ * el invariante `stock_actual(p) = Σ movimientos(p)`, que es la base de la prueba de
+ * conciliación y de la confianza en el inventario. Son dos historiales distintos porque
+ * responden dos preguntas distintas: *cuánto hay y por qué* vs. *cuánto vale y desde cuándo*.
+ *
+ * Solo INSERT — la migración agrega el MISMO trigger de inmutabilidad que protege
+ * `movimientos_inventario` (Principio II). Cada fila se escribe DENTRO de la misma transacción
+ * que actualiza `productos.ultimo_costo`, de modo que jamás exista un costo cambiado sin su
+ * registro, y solo cuando el costo REALMENTE cambia (`costo_nuevo <> costo_anterior`, FR-074).
+ *
+ * Sin campos de auditoría genéricos (`fecha_creacion`/`usuario_creacion_id`) por el mismo
+ * criterio que `movimientos_inventario`: `fecha_hora` + `usuario_id` ya cumplen ese propósito y
+ * no hay modificaciones posibles que registrar.
+ */
+model HistorialCostoProducto {
+  id            BigInt            @id @default(autoincrement())
+  productoId    BigInt            @map("producto_id")
+  producto      Producto          @relation(fields: [productoId], references: [id])
+  costoAnterior Decimal           @map("costo_anterior") @db.Decimal(14, 2)
+  costoNuevo    Decimal           @map("costo_nuevo") @db.Decimal(14, 2)
+  origen        OrigenCambioCosto
+  /** FK lógico (no declarado a nivel de BD, mismo criterio que `movimientos_inventario`) al
+   *  `Ingreso.id` cuando `origen = RECEPCION_INGRESO`; NULL en los otros dos orígenes. */
+  documentoId   BigInt?           @map("documento_id")
+  fechaHora     DateTime          @default(now()) @map("fecha_hora") @db.Timestamptz(6)
+  usuarioId     BigInt            @map("usuario_id")
+  usuario       Usuario           @relation("CambioCostoUsuario", fields: [usuarioId], references: [id])
+
+  @@index([productoId, fechaHora])
+  @@index([usuarioId])
+  @@map("historial_costos_producto")
+}
+
+// ============================================================================
+// Clientes y proyectos (FR-034…FR-038)
+// ============================================================================
+
+/** Cliente del catálogo comercial — destino final de toda salida (vía sus proyectos). */
+model Cliente {
+  id            BigInt        @id @default(autoincrement())
+  nombre        String        @db.VarChar(150)
+  nit           String        @unique @db.VarChar(30)
+  telefono      String?       @db.VarChar(30)
+  email         String?       @db.VarChar(150)
+  direccion     String?       @db.VarChar(200)
+  ciudad        String?       @db.VarChar(100)
+  fechaRegistro DateTime      @default(now()) @map("fecha_registro") @db.Date
+  estado        EstadoCliente @default(ACTIVO)
+
+  /// Logo del cliente (US11, FR-066…FR-069) — bytes de la imagen y su tipo MIME, siempre
+  /// consistentes entre sí (CHECK `clientes_logo_consistente`). Solo `image/png` o
+  /// `image/jpeg` (CHECK `clientes_logo_tipo_mime_admitido`): NUNCA SVG, que es XML capaz de
+  /// llevar scripts. Se validan por los BYTES REALES del archivo, no por su extensión ni por
+  /// el `Content-Type` declarado — ver `dominio/servicios/servicio-imagen-logo.ts`.
+  logo         Bytes?
+  logoTipoMime String? @map("logo_tipo_mime") @db.VarChar(30)
+
+  fechaCreacion         DateTime  @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
+  usuarioCreacionId     BigInt    @map("usuario_creacion_id")
+  usuarioCreacion       Usuario   @relation("ClienteCreadoPor", fields: [usuarioCreacionId], references: [id])
+  fechaModificacion     DateTime? @map("fecha_modificacion") @db.Timestamptz(6)
+  usuarioModificacionId BigInt?   @map("usuario_modificacion_id")
+  usuarioModificacion   Usuario?  @relation("ClienteModificadoPor", fields: [usuarioModificacionId], references: [id])
+
+  proyectos Proyecto[]
+
+  @@index([nombre])
+  @@map("clientes")
+}
+
+/**
+ * Proyecto de un cliente. Solo un proyecto ACTIVO de un cliente ACTIVO es destino válido
+ * de nuevas salidas (FR-038) — esa regla vive en el dominio, no aquí; este modelo solo
+ * persiste el estado que la regla evalúa.
+ */
+model Proyecto {
+  id                  BigInt         @id @default(autoincrement())
+  clienteId           BigInt         @map("cliente_id")
+  cliente             Cliente        @relation(fields: [clienteId], references: [id])
+  nombre              String         @db.VarChar(150)
+  descripcion         String?        @db.Text
+  fechaInicio         DateTime?      @map("fecha_inicio") @db.Date
+  fechaCierreEstimada DateTime?      @map("fecha_cierre_estimada") @db.Date
+  responsable         String?        @db.VarChar(150)
+  presupuestoEstimado Decimal?       @map("presupuesto_estimado") @db.Decimal(14, 2)
+  estado              EstadoProyecto @default(ACTIVO)
+
+  fechaCreacion         DateTime  @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
+  usuarioCreacionId     BigInt    @map("usuario_creacion_id")
+  usuarioCreacion       Usuario   @relation("ProyectoCreadoPor", fields: [usuarioCreacionId], references: [id])
+  fechaModificacion     DateTime? @map("fecha_modificacion") @db.Timestamptz(6)
+  usuarioModificacionId BigInt?   @map("usuario_modificacion_id")
+  usuarioModificacion   Usuario?  @relation("ProyectoModificadoPor", fields: [usuarioModificacionId], references: [id])
+
+  salidas     Salida[]
+  movimientos MovimientoInventario[]
+
+  @@unique([clienteId, nombre])
+  @@index([clienteId, estado])
+  @@map("proyectos")
+}
+
+// ============================================================================
+// Ingresos (FR-013…FR-019)
+// ============================================================================
+
+/**
+ * Factura de compra. `estado` gobierna la máquina de estados PENDIENTE→RECIBIDO→VERIFICADO
+ * (o ANULADO); solo `recibir` mueve stock (FR-017, dentro de la UnidadDeTrabajo).
+ * `usuarioRegistraId` (FR-018, quién digitó la factura) es intencionalmente independiente
+ * de `usuarioCreacionId` (auditoría genérica): en la práctica hoy coinciden, pero
+ * data-model.md los define como campos separados con propósitos distintos.
+ */
+model Ingreso {
+  id                BigInt        @id @default(autoincrement())
+  numeroFactura     String        @unique @map("numero_factura") @db.VarChar(50)
+  fechaFactura      DateTime      @map("fecha_factura") @db.Date
+  proveedor         String        @db.VarChar(150)
+  fechaRecepcion    DateTime      @map("fecha_recepcion") @db.Date
+  observaciones     String?       @db.Text
+  estado            EstadoIngreso @default(PENDIENTE)
+  valorTotal        Decimal       @default(0) @map("valor_total") @db.Decimal(14, 2)
+  usuarioRegistraId BigInt        @map("usuario_registra_id")
+  usuarioRegistra   Usuario       @relation("IngresoUsuarioRegistra", fields: [usuarioRegistraId], references: [id])
+  motivoAnulacion   String?       @map("motivo_anulacion") @db.Text
+
+  fechaCreacion         DateTime  @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
+  usuarioCreacionId     BigInt    @map("usuario_creacion_id")
+  usuarioCreacion       Usuario   @relation("IngresoCreadoPor", fields: [usuarioCreacionId], references: [id])
+  fechaModificacion     DateTime? @map("fecha_modificacion") @db.Timestamptz(6)
+  usuarioModificacionId BigInt?   @map("usuario_modificacion_id")
+  usuarioModificacion   Usuario?  @relation("IngresoModificadoPor", fields: [usuarioModificacionId], references: [id])
+
+  detalles DetalleIngreso[]
+
+  @@index([fechaRecepcion])
+  @@index([estado])
+  @@map("ingresos")
+}
+
+/** Línea de factura. `ON DELETE CASCADE` solo se ejerce mientras el ingreso es PENDIENTE
+ * (editable) — la aplicación nunca elimina líneas de un ingreso RECIBIDO/VERIFICADO. */
+model DetalleIngreso {
+  id             BigInt   @id @default(autoincrement())
+  ingresoId      BigInt   @map("ingreso_id")
+  ingreso        Ingreso  @relation(fields: [ingresoId], references: [id], onDelete: Cascade)
+  productoId     BigInt   @map("producto_id")
+  producto       Producto @relation(fields: [productoId], references: [id])
+  cantidad       Decimal  @db.Decimal(12, 2)
+  precioUnitario Decimal  @map("precio_unitario") @db.Decimal(14, 2)
+  valorTotal     Decimal  @map("valor_total") @db.Decimal(14, 2)
+
+  @@unique([ingresoId, productoId])
+  @@index([productoId])
+  @@map("detalles_ingresos")
+}
+
+// ============================================================================
+// Salidas (FR-025…FR-033) — núcleo transaccional del negocio
+// ============================================================================
+
+/**
+ * Salida de mercancía. `proyectoId` es NOT NULL: cumple "salida vinculada a cliente y
+ * proyecto" (FR-027) porque todo proyecto pertenece a exactamente un cliente — no se
+ * duplica `clienteId` aquí (data-model.md). `usuarioAutorizaId`/`fechaConfirmacion` quedan
+ * NULL en PENDIENTE y se fijan atómicamente al `confirmar` (FR-030).
+ */
+model Salida {
+  id                BigInt       @id @default(autoincrement())
+  /** Correlativo emitido por el puerto Contadores al crear (FR-026, research R5). */
+  numero            BigInt       @unique
+  fechaSalida       DateTime     @map("fecha_salida") @db.Date
+  proyectoId        BigInt       @map("proyecto_id")
+  proyecto          Proyecto     @relation(fields: [proyectoId], references: [id])
+  observaciones     String?      @db.Text
+  estado            EstadoSalida @default(PENDIENTE)
+  valorTotal        Decimal      @default(0) @map("valor_total") @db.Decimal(14, 2)
+  usuarioAutorizaId BigInt?      @map("usuario_autoriza_id")
+  usuarioAutoriza   Usuario?     @relation("SalidaUsuarioAutoriza", fields: [usuarioAutorizaId], references: [id])
+  fechaConfirmacion DateTime?    @map("fecha_confirmacion") @db.Timestamptz(6)
+  motivoAnulacion   String?      @map("motivo_anulacion") @db.Text
+
+  fechaCreacion         DateTime  @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
+  usuarioCreacionId     BigInt    @map("usuario_creacion_id")
+  usuarioCreacion       Usuario   @relation("SalidaCreadoPor", fields: [usuarioCreacionId], references: [id])
+  fechaModificacion     DateTime? @map("fecha_modificacion") @db.Timestamptz(6)
+  usuarioModificacionId BigInt?   @map("usuario_modificacion_id")
+  usuarioModificacion   Usuario?  @relation("SalidaModificadoPor", fields: [usuarioModificacionId], references: [id])
+
+  detalles DetalleSalida[]
+
+  @@index([proyectoId, estado])
+  @@index([fechaSalida])
+  @@index([estado])
+  // US13 (T132): filtro "¿qué autorizó esta persona?" (FR-075) — mismo criterio con el que
+  // `movimientos_inventario.usuario_id` ya está indexado para FR-042.
+  @@index([usuarioAutorizaId])
+  @@map("salidas")
+}
+
+/** Línea de salida. `ON DELETE CASCADE` solo se ejerce mientras la salida es PENDIENTE. */
+model DetalleSalida {
+  id             BigInt   @id @default(autoincrement())
+  salidaId       BigInt   @map("salida_id")
+  salida         Salida   @relation(fields: [salidaId], references: [id], onDelete: Cascade)
+  productoId     BigInt   @map("producto_id")
+  producto       Producto @relation(fields: [productoId], references: [id])
+  cantidad       Decimal  @db.Decimal(12, 2)
+  precioUnitario Decimal  @map("precio_unitario") @db.Decimal(14, 2)
+  valorTotal     Decimal  @map("valor_total") @db.Decimal(14, 2)
+
+  @@unique([salidaId, productoId])
+  @@index([productoId])
+  @@map("detalles_salidas")
+}
+
+// ============================================================================
+// Movimientos de inventario — INMUTABLE (Principio II / FR-046)
+// ============================================================================
+
+/**
+ * Registro permanente de cada cambio de `stock_actual`. Solo INSERT: la migración T009
+ * agrega un trigger de BD que rechaza UPDATE/DELETE — la última línea de defensa de la
+ * trazabilidad (Principio II). Siempre se inserta dentro de la MISMA transacción que
+ * modifica el stock (research R4).
+ */
+model MovimientoInventario {
+  id              BigInt         @id @default(autoincrement())
+  fechaHora       DateTime       @default(now()) @map("fecha_hora") @db.Timestamptz(6)
+  tipo            TipoMovimiento
+  productoId      BigInt         @map("producto_id")
+  producto        Producto       @relation(fields: [productoId], references: [id])
+  /** El signo lo define `tipo` (ENTRADA/AJUSTE_ENTRADA suman, SALIDA/AJUSTE_SALIDA restan). */
+  cantidad        Decimal        @db.Decimal(12, 2)
+  /** Snapshot de `stock_actual` inmediatamente después de este movimiento (auditoría). */
+  stockResultante Decimal        @map("stock_resultante") @db.Decimal(12, 2)
+  documentoTipo   DocumentoTipo  @map("documento_tipo")
+  /** FK lógico (no declarado a nivel de BD) al `Ingreso.id` o `Salida.id` según documentoTipo. */
+  documentoId     BigInt         @map("documento_id")
+  proyectoId      BigInt?        @map("proyecto_id")
+  proyecto        Proyecto?      @relation(fields: [proyectoId], references: [id])
+  usuarioId       BigInt         @map("usuario_id")
+  usuario         Usuario        @relation("MovimientoUsuario", fields: [usuarioId], references: [id])
+  /** Obligatorio a nivel de aplicación en AJUSTE_ENTRADA/AJUSTE_SALIDA (motivo de anulación). */
+  motivo          String?        @db.Text
+
+  @@index([productoId, fechaHora])
+  @@index([documentoTipo, documentoId])
+  @@index([proyectoId])
+  @@index([usuarioId])
+  @@index([fechaHora])
+  @@map("movimientos_inventario")
+}
+
+// ============================================================================
+// Contadores — tabla técnica (research R5)
+// ============================================================================
+
+/** Correlativos por clave (p. ej. `'salida'`), mutados con `UPDATE ... RETURNING` dentro
+ * de la transacción del documento — nunca `MAX()+1` (carrera) ni secuencia (huecos). */
+model Contador {
+  clave String @id @db.VarChar(30)
+  valor BigInt @default(0)
+
+  @@map("contadores")
+}

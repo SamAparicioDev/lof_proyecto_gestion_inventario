@@ -1,0 +1,417 @@
+# Feature Specification: Sistema de Gestión de Inventarios con Trazabilidad por Cliente/Proyecto (Trazo)
+
+**Feature Branch**: `001-gestion-inventarios`
+
+**Created**: 2026-08-10
+
+**Status**: Draft
+
+**Input**: User description: "Sistema de gestión de inventarios 'Trazo' con trazabilidad de consumo por cliente y proyecto: gestión de usuarios con roles (Administrador, Gerente, Operario), ingreso de mercancía mediante facturas de compra, gestión de stock con cantidades comprometidas y alertas, salidas de mercancía asignadas obligatoriamente a cliente/proyecto con validación de disponibilidad, gestión de clientes y proyectos, y reportes de consumo/inventario/movimientos exportables a PDF y Excel." — Documento fuente: `C:\Users\Samuel\Documents\DIANA\requisitos.txt` (Especificaciones Funcionales v1.0, Agosto 2026).
+
+## User Scenarios & Testing *(mandatory)*
+
+### User Story 1 - Registrar ingreso de mercancía mediante factura (Priority: P1)
+
+Un operario o gerente recibe mercancía del proveedor y la registra en el sistema a partir de la factura de compra: captura número de factura, proveedor, fechas de factura y recepción, y la lista de productos con cantidades y precios unitarios. Al marcar el ingreso como "Recibido", el stock de cada producto aumenta de inmediato.
+
+**Why this priority**: Sin entradas registradas no existe stock que controlar; es la puerta de entrada de todos los datos del inventario y la primera mitad de la trazabilidad (qué entró, cuándo y a qué costo).
+
+**Independent Test**: Se prueba de forma independiente creando un ingreso con 2–3 productos y verificando que (a) el ingreso queda en el historial con todos sus datos y (b) el stock de cada producto refleja las cantidades ingresadas. Entrega valor por sí sola: control de compras recibidas.
+
+**Acceptance Scenarios**:
+
+1. **Given** un usuario autenticado con rol Operario y un formulario de nuevo ingreso, **When** registra la factura F-001 con proveedor, fechas y 3 productos con cantidades y precios positivos y guarda, **Then** el sistema crea el ingreso en estado "Pendiente", calcula el valor total por línea y el total de la factura, y lo muestra en el historial de ingresos.
+2. **Given** un ingreso en estado "Pendiente", **When** el usuario lo marca como "Recibido", **Then** el stock de cada producto del ingreso aumenta en la cantidad registrada y el movimiento queda en el historial con usuario, fecha y hora, y documento asociado.
+3. **Given** una factura ya registrada con número F-001, **When** un usuario intenta registrar otro ingreso con el mismo número de factura, **Then** el sistema rechaza la operación e indica que el número de factura ya existe.
+4. **Given** un formulario de ingreso con campos obligatorios vacíos o cantidades/precios no positivos, **When** el usuario intenta guardar, **Then** el sistema rechaza la operación y señala en español cada campo con error.
+5. **Given** un ingreso en estado "Pendiente", **When** el usuario lo edita (agrega o corrige líneas), **Then** los cambios se guardan; **Given** un ingreso "Recibido" o "Verificado", **When** intenta editarlo, **Then** el sistema no lo permite.
+
+---
+
+### User Story 2 - Administrar clientes y sus proyectos (Priority: P1)
+
+Un gerente registra los clientes de la empresa (nombre, NIT, contacto, dirección, ciudad) y crea los proyectos de cada cliente (nombre, descripción, fechas, responsable, presupuesto estimado). Puede listarlos, editarlos y consultar el historial de salidas de cada uno.
+
+**Why this priority**: Toda salida de mercancía debe asignarse obligatoriamente a un cliente y proyecto; sin este catálogo la funcionalidad central del sistema (trazabilidad de consumo) no puede operar.
+
+**Independent Test**: Se prueba creando un cliente con dos proyectos, editándolos y verificando los listados y filtros por cliente. Entrega valor por sí sola: directorio comercial de clientes y proyectos con presupuestos.
+
+**Acceptance Scenarios**:
+
+1. **Given** un usuario con rol Gerente, **When** crea el cliente "Jumbo" con NIT, contacto, dirección y ciudad, **Then** el cliente aparece en el listado con estado "Activo" y fecha de registro.
+2. **Given** un cliente activo, **When** el gerente crea el proyecto "Remodelación Bodega Norte" con fechas, responsable y presupuesto estimado, **Then** el proyecto queda asociado al cliente en estado "Activo" y aparece al listar los proyectos de ese cliente.
+3. **Given** un cliente con proyectos y salidas registradas, **When** el usuario consulta su detalle, **Then** ve el historial de salidas por proyecto.
+4. **Given** un proyecto en estado "Completado" o "Suspendido", **When** un usuario intenta asignarle una nueva salida, **Then** el sistema no lo ofrece como destino válido.
+
+---
+
+### User Story 3 - Registrar salida de mercancía asignada a cliente/proyecto (Priority: P1)
+
+Un operario registra una salida de mercancía seleccionando obligatoriamente el cliente y proyecto de destino, agrega los productos con sus cantidades, y el sistema verifica la disponibilidad antes de permitir la confirmación. Al confirmarse, el stock se descuenta de inmediato y la salida queda vinculada al proyecto con número auto-correlativo y usuario que autoriza.
+
+**Why this priority**: Es la funcionalidad principal del negocio: saber exactamente qué material se fue a qué proyecto de qué cliente. Además protege el invariante crítico del sistema (nunca sacar más de lo disponible).
+
+**Independent Test**: Con productos, stock, clientes y proyectos precargados, se prueba creando una salida válida (descuenta stock) y una inválida por cantidad excesiva (rechazada). Entrega el valor central: consumo trazable por proyecto.
+
+**Acceptance Scenarios**:
+
+1. **Given** un producto con 100 unidades disponibles y un proyecto activo, **When** el operario crea una salida de 30 unidades asignada a ese cliente/proyecto y la confirma, **Then** el sistema genera el número de salida auto-correlativo, descuenta el stock (quedan 70 disponibles), registra el usuario que autoriza y guarda fecha y hora.
+2. **Given** un producto con 70 unidades disponibles, **When** un usuario intenta confirmar una salida de 80 unidades, **Then** el sistema rechaza la operación indicando la cantidad disponible y no modifica el stock.
+3. **Given** el formulario de nueva salida, **When** el usuario intenta guardar sin seleccionar cliente/proyecto, **Then** el sistema rechaza la operación indicando que el cliente/proyecto es obligatorio.
+4. **Given** una salida en estado "Pendiente", **When** el usuario la edita o cancela, **Then** los cambios se aplican y la cantidad comprometida se recalcula; **Given** una salida "Confirmada", **When** intenta editarla, **Then** el sistema no lo permite.
+5. **Given** dos usuarios que intentan confirmar simultáneamente salidas del mismo producto cuya suma excede el disponible, **When** ambos confirman, **Then** solo una salida se confirma y la otra es rechazada por disponibilidad insuficiente (el stock nunca queda negativo).
+
+---
+
+### User Story 4 - Consultar consumo por cliente y por proyecto (Priority: P2)
+
+Un gerente consulta cuánto material ha consumido cada cliente en sus proyectos: selecciona cliente y período y obtiene el detalle de productos, cantidades y valores por proyecto, con totales por proyecto y por cliente. Para un proyecto específico ve además el margen entre consumo y presupuesto, con gráficos, y puede exportar cualquiera de los reportes a PDF o Excel.
+
+**Why this priority**: Es la pregunta de negocio que motiva el sistema ("¿cuánto material consumió Jumbo en cada proyecto?"); depende de que existan salidas registradas (Historias 1–3).
+
+**Independent Test**: Con salidas precargadas para dos clientes, se genera el reporte filtrado por cliente y período y se verifican los totales contra los datos conocidos; se exporta a PDF y Excel y se comprueba que conservan los filtros aplicados.
+
+**Acceptance Scenarios**:
+
+1. **Given** salidas confirmadas para los proyectos A y B del cliente "Jumbo", **When** el gerente genera el reporte de consumo por cliente con un rango de fechas, **Then** ve por cada proyecto el detalle de productos, cantidades y valores consumidos, el total por proyecto y el total del cliente, limitado al período seleccionado.
+2. **Given** un proyecto con presupuesto estimado de $10.000.000 y consumo de $4.000.000, **When** el gerente genera el reporte de consumo por proyecto, **Then** ve el listado detallado de salidas (fecha, producto, cantidad, valor unitario y total), el valor total consumido y el margen consumo vs presupuesto (40% consumido), con un gráfico de consumo.
+3. **Given** cualquier reporte generado con filtros, **When** el usuario lo exporta, **Then** obtiene un archivo PDF o Excel con los mismos datos y filtros del reporte en pantalla.
+4. **Given** un cliente sin salidas en el período seleccionado, **When** se genera el reporte, **Then** el sistema muestra un estado vacío claro (sin errores) indicando que no hay consumo en el período.
+
+---
+
+### User Story 5 - Consultar inventario con disponibilidad y alertas (Priority: P1)
+
+Cualquier usuario autenticado consulta el estado del inventario: por cada producto ve SKU, descripción, cantidad en stock, cantidad comprometida en salidas pendientes, cantidad disponible, ubicación en almacén y fecha del último movimiento. Puede buscar y filtrar productos, ver el historial de movimientos de cada uno y recibir alertas visuales cuando un producto cae bajo su umbral de stock mínimo.
+
+**Why this priority**: Cierra el ciclo mínimo del negocio: sin consulta de inventario, las historias 1–3 registran datos que nadie puede ver (SC-005 y SC-006 exigen que el stock y sus movimientos sean consultables de inmediato). Es la pantalla de aterrizaje operativa diaria y evita compras o compromisos a ciegas; forma parte del MVP junto con las historias 1–3.
+
+**Independent Test**: Con entradas y salidas precargadas, se verifica que las cantidades en stock/comprometida/disponible cuadran con los movimientos, que la búsqueda filtra correctamente y que un producto bajo umbral aparece marcado en alerta.
+
+**Acceptance Scenarios**:
+
+1. **Given** un producto con 100 unidades ingresadas y una salida pendiente de 20, **When** el usuario consulta el inventario, **Then** ve stock 100, comprometido 20 y disponible 80.
+2. **Given** un producto con umbral de stock bajo configurado en 10 y disponible 8, **When** se consulta el inventario, **Then** el producto aparece destacado como stock bajo.
+3. **Given** el listado de inventario, **When** el usuario busca por SKU o descripción, **Then** el listado se filtra a los productos coincidentes.
+4. **Given** un producto con entradas y salidas, **When** el usuario abre su historial de movimientos, **Then** ve cada movimiento con fecha, tipo (entrada/salida), documento asociado, cantidad y usuario que lo registró.
+
+---
+
+### User Story 6 - Administrar usuarios y roles (Priority: P3)
+
+Un administrador crea usuarios con nombre completo, email, usuario y contraseña, les asigna un rol (Administrador, Gerente u Operario), consulta el listado de usuarios activos, edita sus datos y los desactiva cuando dejan la empresa. Cada usuario inicia sesión con su usuario y contraseña y solo accede a las funciones de su rol.
+
+**Why this priority**: La operación diaria puede arrancar con usuarios precargados; la administración autónoma de usuarios es necesaria pero no bloquea el valor central. (La autenticación y el control por roles son transversales y se exigen desde la primera historia.)
+
+**Independent Test**: Se prueba creando un usuario por cada rol, verificando que cada uno ve solo sus funciones permitidas, editando datos y desactivando un usuario (que ya no puede iniciar sesión pero conserva su historial).
+
+**Acceptance Scenarios**:
+
+1. **Given** un usuario con rol Administrador, **When** crea un usuario con rol Operario, **Then** el nuevo usuario puede iniciar sesión y acceder solo a registro de entradas/salidas y consultas, sin acceso a gestión de usuarios.
+2. **Given** un usuario desactivado, **When** intenta iniciar sesión, **Then** el sistema le niega el acceso; sus movimientos históricos siguen mostrando su nombre.
+3. **Given** un usuario con rol Operario, **When** intenta acceder a la gestión de usuarios o eliminar registros, **Then** el sistema se lo impide indicando permisos insuficientes.
+4. **Given** credenciales inválidas, **When** un usuario intenta iniciar sesión, **Then** el sistema rechaza el acceso sin revelar si el usuario existe.
+
+---
+
+### User Story 7 - Reportes de inventario actual y movimientos (Priority: P3)
+
+Un gerente genera el reporte de inventario actual (stock, comprometido, disponible, valor total del inventario y productos bajo umbral) y el reporte histórico de movimientos (entradas y salidas) filtrable por fecha, tipo, usuario y cliente/proyecto; ambos exportables a PDF y Excel.
+
+**Why this priority**: Complementa la auditoría y los cierres periódicos; el valor operativo inmediato ya lo cubren las historias 4 y 5.
+
+**Independent Test**: Con datos precargados se genera cada reporte, se validan los totales contra los movimientos conocidos y se verifican los filtros y las exportaciones.
+
+**Acceptance Scenarios**:
+
+1. **Given** productos con stock y precios registrados, **When** se genera el reporte de inventario actual, **Then** muestra por producto stock/comprometido/disponible/ubicación, los productos bajo umbral y el valor total del inventario, con filtros por producto y rango de cantidad.
+2. **Given** movimientos de entradas y salidas en un rango de fechas, **When** el gerente filtra el reporte de movimientos por tipo "Salida" y un usuario específico, **Then** ve solo las salidas registradas por ese usuario con fecha, documento, producto, cantidad y cliente/proyecto.
+3. **Given** cualquiera de los dos reportes, **When** el usuario exporta, **Then** obtiene el archivo PDF o Excel con los datos y filtros aplicados.
+
+---
+
+### User Story 8 - Carga masiva de inventario desde plantilla Excel (Priority: P2)
+
+Un Administrador o Gerente descarga una plantilla Excel del catálogo de productos, la llena (productos nuevos, actualizaciones de productos existentes, o ambos en el mismo archivo) y la sube al sistema. El sistema crea los productos nuevos y actualiza los existentes por SKU; si una fila trae una cantidad inicial, esa cantidad sube el stock del producto con la misma trazabilidad que un ingreso registrado a mano.
+
+**Why this priority**: Acelera la carga inicial y las actualizaciones periódicas del catálogo (decenas o cientos de productos a la vez) sin capturarlos uno por uno; no bloquea el ciclo central del negocio (entra→se asigna→sale, historias 1-3-5), pero reduce fricción operativa real pedida directamente por el dueño del negocio — misma prioridad que la historia de reportes (P2).
+
+**Independent Test**: Se prueba subiendo un archivo con productos nuevos (con cantidad inicial), un producto con SKU ya existente (debe actualizarse, no duplicarse) y una fila deliberadamente inválida; se verifica que el catálogo y el stock quedan correctos y que el resumen reporta la fila inválida sin haber bloqueado las demás. Entrega valor por sí sola: alta/actualización masiva de catálogo con stock inicial trazable.
+
+**Acceptance Scenarios**:
+
+1. **Given** una plantilla llena con 3 productos nuevos (SKU no existente en el catálogo), cada uno con cantidad inicial y valor unitario, **When** un Administrador la sube, **Then** el sistema crea los 3 productos, registra una entrada de inventario trazable por cada uno (mismo criterio de auditoría que un ingreso manual) y muestra un resumen con la cantidad de productos creados y con stock inicial aplicado.
+2. **Given** una plantilla con una fila cuyo SKU ya existe en el catálogo, **When** se sube, **Then** el sistema ACTUALIZA ese producto (descripción/categoría/ubicación/umbral) en vez de crear un duplicado, y lo indica en el resumen como actualizado.
+3. **Given** una plantilla con una fila inválida (SKU vacío, cantidad negativa, o cantidad inicial mayor a 0 sin valor unitario), **When** se sube, **Then** el sistema procesa el resto de filas válidas con normalidad y reporta esa fila con su error específico en español, sin bloquear el archivo completo.
+4. **Given** un usuario con rol Operario, **When** intenta descargar la plantilla o subir un archivo de carga masiva, **Then** el sistema se lo impide (misma restricción que editar productos existentes, solo Administrador/Gerente).
+5. **Given** una plantilla vacía (solo encabezados, sin filas de datos) o un archivo que no es un Excel válido, **When** se sube, **Then** el sistema lo rechaza con un mensaje claro en español, sin crear ni modificar ningún producto.
+6. **Given** un catálogo con productos ya cargados, **When** el usuario descarga el catálogo actual (opción contigua a la plantilla vacía), **Then** obtiene un Excel con la misma estructura de columnas y una fila por producto existente; al editar descripciones/categorías/ubicaciones/umbrales y volver a subirlo, esos productos se actualizan por SKU y ninguno se duplica ni cambia su stock.
+
+---
+
+### User Story 9 - Administrar roles y permisos (Priority: P2)
+
+Un Administrador define qué puede hacer cada tipo de usuario: consulta el catálogo de permisos del sistema agrupado por módulo, crea roles propios además de los tres iniciales (Administrador, Gerente, Operario), marca qué permisos tiene cada rol, y asigna ese rol a los usuarios. El control de acceso de toda la aplicación pasa a resolverse contra esos permisos.
+
+**Why this priority**: hoy los tres roles y sus permisos están fijos en el código: cambiar qué puede hacer un Gerente exige tocar el código y volver a desplegar. Modelar permisos como datos le da al dueño del negocio autonomía real sobre su organización (por ejemplo, un rol "Bodeguero" que registra ingresos pero no despacha salidas) sin depender de un desarrollador. No es P1 porque el sistema ya opera correctamente con los tres roles fijos.
+
+**Independent Test**: Se prueba creando un rol nuevo con un subconjunto de permisos, asignándoselo a un usuario, e iniciando sesión con él para verificar que solo puede hacer exactamente lo permitido (y que la API rechaza lo demás con 403, no solo la UI). Entrega valor por sí sola: control de acceso configurable sin tocar código.
+
+**Acceptance Scenarios**:
+
+1. **Given** un Administrador en la pantalla de roles, **When** crea el rol "Bodeguero" y le marca solo los permisos de inventario e ingresos, **Then** el rol queda disponible para asignar a usuarios y muestra exactamente esos permisos.
+2. **Given** un usuario con el rol "Bodeguero", **When** inicia sesión, **Then** ve en la navegación únicamente los módulos permitidos, y si intenta llamar directamente a un endpoint no permitido (por ejemplo, confirmar una salida) el servidor responde 403.
+3. **Given** un rol al que se le quita un permiso, **When** un usuario con ese rol hace su siguiente petición, **Then** el cambio ya está vigente sin que el usuario tenga que volver a iniciar sesión (los permisos se resuelven en el servidor en cada petición).
+4. **Given** el rol Administrador (rol del sistema), **When** se intenta eliminarlo, o quitarle el permiso de gestionar roles siendo el último rol que lo tiene, **Then** el sistema lo impide con un mensaje claro en español y no aplica ningún cambio.
+5. **Given** un rol con usuarios asignados, **When** se intenta eliminar, **Then** el sistema lo impide indicando cuántos usuarios lo tienen; el rol puede desactivarse, pero no eliminarse dejando usuarios sin rol.
+6. **Given** los tres roles iniciales tras migrar a permisos, **When** los usuarios existentes operan normalmente, **Then** pueden hacer exactamente lo mismo que antes de la migración, sin ningún cambio de comportamiento perceptible.
+
+---
+
+### User Story 10 - Panel de control al iniciar sesión (Priority: P2)
+
+Al entrar al sistema, el usuario aterriza en un panel que responde de un vistazo "¿cómo está el negocio hoy y qué me toca hacer?": cifras clave del inventario, pendientes que requieren su acción (salidas por confirmar, ingresos por recibir, productos bajo umbral) y actividad reciente. Cada cifra es un acceso directo a la pantalla que la resuelve.
+
+**Why this priority**: hoy la ruta `/` solo redirige a `/inventario`, así que el ítem "Panel" del menú lleva al mismo sitio que "Inventario" — ocupa un lugar en la navegación sin aportar nada. El sistema ya acumula toda la información necesaria (stock, umbrales, documentos pendientes, consumo, movimientos) pero obliga a recorrer cinco pantallas para saber si algo requiere atención. No es P1 porque la operación diaria funciona sin él.
+
+**Independent Test**: Con datos conocidos (productos bajo umbral, una salida pendiente, un ingreso pendiente), se abre el panel y se verifica que cada cifra coincide exactamente con lo que muestran las pantallas de detalle, y que cada tarjeta navega al listado ya filtrado por ese criterio. Entrega valor por sí sola: una portada operativa que dice qué atender.
+
+**Acceptance Scenarios**:
+
+1. **Given** un inventario con productos bajo su umbral, salidas en estado Pendiente e ingresos en estado Pendiente, **When** el usuario abre el panel, **Then** ve cada una de esas cifras y, al hacer clic en una, llega al listado correspondiente ya filtrado por ese criterio.
+2. **Given** un usuario con rol Operario, **When** abre el panel, **Then** ve únicamente las tarjetas cuya información tiene permiso de consultar; las cifras de valorización y consumo (exclusivas de Administrador/Gerente, como los reportes) no se muestran ni viajan al navegador.
+3. **Given** un sistema recién instalado sin movimientos, **When** se abre el panel, **Then** cada tarjeta muestra su estado vacío en español (por ejemplo "Sin movimientos registrados"), nunca cifras en blanco, "NaN" ni un error.
+4. **Given** el panel abierto, **When** el usuario compara cualquier cifra con la pantalla de detalle correspondiente, **Then** ambas coinciden exactamente (el panel no recalcula por su cuenta: reutiliza los mismos casos de uso que ya alimentan inventario, salidas, ingresos y reportes).
+
+---
+
+### User Story 11 - Exportar cualquier proceso, con la identidad del cliente (Priority: P2)
+
+Cualquier listado o documento del sistema —no solo los reportes— se exporta a PDF y Excel: el historial de ingresos, el de salidas, y cada documento individual (una salida concreta, un ingreso concreto). Además, cada cliente puede tener su logo cargado en el sistema, y todo export que corresponda a un único cliente lo lleva impreso, de modo que el archivo sirve para enviárselo al cliente tal cual.
+
+**Why this priority**: hoy solo los 4 reportes se exportan; el resto de la operación (ingresos y salidas, que es donde vive el día a día) obliga a leerlo en pantalla o copiarlo a mano. Y un PDF sin identidad visual es un documento interno: con el logo del cliente pasa a ser algo entregable — un soporte de entrega que se puede adjuntar en un correo o imprimir para firmar.
+
+**Independent Test**: Se carga el logo de un cliente, se exporta un documento de salida de ese cliente a PDF y a Excel, y se verifica que ambos archivos abren correctamente, contienen exactamente los datos de la pantalla y muestran el logo; luego se exporta un listado que abarca varios clientes y se verifica que no muestra ningún logo (no habría uno correcto que mostrar).
+
+**Acceptance Scenarios**:
+
+1. **Given** el historial de ingresos o de salidas con filtros aplicados, **When** el usuario exporta a PDF o Excel, **Then** obtiene un archivo con TODAS las filas que cumplen esos filtros (no solo la página visible) y con los filtros indicados en el encabezado.
+2. **Given** una salida o un ingreso concreto, **When** el usuario lo exporta, **Then** obtiene el documento completo (cabecera, líneas, totales y datos de auditoría) en PDF o Excel.
+3. **Given** un cliente con logo cargado, **When** se exporta cualquier documento o reporte correspondiente a ese único cliente, **Then** el archivo muestra su logo; **Given** un cliente sin logo, **Then** el archivo se genera igual, sin logo y sin ningún hueco ni error.
+4. **Given** un export que abarca varios clientes (por ejemplo, el historial completo de salidas sin filtrar, o el reporte de inventario), **When** se exporta, **Then** no se muestra ningún logo de cliente, porque no hay uno solo al que el documento corresponda.
+5. **Given** un Administrador o Gerente en la ficha de un cliente, **When** carga una imagen de logo, **Then** el sistema la acepta solo si es una imagen válida dentro del tamaño permitido, y puede reemplazarla o quitarla después.
+6. **Given** un archivo que no es una imagen válida (o una imagen que excede el tamaño permitido), **When** se intenta cargar como logo, **Then** el sistema lo rechaza con un mensaje claro en español y el logo anterior del cliente queda intacto.
+
+---
+
+### User Story 13 - Filtrar cualquier listado por los campos que el trabajo diario usa (Priority: P2)
+
+Cualquier usuario acota un listado por los campos con los que realmente piensa su trabajo: el inventario por categoría, ubicación, estado del producto y rango de disponible; los ingresos por proveedor; las salidas por número y por quien las autorizó; los clientes por ciudad; los usuarios por rol. Cuando hay filtros activos los ve escritos en pantalla y los quita todos con una sola acción, de modo que nunca queda mirando "pocos resultados" sin saber por qué.
+
+**Why this priority**: los listados ya existen y ya paginan, pero filtran por muy poco: la categoría se captura desde US8 y no se puede usar para buscar, el estado del producto se ve en la tabla y no se puede filtrar, el proveedor solo se alcanza con la caja de búsqueda genérica, y el rol —que desde US9 es un dato administrable— no se puede usar para responder "¿quiénes son mis operarios?". El costo de esto es diario y silencioso: se pagina a mano. No es P1 porque el sistema opera sin ello.
+
+**Independent Test**: Con datos conocidos, se filtra cada listado por uno de sus campos nuevos y se verifica que el conjunto devuelto es exactamente el esperado (ni una fila de más ni de menos), que los filtros aplicados se ven en pantalla, que "Limpiar filtros" devuelve el listado completo y que un filtro sin coincidencias muestra un estado vacío que dice que hay filtros activos. Entrega valor por sí sola: los listados dejan de recorrerse página por página.
+
+**Acceptance Scenarios**:
+
+1. **Given** un catálogo con productos de varias categorías y ubicaciones, **When** el usuario filtra el inventario por una categoría, **Then** ve únicamente los productos de esa categoría, y la lista de categorías que se le ofrece contiene exactamente las que existen en su catálogo (no una lista fija escrita en el código).
+2. **Given** productos activos e inactivos en el catálogo, **When** el usuario filtra por estado "Inactivo", **Then** ve solo los dados de baja; sin filtro de estado sigue viendo ambos, como hasta ahora.
+3. **Given** un inventario con disponibles muy distintos entre productos, **When** el usuario pide el rango "disponible hasta 10", **Then** ve solo los productos cuyo disponible (stock − comprometido, nunca el stock crudo) cae en ese rango.
+4. **Given** salidas autorizadas por distintos usuarios, **When** el gerente filtra por el usuario que autoriza, **Then** ve solo las salidas que esa persona autorizó; las que aún no tienen autorizante (pendientes) no aparecen.
+5. **Given** un listado con dos filtros activos, **When** el usuario lo mira, **Then** ve escritos ambos filtros con su valor y una acción para limpiarlos; **When** la usa, **Then** vuelve al listado completo en un solo paso.
+6. **Given** un filtro que no coincide con ningún registro, **When** se muestra el listado vacío, **Then** el mensaje en español dice que no hay resultados **con los filtros aplicados** (y no el mismo texto que vería un sistema recién instalado, que debe decir que aún no hay registros).
+7. **Given** un rol propio creado por el Administrador (US9), **When** se abre el filtro de rol del listado de usuarios, **Then** ese rol aparece entre las opciones sin haber tocado código.
+
+---
+
+### Edge Cases
+
+- **Salida mayor al disponible**: debe rechazarse siempre, incluida la carrera entre dos usuarios simultáneos sobre el mismo producto (solo una confirmación puede ganar).
+- **Número de factura duplicado**: rechazado con mensaje claro; la unicidad se garantiza aunque dos usuarios registren a la vez.
+- **Edición de documentos que ya afectaron stock**: los ingresos "Recibido/Verificado" y las salidas "Confirmada/Completada" no son editables; las correcciones se hacen mediante anulación con movimiento inverso registrado (auditado), nunca borrando el documento.
+- **Cliente o proyecto inactivo/suspendido/completado**: no puede recibir nuevas salidas, pero su historial sigue consultable en reportes.
+- **Usuario desactivado**: no puede iniciar sesión; su nombre permanece en los movimientos históricos que registró.
+- **Producto sin movimientos vs. con movimientos**: un producto con movimientos no puede eliminarse; solo marcarse inactivo.
+- **Reporte sin datos en el período**: muestra estado vacío claro, sin errores; la exportación produce un archivo válido con encabezados y sin filas.
+- **Cantidades con decimales**: se aceptan hasta 2 decimales (materiales medidos en metros/kg); nunca cantidades cero o negativas.
+- **Sesión expirada a mitad de un formulario**: al reintentar guardar, el sistema pide autenticarse de nuevo sin perder la información capturada o indicando claramente que debe recapturarse.
+- **Salida pendiente cuya disponibilidad desaparece** (otro usuario consumió el stock): al intentar confirmarla, se rechaza indicando el disponible actual.
+- **SKU repetido dentro del mismo archivo de carga masiva**: la primera ocurrencia se procesa; las repeticiones posteriores del mismo SKU en el archivo se reportan como fila inválida (evita aplicar dos altas/actualizaciones contradictorias del mismo producto en una sola corrida).
+- **Carga masiva con cantidad inicial pero el catálogo sí se actualizó**: si registrar el stock inicial falla por una causa ajena a los datos del archivo (ej. corte de conexión), los productos quedan creados/actualizados igual; el archivo se puede volver a subir para aplicar el stock pendiente sin duplicar el producto (ver data-model.md § Carga masiva de inventario).
+
+## Requirements *(mandatory)*
+
+### Functional Requirements
+
+**Autenticación y control de acceso**
+
+- **FR-001**: El sistema DEBE exigir autenticación con usuario y contraseña para acceder a cualquier función.
+- **FR-002**: El sistema DEBE restringir las funciones según el rol del usuario: Administrador (todo, incluida gestión de usuarios), Gerente (operación completa de inventario, clientes, proyectos y reportes), Operario (registro de entradas/salidas y consultas).
+- **FR-003**: El sistema DEBE verificar los permisos en el servidor para cada operación; la ocultación de opciones en pantalla no sustituye esta verificación.
+- **FR-004**: El sistema DEBE cerrar sesiones inactivas tras un período de expiración y rechazar accesos anónimos.
+
+**Gestión de usuarios**
+
+- **FR-005**: Los administradores DEBEN poder crear usuarios con nombre completo, email, usuario (login), contraseña y rol; el sistema registra fecha de creación y estado.
+- **FR-006**: Los administradores DEBEN poder listar usuarios (con filtro por estado), editar sus datos, restablecer contraseñas y activar/desactivar usuarios.
+- **FR-007**: El sistema DEBE almacenar contraseñas de forma irrecuperable (hash criptográfico) y NUNCA mostrarlas.
+- **FR-008**: El sistema DEBE impedir la eliminación física de usuarios con actividad registrada; la baja es siempre desactivación.
+- **FR-009**: El sistema DEBE rechazar usuarios (login) y emails duplicados.
+
+**Catálogo de productos**
+
+- **FR-010**: El sistema DEBE mantener un catálogo de productos con SKU/código único, descripción, ubicación en almacén y umbral de stock bajo configurable por producto.
+- **FR-011**: Los usuarios DEBEN poder crear productos nuevos al registrar un ingreso (alta rápida) o desde el catálogo, y editar su descripción, ubicación y umbral.
+- **FR-012**: El sistema DEBE impedir eliminar productos con movimientos; solo pueden marcarse inactivos.
+
+**Ingreso de mercancía (facturas)**
+
+- **FR-013**: Los usuarios (Operario, Gerente, Administrador) DEBEN poder crear ingresos de mercancía con: número de factura, fecha de factura, proveedor, fecha de recepción, observaciones y una o más líneas de producto (producto, cantidad, precio unitario).
+- **FR-014**: El sistema DEBE calcular automáticamente el valor total por línea (cantidad × precio unitario) y el valor total del ingreso.
+- **FR-015**: El sistema DEBE garantizar que el número de factura sea único, incluso ante registros simultáneos.
+- **FR-016**: El sistema DEBE validar que cantidades y precios sean números positivos (cantidades con hasta 2 decimales) y que los campos obligatorios no estén vacíos, con mensajes de error en español que indiquen el campo y la corrección esperada.
+- **FR-017**: El sistema DEBE manejar los estados de ingreso Pendiente → Recibido → Verificado: "Pendiente" no afecta stock y es editable; al pasar a "Recibido" el stock de cada producto aumenta de inmediato; "Verificado" marca la revisión final y no permite más cambios.
+- **FR-018**: El sistema DEBE registrar en cada ingreso el usuario que lo registra, y mostrar el historial de ingresos con búsqueda y paginación.
+- **FR-019**: El sistema DEBE permitir anular un ingreso "Recibido" solo a Gerente/Administrador, generando el movimiento inverso de stock (si hay disponibilidad suficiente) y dejando rastro auditado del motivo.
+
+**Inventario / stock**
+
+- **FR-020**: El sistema DEBE mostrar por producto: SKU, descripción, cantidad en stock, cantidad comprometida (salidas en estado Pendiente), cantidad disponible (stock − comprometida), ubicación y fecha del último movimiento.
+- **FR-021**: El sistema DEBE actualizar el stock en tiempo real al registrar entradas ("Recibido") y salidas ("Confirmada"); toda consulta posterior a la operación refleja el nuevo valor.
+- **FR-022**: El sistema DEBE destacar visualmente los productos cuya cantidad disponible esté en o por debajo de su umbral de stock bajo.
+- **FR-023**: Los usuarios DEBEN poder buscar y filtrar productos por SKU y descripción, con listados paginados.
+- **FR-024**: El sistema DEBE mostrar el historial de movimientos por producto (fecha, tipo entrada/salida, documento asociado, cantidad, usuario, cliente/proyecto si aplica).
+
+**Salida de mercancía**
+
+- **FR-025**: Los usuarios DEBEN poder crear salidas de mercancía con: cliente y proyecto de destino (obligatorio, seleccionable de una lista de proyectos activos), una o más líneas de producto (producto, cantidad, precio unitario de referencia), observaciones y fecha de salida.
+- **FR-026**: El sistema DEBE asignar a cada salida un número auto-correlativo único.
+- **FR-027**: El sistema DEBE rechazar cualquier salida sin cliente/proyecto asignado.
+- **FR-028**: El sistema DEBE impedir confirmar salidas con cantidad mayor a la disponible; la validación se ejecuta en el servidor de forma atómica, de modo que el stock nunca quede negativo ni ante operaciones simultáneas.
+- **FR-029**: El sistema DEBE manejar los estados de salida Pendiente → Confirmada → Completada: "Pendiente" compromete la cantidad (reduce el disponible, no el stock) y es editable o cancelable; al pasar a "Confirmada" el stock se descuenta de inmediato y la salida deja de ser editable; "Completada" marca la entrega física final.
+- **FR-030**: El sistema DEBE registrar en cada salida el usuario que la autoriza, con fecha y hora.
+- **FR-031**: El sistema DEBE calcular el valor total de la salida a partir de las líneas (cantidad × precio unitario de referencia).
+- **FR-032**: El sistema DEBE permitir anular una salida "Confirmada" solo a Gerente/Administrador, devolviendo las cantidades al stock mediante movimiento inverso auditado con motivo.
+- **FR-033**: El sistema DEBE listar todas las salidas con filtros por cliente, proyecto, estado y fecha, con paginación.
+
+**Clientes y proyectos**
+
+- **FR-034**: Los usuarios (Gerente, Administrador) DEBEN poder crear y editar clientes con: nombre, NIT/identificación, teléfono, email, dirección, ciudad; el sistema registra fecha de registro y estado (Activo/Inactivo).
+- **FR-035**: El sistema DEBE rechazar clientes con NIT duplicado.
+- **FR-036**: Los usuarios (Gerente, Administrador) DEBEN poder crear y editar proyectos asociados a un cliente con: nombre, descripción, fecha de inicio, fecha de cierre estimada, responsable y presupuesto estimado; con estados Activo/Completado/Suspendido.
+- **FR-037**: El sistema DEBE listar clientes y, por cada cliente, sus proyectos; y mostrar el historial de salidas por cliente y por proyecto.
+- **FR-038**: El sistema DEBE ofrecer como destino de nuevas salidas únicamente proyectos en estado "Activo" de clientes "Activos".
+
+**Reportes**
+
+- **FR-039**: El sistema DEBE generar el reporte de consumo por cliente: proyectos del cliente, detalle de productos y cantidades consumidas por proyecto, valor total por proyecto y por cliente, filtrable por cliente y rango de fechas de salida.
+- **FR-040**: El sistema DEBE generar el reporte de consumo por proyecto: datos del proyecto y cliente, listado detallado de salidas (fecha, producto, cantidad, valor unitario, valor total), valor total consumido, margen consumo vs presupuesto y un gráfico de consumo, filtrable por proyecto y fechas.
+- **FR-041**: El sistema DEBE generar el reporte de inventario actual: productos con stock/comprometido/disponible, ubicación, valor total del inventario y productos bajo umbral, filtrable por producto y rango de cantidad.
+- **FR-042**: El sistema DEBE generar el reporte de movimientos: fecha, tipo (entrada/salida), documento asociado, producto, cantidad, usuario y cliente/proyecto cuando aplique, filtrable por fecha, tipo, usuario y cliente/proyecto.
+- **FR-043**: Todos los reportes DEBEN poder exportarse a PDF y a Excel conservando los filtros aplicados, y poder imprimirse desde la vista del reporte.
+- **FR-044**: En los reportes, el consumo DEBE calcularse sobre salidas en estado "Confirmada" o "Completada" (las pendientes y anuladas no cuentan como consumo).
+
+**Carga masiva de inventario (US8)**
+
+- **FR-048**: El sistema DEBE ofrecer una plantilla Excel descargable con las columnas del catálogo de productos (SKU, descripción, categoría, ubicación, umbral de stock bajo, cantidad inicial, valor unitario).
+- **FR-049**: El sistema DEBE permitir subir un archivo Excel con esa plantilla llena; por cada fila válida, DEBE crear el producto si su SKU no existe en el catálogo, o actualizarlo si ya existe (nunca duplicarlo).
+- **FR-050**: Si una fila trae una cantidad inicial mayor a cero, el sistema DEBE registrar esa cantidad como una entrada de inventario con la misma trazabilidad (usuario, fecha, documento asociado) que un ingreso registrado manualmente, exigiendo el valor unitario en ese caso.
+- **FR-051**: El sistema DEBE procesar el archivo de forma parcial: las filas inválidas se reportan de forma individual con su error específico en español, sin bloquear la creación/actualización de las filas válidas del mismo archivo.
+- **FR-052**: El catálogo de productos DEBE incluir un campo de categoría (texto libre, opcional), editable tanto desde la carga masiva como desde el alta/edición manual de un producto (FR-010).
+- **FR-053**: Junto a la plantilla vacía (FR-048), el sistema DEBE ofrecer la descarga del catálogo actual completo en esa MISMA estructura de columnas, para que el usuario edite los productos existentes y vuelva a subir el archivo como actualización masiva (FR-049 ya resuelve la actualización por SKU). La descarga del catálogo NO incluye cantidad inicial ni valor unitario con valores (esas columnas viajan vacías): re-subir el archivo sin tocarlas actualiza solo datos de catálogo, nunca vuelve a sumar stock.
+
+**Gestión de roles y permisos (US9)**
+
+- **FR-054**: El sistema DEBE modelar los permisos como datos: un catálogo de permisos por módulo y acción, y roles a los que se les asignan permisos, en lugar de una lista de roles fija en el código.
+- **FR-055**: Un Administrador DEBE poder crear, editar, activar/desactivar y consultar roles, y asignar o quitar permisos a cada rol.
+- **FR-056**: El catálogo de permisos es de SOLO LECTURA desde la interfaz: cada permiso corresponde a una verificación real en el código, por lo que se define en el sistema (semilla) y no se crea desde la aplicación — lo que el Administrador gestiona es qué permisos tiene cada rol (ver research.md R16).
+- **FR-057**: El sistema DEBE impedir cualquier operación que deje a la organización sin capacidad de administrar roles o usuarios: no se puede eliminar un rol del sistema, ni eliminar un rol que tenga usuarios asignados, ni quitar el permiso de gestión de roles del último rol que lo tiene.
+- **FR-057b**: Nadie DEBE poder conceder —ni asignando un rol a un usuario, ni creando o editando un rol— permisos que su propio rol no tenga. Sin esta regla, el permiso de gestión de roles sería auto-escalable: quien lo tuviera podría concederse todos los demás en una sola operación, y marcar esa casilla equivaldría a conceder administración total de forma silenciosa.
+- **FR-058**: La autorización de cada endpoint DEBE verificarse contra los permisos efectivos del rol del usuario autenticado, resueltos en el servidor en cada petición (nunca contra un nombre de rol fijo en el código, ni contra un dato del cliente).
+- **FR-059**: Los tres roles iniciales (Administrador, Gerente, Operario) DEBEN existir como roles del sistema con exactamente los permisos que ya tenían, de modo que la migración a permisos no cambie el comportamiento observable de ningún usuario existente.
+
+**Panel de control (US10)**
+
+- **FR-060**: La ruta de inicio DEBE mostrar un panel con las cifras operativas del negocio, no una redirección a otro módulo: valor del inventario, productos bajo umbral, salidas pendientes de confirmar, ingresos pendientes de recibir, consumo del período en curso y actividad reciente.
+- **FR-061**: Cada cifra del panel DEBE ser accionable: al seleccionarla, el sistema navega al listado correspondiente ya filtrado por ese criterio (por ejemplo, "productos bajo umbral" abre el inventario con ese filtro activo).
+- **FR-062**: El panel DEBE respetar los permisos del usuario: el servidor incluye únicamente las cifras que ese usuario puede consultar, y las que no puede no se envían al navegador (ocultarlas en el cliente no es control de acceso).
+- **FR-063**: Las cifras del panel DEBEN provenir de los mismos casos de uso que alimentan las pantallas de detalle, nunca de un cálculo paralelo propio del panel, de modo que jamás puedan discrepar entre sí.
+
+**Exportación universal e identidad del cliente (US11)**
+
+- **FR-064**: Los listados de ingresos y de salidas DEBEN poder exportarse a PDF y Excel con los mismos filtros aplicados en pantalla, incluyendo TODAS las filas que cumplen el filtro (no solo la página visible) — la paginación es una comodidad de lectura, no un recorte de los datos.
+- **FR-065**: Un ingreso y una salida individuales DEBEN poder exportarse como documento completo (cabecera, líneas, totales y datos de auditoría) a PDF y Excel.
+- **FR-066**: El sistema DEBE permitir cargar, reemplazar y quitar el logo de cada cliente (roles Administrador/Gerente), aceptando únicamente imágenes válidas dentro de un tamaño máximo definido.
+- **FR-067**: Todo archivo exportado que corresponda a un ÚNICO cliente DEBE mostrar su logo; los exports que abarcan varios clientes o ninguno se generan sin logo. Un cliente sin logo cargado nunca impide ni degrada la exportación.
+- **FR-068**: El logo DEBE aplicarse tanto al PDF como al Excel, y su ausencia o su fallo de lectura NUNCA puede impedir que el archivo se genere: el contenido de datos manda sobre la decoración.
+- **FR-069**: Los proyectos NO tienen logo propio: un export de un proyecto muestra el logo del cliente al que pertenece (la identidad visual es de la empresa, no del trabajo puntual).
+
+**Costo del producto y su historial (US12)**
+
+- **FR-070**: La descarga del catálogo (FR-053) DEBE incluir el costo actual de cada producto en la columna de valor unitario. Dejarla vacía ocultaba información que el usuario ya posee y que necesita para revisar su catálogo.
+- **FR-071**: El usuario (Administrador/Gerente) DEBE poder actualizar el costo de un producto, tanto en la carga masiva como en la edición manual. Un cambio de costo altera la valorización del inventario y de los reportes, por lo que NUNCA puede ocurrir de forma anónima.
+- **FR-072**: Todo cambio de costo DEBE quedar registrado de forma permanente e inmutable con: costo anterior, costo nuevo, usuario, fecha/hora y origen del cambio (carga masiva, edición manual o recepción de mercancía), y DEBE ser consultable desde la ficha del producto.
+- **FR-073**: Un cambio de costo NO es un movimiento de inventario: no altera cantidades y no DEBE registrarse en el historial de movimientos, para no romper la correspondencia entre el stock y la suma de sus movimientos.
+- **FR-074**: En la carga masiva, un costo se considera cambiado solo si difiere del actual; las filas cuyo valor unitario llega igual (o vacío) NO generan un registro de cambio de costo.
+
+**Filtrado de listados (US13)**
+
+- **FR-075**: Cada listado DEBE poder filtrarse por los campos con los que se consulta en la operación diaria, además de los que ya ofrece: **inventario** por categoría, ubicación, estado del producto y rango de cantidad disponible; **ingresos** por proveedor; **salidas** por número de salida y por usuario que autoriza; **clientes** por ciudad; **usuarios** por rol. Todos los filtros son opcionales y se combinan entre sí (Y lógico) y con la paginación ya existente.
+- **FR-076**: Los filtros cuyo dominio de valores es texto libre capturado por el propio usuario (categoría y ubicación de producto, ciudad de cliente) DEBEN ofrecerse como selección de los valores que EXISTEN hoy en los datos, no como una caja de texto que el usuario deba adivinar ni como una lista fija escrita en el código. El filtro por rol (FR-054) se alimenta igual: del catálogo de roles vigente.
+- **FR-077**: El rango de cantidad del inventario DEBE aplicarse sobre la cantidad **disponible** (stock − comprometido), nunca sobre el stock crudo — mismo criterio que la alerta de stock bajo (FR-022) y que el reporte de inventario actual (FR-041).
+- **FR-078**: Cuando un listado tiene al menos un filtro activo, DEBE mostrarlos en pantalla con su valor legible y ofrecer una acción única para limpiarlos todos: el usuario nunca debe quedarse mirando pocos resultados sin saber por qué.
+- **FR-079**: El estado vacío de un listado DEBE distinguir "no hay registros todavía" de "no hay registros que cumplan los filtros aplicados"; ambos textos en español.
+
+**Auditoría y trazabilidad (transversal)**
+
+- **FR-045**: Toda operación de creación, edición, cambio de estado o anulación DEBE registrar usuario y fecha/hora; los registros con relevancia de inventario DEBEN conservar además el documento asociado.
+- **FR-046**: Todo movimiento de inventario DEBE quedar en un historial permanente e inmutable; las correcciones generan movimientos de ajuste, nunca borrado de historia.
+- **FR-047**: Toda la interfaz, mensajes, validaciones y reportes DEBEN presentarse en español.
+
+### Key Entities
+
+- **Usuario**: persona que opera el sistema; nombre completo, email, login, rol (Administrador/Gerente/Operario), estado activo/inactivo, fecha de creación. Referenciado por todos los registros que crea o autoriza.
+- **Producto**: artículo almacenable; SKU único, descripción, categoría (texto libre, opcional), ubicación en almacén, umbral de stock bajo, estado. Su stock se deriva de los movimientos.
+- **Cliente**: empresa o persona a la que se destinan salidas; nombre, NIT único, contacto (teléfono, email), dirección, ciudad, estado, fecha de registro. Tiene uno o más proyectos.
+- **Proyecto**: trabajo específico de un cliente; nombre, descripción, fechas de inicio y cierre estimada, responsable, presupuesto estimado, estado (Activo/Completado/Suspendido). Destino obligatorio de las salidas.
+- **Ingreso (factura)**: documento de entrada de mercancía; número de factura único, proveedor (texto), fechas de factura y recepción, observaciones, estado (Pendiente/Recibido/Verificado), usuario que registra, valor total. Compuesto por líneas de detalle.
+- **Detalle de ingreso**: línea de un ingreso; producto, cantidad, precio unitario, valor total de la línea.
+- **Salida**: documento de egreso de mercancía; número auto-correlativo, fecha, cliente y proyecto de destino (obligatorios), observaciones, estado (Pendiente/Confirmada/Completada, más Anulada como resultado de anulación), usuario que autoriza, valor total. Compuesta por líneas de detalle.
+- **Detalle de salida**: línea de una salida; producto, cantidad, precio unitario de referencia, valor total de la línea.
+- **Movimiento de inventario**: registro inmutable de cada afectación de stock; fecha/hora, tipo (entrada/salida/ajuste), producto, cantidad con signo, documento asociado, usuario, cliente/proyecto cuando aplica.
+
+## Success Criteria *(mandatory)*
+
+### Measurable Outcomes
+
+- **SC-001**: El 100% de las salidas confirmadas quedan vinculadas a un cliente y proyecto; no existe forma de registrar consumo "sin destino".
+- **SC-002**: En pruebas con operaciones simultáneas sobre el mismo producto, el stock nunca queda negativo y el sistema rechaza el 100% de las salidas que exceden la disponibilidad.
+- **SC-003**: Un gerente responde "¿cuánto material consumió el cliente X en cada uno de sus proyectos?" en menos de 1 minuto desde que abre el módulo de reportes (seleccionar filtros + generar + leer totales).
+- **SC-004**: Un operario registra un ingreso típico (factura con 10 productos) en menos de 5 minutos, y una salida típica (5 productos) en menos de 3 minutos.
+- **SC-005**: Tras confirmar una entrada o salida, cualquier consulta de inventario refleja el stock actualizado de inmediato (sin pasos manuales de sincronización).
+- **SC-006**: El 100% de los movimientos de inventario consultables muestran usuario, fecha/hora y documento asociado.
+- **SC-007**: Los 4 reportes se exportan a PDF y Excel conservando los filtros aplicados, y un archivo exportado con datos conocidos cuadra al 100% con los totales en pantalla.
+- **SC-008**: Con 20 usuarios trabajando a la vez, los listados y reportes habituales cargan en menos de 2 segundos y ninguna operación de stock produce datos inconsistentes.
+- **SC-009**: Un usuario nuevo (Operario) completa su primera salida sin ayuda externa en el primer intento en al menos 9 de cada 10 casos de prueba de usabilidad.
+- **SC-010**: Los productos bajo umbral de stock aparecen destacados en el inventario y en el reporte de inventario actual el mismo día en que caen bajo el umbral.
+- **SC-011**: Con un archivo de carga masiva de N filas válidas y M filas inválidas a propósito, el sistema crea/actualiza exactamente las N filas válidas (ni una de más ni de menos) y reporta las M filas inválidas con su error específico, sin duplicar productos ya existentes.
+- **SC-012**: Un Administrador crea un rol nuevo con un subconjunto de permisos y se lo asigna a un usuario en menos de 2 minutos, sin tocar código ni reiniciar el sistema; ese usuario puede ejecutar el 100% de las acciones concedidas y la API rechaza con 403 el 100% de las no concedidas.
+- **SC-013**: Tras migrar el control de acceso a permisos, los tres roles iniciales conservan exactamente sus capacidades previas: la suite completa de pruebas de autorización (401/403 por endpoint y por rol) pasa sin modificar una sola aserción de permisos existente.
+- **SC-014**: Al iniciar sesión, el usuario identifica en menos de 10 segundos y sin navegar a otra pantalla si hay algo pendiente de su atención (stock bajo, documentos por confirmar o recibir); el 100% de las cifras del panel coincide exactamente con las de su pantalla de detalle.
+- **SC-015**: El 100% de los listados y documentos operativos del sistema (ingresos, salidas y los 4 reportes) se exporta a PDF y Excel conservando filtros y cuadrando con la pantalla; un documento de un cliente con logo cargado sale listo para enviárselo a ese cliente sin edición posterior.
+- **SC-016**: El 100% de los cambios de costo de producto —vengan de carga masiva, edición manual o recepción de mercancía— queda registrado con costo anterior, costo nuevo, usuario y fecha, y es consultable desde la ficha del producto; el stock de un producto sigue siendo exactamente igual a la suma de sus movimientos después de cualquier cambio de costo.
+- **SC-017**: Cada uno de los 5 listados (inventario, ingresos, salidas, clientes, usuarios) se acota por cualquiera de sus campos filtrables sin recorrer páginas a mano: un filtro devuelve EXACTAMENTE el conjunto esperado (verificado con datos conocidos contra la base real), los filtros activos son visibles y se limpian en un solo paso, y ningún filtro nuevo degrada el tiempo de respuesta por debajo del umbral de SC-008.
+
+## Assumptions
+
+- **Alcance v1**: aplicación web multiusuario para un solo almacén/bodega; la "ubicación" es un texto descriptivo por producto. Multi-almacén, códigos de barras, órdenes de compra, facturación a clientes, devoluciones de clientes, notificaciones por email y app móvil quedan fuera de alcance.
+- **Escala esperada**: hasta ~50 usuarios registrados (≤20 concurrentes), miles de productos y decenas de miles de movimientos por año.
+- **Moneda y localización**: valores en pesos colombianos (COP) sin manejo de impuestos ni multi-moneda en v1; zona horaria America/Bogota; interfaz 100% en español.
+- **Semántica de estados (ingreso)**: Pendiente = borrador editable sin efecto en stock; Recibido = mercancía física recibida, suma stock; Verificado = conteo revisado, inmutable.
+- **Semántica de estados (salida)**: Pendiente = borrador que compromete disponibilidad (stock físico intacto); Confirmada = stock descontado, inmutable salvo anulación por Gerente/Administrador; Completada = entrega física cerrada. "Cantidad comprometida" = suma de líneas de salidas Pendientes.
+- **Cantidades**: se permiten decimales (hasta 2) para materiales medidos en unidades continuas; la unidad de medida va implícita en la descripción del producto.
+- **Proveedores**: campo de texto libre en el ingreso; no hay catálogo de proveedores en v1.
+- **Usuarios iniciales**: el sistema arranca con un usuario Administrador semilla; el restablecimiento de contraseñas lo hace el Administrador (sin flujo de recuperación por email en v1).
+- **Precios**: el precio unitario en salidas es de referencia (último costo registrado del producto, editable al capturar); la valoración de consumo usa ese precio de referencia.
+- **Gráficos**: el reporte de consumo por proyecto incluye al menos un gráfico de consumo (por producto o en el tiempo); los demás reportes no requieren gráficos en v1.
+- **Carga masiva (US8)**: un archivo por corrida, máximo 2.000 filas de datos y 5 MB — coherente con la escala esperada (miles de productos, no cientos de miles) sin necesidad de una cola de procesamiento en background; sin catálogo propio de categorías en v1 (texto libre, igual que "ubicación").

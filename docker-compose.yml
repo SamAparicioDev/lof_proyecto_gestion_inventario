@@ -1,0 +1,114 @@
+# Trazo — orquestación de contenedores.
+#
+# Dos usos, el mismo archivo:
+#
+#   1) SOLO LA BASE DE DATOS (desarrollo local, con backend y frontend corriendo en el host):
+#        docker compose up -d db          # equivale a `npm run db:up`
+#
+#   2) LA APLICACIÓN COMPLETA (lo más parecido a un despliegue real):
+#        cp .env.docker.example .env      # y edita los valores — OBLIGATORIO
+#        docker compose up -d --build
+#        docker compose run --rm backend node backend/dist-seed/seed.js
+#        # (con --demo al final añade además los usuarios gerente.demo/operario.demo)
+#        # → http://localhost:3000
+#
+# Las migraciones se aplican SOLAS al arrancar el backend (`prisma migrate deploy`, ver
+# `backend/Dockerfile`). La semilla del administrador NO: crear un usuario con contraseña
+# conocida debe ser una decisión explícita, nunca un efecto secundario de levantar la app.
+#
+# Los secretos se inyectan aquí en tiempo de ejecución y NUNCA se hornean en las imágenes
+# (ver `.dockerignore`, que excluye todos los `.env`).
+
+services:
+  db:
+    image: postgres:16
+    container_name: trazo-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-trazo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-trazo}
+      POSTGRES_DB: ${POSTGRES_DB:-trazo}
+    ports:
+      # Puerto del HOST configurable: en la máquina de desarrollo suele haber ya un PostgreSQL
+      # nativo ocupando el 5432 (el que guarda la base `trazo` de trabajo). Publicar el
+      # contenedor en otro puerto permite que ambos convivan sin tocar el nativo. Dentro de la
+      # red de Docker el backend sigue hablando por el 5432 del servicio, no por este.
+      - "${PUERTO_DB:-5432}:5432"
+    volumes:
+      - trazo_pgdata:/var/lib/postgresql/data
+      # Solo corre en el PRIMER arranque del volumen: crea la BD adicional `trazo_test` que
+      # usan las pruebas de integración (research R10). Inofensivo fuera de desarrollo.
+      - ./docker/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql:ro
+    healthcheck:
+      # `depends_on: service_healthy` necesita esto: sin la sonda, el backend arrancaría antes
+      # de que Postgres acepte conexiones y `migrate deploy` fallaría en el primer intento.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-trazo} -d ${POSTGRES_DB:-trazo}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  backend:
+    build:
+      # Contexto = raíz del repositorio: es un monorepo de workspaces (ver backend/Dockerfile).
+      context: .
+      dockerfile: backend/Dockerfile
+    image: trazo-backend:latest
+    container_name: trazo-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # `db` es el nombre del servicio: Docker lo resuelve por DNS en la red interna.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-trazo}:${POSTGRES_PASSWORD:-trazo}@db:5432/${POSTGRES_DB:-trazo}?schema=public
+      # Sin valor por defecto A PROPÓSITO: `:?` aborta el arranque si falta. Un secreto de
+      # firma de sesiones con valor por defecto es un secreto conocido por cualquiera que lea
+      # el repositorio (hallazgo de la revisión de seguridad, specs/.../seguridad.md).
+      # Entre comillas simples y con un mensaje SIN dos puntos ni comillas: sin comillar, el
+      # texto de `:?` haría que YAML lo interpretara como un mapa anidado y el archivo entero
+      # dejaría de parsear (error real al primer `docker compose build`). El comando para
+      # generar el secreto está en `.env.docker.example`, no aquí.
+      JWT_SECRET: '${JWT_SECRET:?falta definir JWT_SECRET en el archivo .env — ver .env.docker.example}'
+      PORT: 4000
+      NODE_ENV: production
+      # Solo los usa la semilla, y solo si la ejecutas a mano (ver encabezado).
+      SEED_ADMIN_LOGIN: ${SEED_ADMIN_LOGIN:-admin}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
+    # Sin `ports`: el backend NO se expone al exterior. El único que necesita hablarle es el
+    # frontend, y lo hace por la red interna. Menos superficie expuesta, y obliga a que todo
+    # el tráfico pase por el proxy `/api/*` con su cookie first-party (research R14).
+    expose:
+      - "4000"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4000/api/salud').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        # En tiempo de BUILD, no de ejecución: Next congela el destino del proxy `/api/*` en el
+        # manifiesto de rutas al compilar (ver `frontend/next.config.ts`). `backend` es el
+        # nombre del servicio, que Docker resuelve por DNS dentro de la red interna.
+        BACKEND_URL: http://backend:4000
+    image: trazo-frontend:latest
+    container_name: trazo-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      # `BACKEND_URL` NO va aquí a propósito: en ejecución no tendría ningún efecto sobre el
+      # proxy `/api/*` (queda fijado al compilar — ver `args` arriba). Ponerla como variable de
+      # entorno daría la falsa impresión de que se puede cambiar sin reconstruir la imagen.
+      NODE_ENV: production
+    ports:
+      - "${PUERTO_PUBLICO:-3000}:3000"
+
+volumes:
+  trazo_pgdata:
