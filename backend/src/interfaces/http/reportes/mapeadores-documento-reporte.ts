@@ -44,6 +44,7 @@ import {
   formatoMonedaCop,
   formatoPorcentaje,
   textoFechaFiltro,
+  soloFiltrosAplicados,
 } from '../comunes/formato-documento';
 
 const COLUMNAS_CONSUMO_CLIENTE: ColumnaDocumentoReporte[] = [
@@ -81,12 +82,12 @@ export function mapearConsumoClienteADocumento(
   return {
     titulo: `Consumo por cliente — ${reporte.cliente.nombre}`,
     generadoEn: new Date(),
-    filtrosAplicados: {
+    filtrosAplicados: soloFiltrosAplicados({
       Cliente: reporte.cliente.nombre,
       NIT: reporte.cliente.nit,
       Desde: textoFechaFiltro(reporte.filtros.desde),
       Hasta: textoFechaFiltro(reporte.filtros.hasta),
-    },
+    }),
     columnas: COLUMNAS_CONSUMO_CLIENTE,
     filas,
     totales,
@@ -122,12 +123,12 @@ export function mapearConsumoProyectoADocumento(
   return {
     titulo: `Consumo por proyecto — ${reporte.proyecto.nombre}`,
     generadoEn: new Date(),
-    filtrosAplicados: {
+    filtrosAplicados: soloFiltrosAplicados({
       Cliente: reporte.cliente.nombre,
       Proyecto: reporte.proyecto.nombre,
       Desde: textoFechaFiltro(reporte.filtros.desde),
       Hasta: textoFechaFiltro(reporte.filtros.hasta),
-    },
+    }),
     columnas: COLUMNAS_CONSUMO_PROYECTO,
     filas,
     totales: [
@@ -174,11 +175,11 @@ export function mapearInventarioADocumento(reporte: ReporteInventarioActual): Do
   return {
     titulo: 'Inventario actual',
     generadoEn: new Date(),
-    filtrosAplicados: {
+    filtrosAplicados: soloFiltrosAplicados({
       Buscar: reporte.filtros.buscar ?? 'Sin filtro',
       'Cantidad mínima': reporte.filtros.cantidadMin === null ? 'Sin filtro' : String(reporte.filtros.cantidadMin),
       'Cantidad máxima': reporte.filtros.cantidadMax === null ? 'Sin filtro' : String(reporte.filtros.cantidadMax),
-    },
+    }),
     columnas: COLUMNAS_REPORTE_INVENTARIO,
     filas,
     totales: [
@@ -237,14 +238,14 @@ export function mapearMovimientosADocumento(reporte: ReporteMovimientos): Docume
   return {
     titulo: 'Movimientos de inventario',
     generadoEn: new Date(),
-    filtrosAplicados: {
+    filtrosAplicados: soloFiltrosAplicados({
       Desde: textoFechaFiltro(reporte.filtros.desde),
       Hasta: textoFechaFiltro(reporte.filtros.hasta),
       Tipo: reporte.filtros.tipo ? (ETIQUETA_TIPO_MOVIMIENTO[reporte.filtros.tipo] ?? reporte.filtros.tipo) : 'Sin filtro',
       Usuario: reporte.filtros.usuarioId === null ? 'Sin filtro' : `N.º ${reporte.filtros.usuarioId}`,
       Cliente: reporte.filtros.clienteId === null ? 'Sin filtro' : `N.º ${reporte.filtros.clienteId}`,
       Proyecto: reporte.filtros.proyectoId === null ? 'Sin filtro' : `N.º ${reporte.filtros.proyectoId}`,
-    },
+    }),
     columnas: COLUMNAS_REPORTE_MOVIMIENTOS,
     filas,
   };

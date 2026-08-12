@@ -41,6 +41,7 @@ import {
   formatoMonedaCop,
   textoFechaFiltro,
   textoFiltroOpcional,
+  soloFiltrosAplicados,
 } from '../comunes/formato-documento';
 
 /**
@@ -75,7 +76,7 @@ export function mapearListadoIngresosADocumento(ingresos: readonly Ingreso[], fi
   return {
     titulo: 'Ingresos de mercancía',
     generadoEn: new Date(),
-    filtrosAplicados: {
+    filtrosAplicados: soloFiltrosAplicados({
       Buscar: textoFiltroOpcional(filtros.buscar),
       // US13: el encabezado enumera TODOS los filtros del listado, también los nuevos — un
       // archivo que omitiera uno diría "esto es todo lo que hay" sobre un conjunto recortado.
@@ -83,7 +84,7 @@ export function mapearListadoIngresosADocumento(ingresos: readonly Ingreso[], fi
       Estado: filtros.estado ? ETIQUETA_ESTADO_INGRESO[filtros.estado] : 'Sin filtro',
       Desde: textoFechaFiltro(filtros.desde),
       Hasta: textoFechaFiltro(filtros.hasta),
-    },
+    }),
     columnas: COLUMNAS_LISTADO_INGRESOS,
     filas: ingresos.map((ingreso) => ({
       numeroFactura: ingreso.numeroFactura,

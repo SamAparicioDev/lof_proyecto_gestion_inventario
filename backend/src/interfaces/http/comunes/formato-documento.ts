@@ -62,13 +62,34 @@ export function formatoPorcentaje(valor: number): string {
   return `${Math.round(valor * 100)}%`;
 }
 
-/** Texto de un filtro de fecha opcional para `filtrosAplicados` — `"Sin filtro"` si no se
+/** Marca de "este filtro no se aplicó". Es un centinela INTERNO de esta capa: los mapeadores lo
+ *  producen y `soloFiltrosAplicados` lo elimina antes de construir el `DocumentoReporte`. */
+export const SIN_FILTRO = 'Sin filtro';
+
+/** Texto de un filtro de fecha opcional para `filtrosAplicados` — `SIN_FILTRO` si no se
  *  aplicó (contrato del `DocumentoReporte`: solo texto ya formateado para mostrar). */
 export function textoFechaFiltro(fechaIso: string | null | undefined): string {
-  return fechaIso ? formatoFechaSoloDia(fechaIso) : 'Sin filtro';
+  return fechaIso ? formatoFechaSoloDia(fechaIso) : SIN_FILTRO;
 }
 
-/** Texto de un filtro opcional cualquiera — `"Sin filtro"` cuando no se aplicó. */
+/** Texto de un filtro opcional cualquiera — `SIN_FILTRO` cuando no se aplicó. */
 export function textoFiltroOpcional(valor: string | number | null | undefined): string {
-  return valor === null || valor === undefined || valor === '' ? 'Sin filtro' : String(valor);
+  return valor === null || valor === undefined || valor === '' ? SIN_FILTRO : String(valor);
+}
+
+/**
+ * Deja en `filtrosAplicados` SOLO los filtros que de verdad se aplicaron.
+ *
+ * El campo se llama "filtros aplicados", y un reporte sin filtrar imprimía en la cabecera del
+ * PDF `Desde: Sin filtro | Hasta: Sin filtro | Tipo: Sin filtro | Usuario: Sin filtro |
+ * Cliente: Sin filtro | Proyecto: Sin filtro`: seis veces la misma no-información, que estorba
+ * justo donde se busca de un vistazo el contexto del reporte. Quitarlos no pierde nada — que un
+ * filtro no aparezca ES la forma de decir que no se aplicó.
+ *
+ * El descarte se hace AQUÍ, en la capa que sabe qué significa cada valor, y no en el exportador:
+ * las estrategias de `ExportadorReporte` solo pintan los pares que reciben, nunca interpretan su
+ * significado (TSDoc del puerto).
+ */
+export function soloFiltrosAplicados(filtros: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(Object.entries(filtros).filter(([, valor]) => valor !== SIN_FILTRO));
 }

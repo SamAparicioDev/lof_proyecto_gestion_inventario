@@ -38,6 +38,7 @@ import {
   formatoFechaSoloDia,
   formatoMonedaCop,
   textoFechaFiltro,
+  soloFiltrosAplicados,
 } from '../comunes/formato-documento';
 import { textoProducto } from '../ingresos/mapeadores-documento-ingreso';
 
@@ -86,7 +87,7 @@ export function mapearListadoSalidasADocumento(
   return {
     titulo: 'Salidas por proyecto',
     generadoEn: new Date(),
-    filtrosAplicados: {
+    filtrosAplicados: soloFiltrosAplicados({
       Cliente: nombresDeFiltro.cliente ?? 'Todos',
       Proyecto: nombresDeFiltro.proyecto ?? 'Todos',
       Estado: filtros.estado ? ETIQUETA_ESTADO_SALIDA[filtros.estado] : 'Sin filtro',
@@ -99,7 +100,7 @@ export function mapearListadoSalidasADocumento(
       // pantalla, ni más ni menos (SC-007, mismo criterio que la columna "Registró" de ingresos).
       'N.º de salida': filtros.numero !== undefined ? `N.º ${filtros.numero}` : 'Sin filtro',
       Autoriza: filtros.usuarioAutorizaId !== undefined ? `Usuario N.º ${filtros.usuarioAutorizaId}` : 'Sin filtro',
-    },
+    }),
     columnas: COLUMNAS_LISTADO_SALIDAS,
     filas: salidas.map((salida) => {
       const destino = destinoPorProyectoId.get(salida.proyectoId);

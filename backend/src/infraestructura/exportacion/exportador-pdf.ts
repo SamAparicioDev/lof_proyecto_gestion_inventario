@@ -24,12 +24,27 @@
  * reintenta sin logo antes de dejar propagar nada; un error que no dependa del logo vuelve a
  * ocurrir en el reintento y sí se propaga.
  *
+ * ## Maqueta: «exportable» no basta, tiene que VERSE
+ *
+ * FR-043 pide que el reporte se exporte completo, y un PDF cuyo contenido no cabe en la hoja no
+ * lo cumple aunque el archivo se genere sin errores. Los reportes de inventario y movimientos
+ * tienen 9 columnas: en A4 vertical la tabla medía más que el papel y la última columna se
+ * dibujaba ENTERA fuera de la hoja — invisible al abrirlo y al imprimirlo, pero presente en el
+ * flujo de contenido, así que una extracción de texto la encontraba y daba el archivo por bueno.
+ *
+ * De ahí las reglas de `construirDefinicionDocumento` y `calcularAnchosColumnas` (cada una con
+ * su porqué en su TSDoc): orientación según el número de columnas, anchos calculados en puntos
+ * descontando el relleno de celda, importes que nunca se parten, encabezado repetido en cada
+ * página, filas que no se cortan entre páginas y pie «Página X de Y».
+ * `test/unit/maqueta-pdf.spec.ts` vigila el invariante; el contrato lo documenta en
+ * `contracts/api-rest.md` §«Maqueta del PDF».
+ *
  * Implementa: FR-043, FR-065, FR-067, FR-068.
  */
 import { Injectable } from '@nestjs/common';
 import PdfPrinter from 'pdfmake';
 import vfsFonts from 'pdfmake/build/vfs_fonts';
-import type { Content, TableCell, TDocumentDefinitions } from 'pdfmake/interfaces';
+import type { Content, ContentTable, CustomTableLayout, TableCell, TDocumentDefinitions } from 'pdfmake/interfaces';
 import type { DocumentoReporte, ExportadorReporte } from '../../aplicacion/reportes/puertos/exportador-reporte';
 
 /** Fuentes Roboto embebidas por `pdfmake`, decodificadas de base64 a `Buffer` (ver TSDoc). */
@@ -52,6 +67,26 @@ const FORMATO_FECHA_GENERACION = new Intl.DateTimeFormat('es-CO', {
 /** Ancho (en puntos) con el que se incrusta el logo — `pdfmake` deduce el alto conservando la
  *  proporción, así que un logo apaisado y uno cuadrado se ven bien con el mismo valor. */
 const ANCHO_LOGO_PT = 110;
+
+/**
+ * A partir de cuántas columnas el documento se imprime APAISADO.
+ *
+ * El motivo es aritmético, no estético: un A4 vertical deja 515 pt útiles, así que un reporte
+ * de 9 columnas —los de inventario y movimientos lo son— dispone de unos 57 pt por columna,
+ * donde no cabe una descripción de producto ni un nombre de proyecto sin partirse en cuatro
+ * líneas o quedar recortado. Apaisado sube a ~780 pt útiles (~87 pt por columna) y el mismo
+ * contenido entra holgado. Los reportes de 4 y 6 columnas se quedan verticales, que es como se
+ * imprimen y archivan de forma natural.
+ */
+const COLUMNAS_PARA_APAISAR = 7;
+
+/** Paleta del documento impreso. A propósito NO son los tokens de Nocturne: ese sistema está
+ *  pensado para pantalla sobre fondo oscuro, y un PDF se imprime sobre papel blanco. */
+const COLOR_TEXTO = '#1f2430';
+const COLOR_TENUE = '#6b7280';
+const COLOR_LINEA = '#d7dae0';
+const COLOR_ENCABEZADO_FONDO = '#eef0f6';
+const COLOR_FILA_ALTERNA = '#f7f8fb';
 
 @Injectable()
 export class ExportadorPdf implements ExportadorReporte {
@@ -86,30 +121,196 @@ export class ExportadorPdf implements ExportadorReporte {
   }
 }
 
-/** Arma la definición pdfmake: título (con logo a la derecha), filtros aplicados, fecha de
- *  generación, cabecera del documento si la hay, y tabla de líneas. */
+/** Dimensiones útiles de un A4 en puntos, para calcular anchos de columna sin adivinar. */
+const A4_LADO_CORTO_PT = 595.28;
+const A4_LADO_LARGO_PT = 841.89;
+const MARGEN_HORIZONTAL_PT = 32;
+const MARGEN_SUPERIOR_PT = 34;
+/** El margen inferior reserva sitio para el pie de página; si no, `pdfmake` lo dibujaría
+ *  encima de la última fila de la tabla. */
+const MARGEN_INFERIOR_PT = 44;
+
+/** Aire a cada lado del texto dentro de la celda. Es una constante compartida —y no un número
+ *  suelto en el layout— porque `calcularAnchosColumnas` TIENE que descontarlo: ver su TSDoc. */
+const PADDING_CELDA_PT = 6;
+
+/** Ancho de carácter, en múltiplos del tamaño de fuente, para estimar cuánto ocupa un importe
+ *  en Roboto. Los dígitos avanzan 0,556 em y el punto separador bastante menos, así que 0,55
+ *  sobreestima ligeramente — que es justo el lado seguro: sobra sitio, no falta. */
+const ANCHO_CARACTER_EM = 0.55;
+
+/** Techo del ancho total que pueden acaparar las columnas numéricas. Sin él, un reporte con
+ *  muchos importes largos dejaría las descripciones en un hilo de dos caracteres por línea. */
+const PROPORCION_MAXIMA_NUMERICAS = 0.55;
+
+/**
+ * Arma la definición pdfmake: título (con logo a la derecha), filtros aplicados, fecha de
+ * generación, cabecera del documento si la hay, tabla de líneas y pie con la paginación.
+ *
+ * Las tres decisiones de maqueta que garantizan que NO se corte información (FR-043) son:
+ *
+ *  1. **Orientación según el número de columnas** (`COLUMNAS_PARA_APAISAR`).
+ *  2. **Anchos de columna calculados en puntos**, nunca `'auto'`. Con `'auto'` `pdfmake` mide
+ *     el contenido más ancho de cada columna y, si la suma supera la página, la tabla se sale
+ *     del papel y lo que sobra se pierde al recortar. Repartiendo el ancho disponible en
+ *     proporciones fijas la tabla mide SIEMPRE exactamente lo que cabe, y el texto largo se
+ *     ajusta en varias líneas en vez de desbordarse.
+ *  3. **`dontBreakRows`**, para que una fila alta (una descripción de tres líneas) salte
+ *     entera a la página siguiente en lugar de partirse por la mitad entre dos páginas.
+ *
+ * El pie "Página X de Y" no es decorativo: es lo que le permite a quien recibe el PDF saber
+ * que no le falta una hoja.
+ */
 function construirDefinicionDocumento(documento: DocumentoReporte): TDocumentDefinitions {
+  const apaisado = documento.columnas.length >= COLUMNAS_PARA_APAISAR;
+  const anchoPagina = apaisado ? A4_LADO_LARGO_PT : A4_LADO_CORTO_PT;
+  const anchoUtil = anchoPagina - MARGEN_HORIZONTAL_PT * 2;
+  const tamanoFuente = apaisado ? 8 : 9;
+  const cuerpoTabla = construirCuerpoTabla(documento);
+  const filaPrimerTotal = cuerpoTabla.length - (documento.totales?.length ?? 0);
+
   const contenido: Content[] = [
     construirBloqueTitulo(documento),
     ...construirBloqueEncabezado(documento),
     {
       table: {
         headerRows: 1,
-        widths: documento.columnas.map((columna) => (columna.alineacion === 'derecha' ? 'auto' : '*')),
-        body: construirCuerpoTabla(documento),
+        dontBreakRows: true,
+        widths: calcularAnchosColumnas(documento, anchoUtil, tamanoFuente),
+        body: cuerpoTabla,
       },
-      layout: 'lightHorizontalLines',
+      layout: construirLayoutTabla(filaPrimerTotal),
     },
   ];
 
   return {
+    pageSize: 'A4',
+    pageOrientation: apaisado ? 'landscape' : 'portrait',
+    pageMargins: [MARGEN_HORIZONTAL_PT, MARGEN_SUPERIOR_PT, MARGEN_HORIZONTAL_PT, MARGEN_INFERIOR_PT],
     content: contenido,
-    defaultStyle: { font: 'Roboto', fontSize: 9 },
+    footer: (paginaActual: number, totalPaginas: number): Content => ({
+      margin: [MARGEN_HORIZONTAL_PT, 14, MARGEN_HORIZONTAL_PT, 0],
+      columns: [
+        { text: documento.titulo, style: 'pie', width: '*' },
+        { text: `Página ${paginaActual} de ${totalPaginas}`, style: 'pie', width: 'auto', alignment: 'right' },
+      ],
+    }),
+    defaultStyle: { font: 'Roboto', fontSize: tamanoFuente, color: COLOR_TEXTO, lineHeight: 1.15 },
     styles: {
-      titulo: { fontSize: 16, bold: true, margin: [0, 0, 0, 4] },
-      filtros: { fontSize: 9, color: '#555555', margin: [0, 0, 0, 2] },
-      meta: { fontSize: 8, color: '#777777', margin: [0, 0, 0, 12] },
+      titulo: { fontSize: 15, bold: true, margin: [0, 0, 0, 5] },
+      filtros: { fontSize: 8.5, color: COLOR_TENUE, margin: [0, 0, 0, 2] },
+      meta: { fontSize: 8, color: COLOR_TENUE, margin: [0, 0, 0, 12] },
+      pie: { fontSize: 7.5, color: COLOR_TENUE },
     },
+  };
+}
+
+/**
+ * Medidas de la maqueta de `documento`, EXPUESTAS para que una prueba pueda comprobar el
+ * invariante de FR-043 «nada se sale de la hoja» sin necesidad de un parser de PDF.
+ *
+ * Se expone porque el fallo que motivó esta función era invisible desde fuera: la tabla salía
+ * más ancha que el papel, la última columna se dibujaba fuera de la hoja y el PDF seguía
+ * conteniendo ese texto — una extracción de texto lo encontraba y daba el archivo por bueno,
+ * pero al abrirlo o imprimirlo la columna no estaba. El invariante que hay que vigilar es
+ * `anchoTabla <= anchoUtilPagina`.
+ */
+export function medirMaquetaTabla(documento: DocumentoReporte): {
+  anchoTabla: number;
+  anchoUtilPagina: number;
+  apaisado: boolean;
+} {
+  const apaisado = documento.columnas.length >= COLUMNAS_PARA_APAISAR;
+  const anchoUtilPagina = (apaisado ? A4_LADO_LARGO_PT : A4_LADO_CORTO_PT) - MARGEN_HORIZONTAL_PT * 2;
+  const anchos = calcularAnchosColumnas(documento, anchoUtilPagina, apaisado ? 8 : 9);
+  const anchoTabla =
+    anchos.reduce((suma, ancho) => suma + ancho, 0) + documento.columnas.length * PADDING_CELDA_PT * 2;
+
+  return { anchoTabla, anchoUtilPagina, apaisado };
+}
+
+/**
+ * Reparte el ancho disponible entre las columnas, de modo que la tabla mida siempre exactamente
+ * lo que cabe en la página. Ver punto 2 del TSDoc de `construirDefinicionDocumento` para por qué
+ * no se usa `'auto'`.
+ *
+ * El criterio no es el mismo para los dos tipos de columna, porque no fallan igual:
+ *
+ * - Una columna NUMÉRICA recibe el ancho que su contenido REALMENTE necesita (estimado a partir
+ *   del texto más largo de la columna, encabezado incluido). Un importe partido en varias líneas
+ *   —`$` / `15.432.098.76` / `5`— no es un texto ajustado, es una cifra rota: quien la lee tiene
+ *   que recomponerla mentalmente y puede equivocarse. Las numéricas nunca deben ajustarse.
+ * - Una columna de TEXTO se reparte el resto a partes iguales y sí se ajusta en varias líneas,
+ *   que es el comportamiento natural y legible de una descripción larga.
+ *
+ * OJO con el padding: en `pdfmake` un `width` numérico es el ancho del CONTENIDO de la celda, y
+ * el relleno lateral se suma por fuera. Repartir el ancho útil completo hacía una tabla
+ * `anchoUtil + columnas * 2 * PADDING_CELDA_PT` de ancho —con 9 columnas, 108 pt más que el
+ * papel— y la última columna terminaba fuera de la hoja: seguía escrita en el PDF (por eso una
+ * extracción de texto la encuentra) pero no se ve ni se imprime. Por eso el relleno se descuenta
+ * ANTES de repartir.
+ */
+function calcularAnchosColumnas(documento: DocumentoReporte, anchoUtil: number, tamanoFuente: number): number[] {
+  const anchoParaContenido = anchoUtil - documento.columnas.length * PADDING_CELDA_PT * 2;
+
+  // `null` marca "columna de texto": se resuelve después, con lo que sobre.
+  const necesidades = documento.columnas.map((columna) =>
+    columna.alineacion === 'derecha' ? anchoNecesarioColumna(documento, columna, tamanoFuente) : null,
+  );
+
+  const totalCrudo = necesidades.reduce((suma: number, ancho) => suma + (ancho ?? 0), 0);
+  const columnasTexto = necesidades.filter((ancho) => ancho === null).length;
+
+  // Sin columnas de texto que proteger, las numéricas se reparten TODO el ancho (si no, la
+  // tabla quedaría flotando estrecha en medio de la hoja).
+  const tope = columnasTexto === 0 ? anchoParaContenido : anchoParaContenido * PROPORCION_MAXIMA_NUMERICAS;
+  const escala = totalCrudo > 0 && (totalCrudo > tope || columnasTexto === 0) ? tope / totalCrudo : 1;
+
+  const anchosNumericos = necesidades.map((ancho) => (ancho === null ? null : ancho * escala));
+  const totalNumericas = anchosNumericos.reduce((suma: number, ancho) => suma + (ancho ?? 0), 0);
+  const anchoPorColumnaTexto = columnasTexto > 0 ? (anchoParaContenido - totalNumericas) / columnasTexto : 0;
+
+  return anchosNumericos.map((ancho) => ancho ?? anchoPorColumnaTexto);
+}
+
+/** Ancho estimado que necesita una columna para que su valor más largo (encabezado incluido)
+ *  quepa en UNA sola línea. Ver `ANCHO_CARACTER_EM`. */
+function anchoNecesarioColumna(
+  documento: DocumentoReporte,
+  columna: DocumentoReporte['columnas'][number],
+  tamanoFuente: number,
+): number {
+  const textos = [columna.etiqueta, ...documento.filas.map((fila) => formatearCeldaTexto(fila[columna.clave]))];
+  const caracteres = Math.max(...textos.map((texto) => texto.length));
+  return caracteres * ANCHO_CARACTER_EM * tamanoFuente;
+}
+
+/**
+ * Estética de la tabla: encabezado con fondo, filas alternas muy suaves para seguir la línea
+ * con la vista en un reporte ancho, líneas horizontales finas y ninguna vertical (las rejillas
+ * completas ensucian y hacen ilegible un reporte de 9 columnas), y el bloque de totales
+ * separado por una línea más marcada.
+ *
+ * `filaPrimerTotal` es el índice de la primera fila de totales dentro del cuerpo; cuando el
+ * reporte no tiene totales coincide con el final de la tabla y las reglas siguen siendo
+ * correctas (la línea "de separación" cae justo en el borde inferior).
+ */
+function construirLayoutTabla(filaPrimerTotal: number): CustomTableLayout {
+  const esLineaFuerte = (i: number, node: ContentTable): boolean =>
+    i === 0 || i === 1 || i === filaPrimerTotal || i === node.table.body.length;
+
+  return {
+    hLineWidth: (i, node) => (esLineaFuerte(i, node) ? 0.8 : 0.4),
+    vLineWidth: () => 0,
+    hLineColor: (i, node) => (esLineaFuerte(i, node) ? COLOR_TENUE : COLOR_LINEA),
+    fillColor: (i) => {
+      if (i === 0 || i >= filaPrimerTotal) return COLOR_ENCABEZADO_FONDO;
+      return i % 2 === 0 ? COLOR_FILA_ALTERNA : null;
+    },
+    paddingTop: () => 5,
+    paddingBottom: () => 5,
+    paddingLeft: () => PADDING_CELDA_PT,
+    paddingRight: () => PADDING_CELDA_PT,
   };
 }
 
@@ -196,14 +397,34 @@ function construirCuerpoTabla(documento: DocumentoReporte): TableCell[][] {
   );
 
   const filasTotales: TableCell[][] = (documento.totales ?? []).map((total) =>
-    documento.columnas.map((columna, indice) => ({
-      text: indice === 0 ? total.etiqueta : indice === documento.columnas.length - 1 ? total.valor : '',
-      bold: true,
-      alignment: columna.alineacion === 'derecha' ? 'right' : 'left',
-    })),
+    construirFilaTotal(total, documento.columnas.length),
   );
 
   return [filaEncabezado, ...filasDatos, ...filasTotales];
+}
+
+/**
+ * Fila de total: la etiqueta ocupa TODAS las columnas menos la última (`colSpan`) alineada a la
+ * derecha, y el importe cae en la última, justo debajo de la columna de importes.
+ *
+ * Antes la etiqueta se metía en la primera celda, de ~57 pt: "Valor total del inventario" no
+ * cabía y se partía o se recortaba, y encima quedaba en el extremo opuesto a su propio número.
+ * `colSpan` le da todo el ancho de la fila y la pega al valor que describe.
+ *
+ * `pdfmake` exige que tras una celda con `colSpan: n` vengan n-1 celdas vacías de relleno; si
+ * faltan, descuadra el resto de la tabla.
+ */
+function construirFilaTotal(total: { etiqueta: string; valor: string }, numeroColumnas: number): TableCell[] {
+  const columnasEtiqueta = numeroColumnas - 1;
+  if (columnasEtiqueta < 1) {
+    return [{ text: `${total.etiqueta}: ${total.valor}`, bold: true, alignment: 'right' }];
+  }
+
+  return [
+    { text: total.etiqueta, bold: true, alignment: 'right', colSpan: columnasEtiqueta },
+    ...Array.from({ length: columnasEtiqueta - 1 }, (): TableCell => ({})),
+    { text: total.valor, bold: true, alignment: 'right' },
+  ];
 }
 
 /** Números con separador de miles (`es-CO`); el resto, texto tal cual. */

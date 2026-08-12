@@ -489,3 +489,26 @@ Los endpoints de datos y los de exportación comparten esquema de filtros y caso
 El PDF incluye encabezado con nombre del reporte, filtros aplicados y fecha/hora; el Excel
 incluye formatos COP y autofiltro. Implementación vía puerto `ExportadorReporte` con
 estrategias Excel/Pdf (research R8).
+
+### Maqueta del PDF — garantías de FR-043 «el reporte sale completo»
+
+«Exportable» no basta: un PDF cuyo contenido no se ve no cumple FR-043. La estrategia
+`ExportadorPdf` garantiza, para CUALQUIER reporte o documento:
+
+1. **Tamaño y orientación**: A4; **apaisado** a partir de 7 columnas (inventario y movimientos
+   tienen 9), **vertical** por debajo. En vertical caben 515 pt útiles: con 9 columnas tocarían
+   a ~57 pt, donde no entra una descripción de producto.
+2. **La tabla nunca excede el ancho imprimible.** Los anchos de columna se calculan en puntos
+   —nunca `auto`— descontando el relleno de celda, que en `pdfmake` se suma POR FUERA del
+   `width`. Es el invariante que vigila `backend/test/unit/maqueta-pdf.spec.ts`.
+3. **Los importes no se parten**: las columnas numéricas reciben el ancho que su valor más
+   largo necesita para caber en una línea; solo las columnas de texto se ajustan en varias.
+   Una cifra partida en dos renglones es un dato que hay que recomponer a mano.
+4. **Continuidad legible**: la fila de encabezados se repite en cada página, ninguna fila se
+   parte entre dos páginas, y el pie muestra «Página X de Y» para que quien reciba el archivo
+   sepa si le falta una hoja.
+5. **Totales junto a su cifra**: la etiqueta del total ocupa el ancho de la fila y termina
+   pegada al importe que describe, en la misma columna de importes.
+
+Estas garantías aplican igual a los documentos individuales de US11 (FR-065), que usan la
+misma estrategia con `encabezado` y `logo`.
