@@ -39,9 +39,10 @@ import { Plus } from '@phosphor-icons/react/dist/ssr';
 import type { EstadoSalida, Paginado, Salida } from '@trazo/compartido';
 import { apiServidor } from '@/lib/api/servidor';
 import { cargarClientesYProyectos } from '@/lib/clientes-proyectos-servidor';
-import { formatoFecha, formatoMoneda } from '@/lib/formato';
+import { formatoFecha, formatoFechaFiltro, formatoMoneda } from '@/lib/formato';
 import { EstadoSalidaTag } from '@/componentes/salidas/estado-salida-tag';
 import { BarraFiltros, CampoFiltro } from '@/componentes/comunes/barra-filtros';
+import { CampoFecha } from '@/componentes/comunes/campo-fecha';
 import { BotonesExportar } from '@/componentes/comunes/botones-exportar';
 import { ResumenFiltros } from '@/componentes/comunes/resumen-filtros';
 import { claveDeFiltros, filtrosActivos, mensajeListadoVacio } from '@/lib/filtros';
@@ -117,8 +118,8 @@ export default async function PaginaSalidas({
     { etiqueta: 'Cliente', valor: clientes.find((cliente) => String(cliente.id) === parametros.clienteId)?.nombre },
     { etiqueta: 'Proyecto', valor: proyectos.find((proyecto) => String(proyecto.id) === parametros.proyectoId)?.nombre },
     { etiqueta: 'Estado', valor: ESTADOS.find((estado) => estado.valor === parametros.estado)?.etiqueta },
-    { etiqueta: 'Desde', valor: parametros.desde },
-    { etiqueta: 'Hasta', valor: parametros.hasta },
+    { etiqueta: 'Desde', valor: formatoFechaFiltro(parametros.desde) },
+    { etiqueta: 'Hasta', valor: formatoFechaFiltro(parametros.hasta) },
     { etiqueta: 'N.º de salida', valor: parametros.numero },
     { etiqueta: 'Autoriza', valor: parametros.usuarioAutorizaId ? `Usuario N.º ${parametros.usuarioAutorizaId}` : undefined },
   ]);
@@ -181,11 +182,11 @@ export default async function PaginaSalidas({
         </CampoFiltro>
         <CampoFiltro ancho="corto">
           <label htmlFor="desde">Desde</label>
-          <input id="desde" name="desde" type="date" className="input" defaultValue={parametros.desde} />
+          <CampoFecha id="desde" name="desde" defaultValue={parametros.desde} />
         </CampoFiltro>
         <CampoFiltro ancho="corto">
           <label htmlFor="hasta">Hasta</label>
-          <input id="hasta" name="hasta" type="date" className="input" defaultValue={parametros.hasta} />
+          <CampoFecha id="hasta" name="hasta" defaultValue={parametros.hasta} />
         </CampoFiltro>
         <CampoFiltro ancho="corto">
           <label htmlFor="numero">N.º de salida</label>

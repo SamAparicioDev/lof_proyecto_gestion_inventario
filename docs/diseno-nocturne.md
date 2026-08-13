@@ -229,6 +229,27 @@ Si alguna vez una tarjeta necesita de verdad otro relleno, la solución es la mi
 | `.hr` | Regla horizontal — el sistema prefiere espacio en blanco; evítala | — |
 | `.lighten` | Wrapper de imagen (`mix-blend-mode: lighten`) | Sin uso previsto en Trazo (no hay fotografías) |
 
+### Campo de fecha: `CampoFecha`, no `<input type="date">`
+
+Nocturne no trae un selector de fecha propio, y el campo nativo tampoco sirve tal cual: el
+navegador lo pinta **según su propio idioma**, ignorando el `lang` del documento y el del propio
+campo (comprobado en Chromium con las tres variantes). Con el navegador en inglés, el 12 de
+agosto de 2026 aparece como `08/12/2026`, que aquí se lee 8 de diciembre — y FR-047 exige
+español en toda la interfaz.
+
+`componentes/comunes/campo-fecha.tsx` resuelve esto sin salirse del sistema: por dentro es un
+`.input` normal en modo texto con máscara `dd/mm/aaaa` y un botón de calendario que abre el
+selector NATIVO (`showPicker()`), así que se conserva lo bueno del control del sistema sin
+heredar su formato. Hacia fuera sigue entregando el ISO `aaaa-mm-dd` del contrato.
+
+Dos detalles de estilo, por si se toca:
+
+- El hueco del botón (`padding-right`) va en `style` inline y no en una clase. Es geometría
+  propia del componente y, además, un `style` inline gana siempre — no hay que pelear con la
+  regla de cascada de más arriba.
+- El botón NO lleva `.btn`: es un adorno dentro del campo, no una acción de la pantalla. Su
+  color usa el mismo `color-mix` que `.text-muted`, que no tiene token propio.
+
 ## Iconos usados en la navegación (referencia para tandas futuras)
 
 De `Trazo Inventarios.dc.html`, mapeados a nuestras rutas reales

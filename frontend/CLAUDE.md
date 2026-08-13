@@ -42,7 +42,14 @@ escribiendo una regla de negocio aquí, pertenece al backend — detente y revis
 - **Listados**: paginación server-side con los parámetros del contrato
   (`pagina`/`porPagina`), estado vacío y estado de carga en español, siempre.
 - **Dinero y fechas**: helpers de formato (COP `es-CO`, zona `America/Bogota`) en
-  `src/lib/` — no formatees a mano en cada componente.
+  `src/lib/` — no formatees a mano en cada componente. Para un valor de filtro que llega por
+  query string, `formatoFechaFiltro` (devuelve `undefined` si el filtro no se aplicó).
+- **Capturar fechas: SIEMPRE `CampoFecha`** (`componentes/comunes/campo-fecha.tsx`), NUNCA un
+  `<input type="date">` suelto. El navegador pinta el campo nativo según SU idioma, ignorando
+  el `lang` del documento y el del propio campo (comprobado en Chromium): con el navegador en
+  inglés, el 12 de agosto sale como `08/12/2026` — 8 de diciembre para quien lo lee aquí. En
+  formularios de `react-hook-form` va con `Controller`, no con `register` (es un componente
+  controlado). Sigue enviando el ISO `aaaa-mm-dd` del contrato, así que los esquemas no cambian.
 - **Sistema de diseño**: Nocturne (reemplaza shadcn/ui — docs/diseno-nocturne.md). Usa
   SIEMPRE sus clases (`.btn`, `.field`/`.input`, `.card`, `.table`, `.tag`, `.dialog`) y
   tokens (`var(--color-*)`, `var(--space-*)`, `var(--radius-*)`) — nunca hex/px sueltos ni

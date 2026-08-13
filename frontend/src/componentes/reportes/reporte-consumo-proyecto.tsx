@@ -29,7 +29,7 @@
  * división por cero); si no, se redondea a un entero de porcentaje (`0.4` → "40%").
  */
 import { useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { FilePdf, FileXls, Printer } from '@phosphor-icons/react/dist/ssr';
 import {
@@ -44,20 +44,13 @@ import { exportarConsumoProyecto, obtenerReporteConsumoProyecto } from '@/lib/ap
 import { ErrorApi } from '@/lib/api/cliente';
 import { formatoFecha, formatoMoneda } from '@/lib/formato';
 import { BarraFiltros, CampoFiltro } from '@/componentes/comunes/barra-filtros';
+import { CampoFecha } from '@/componentes/comunes/campo-fecha';
 import { GraficoConsumo } from './grafico-consumo';
 
 const MENSAJE_ERROR_RED = 'No fue posible comunicarse con el servidor. Intenta de nuevo.';
 const MENSAJE_SIN_PERMISO = 'No tienes permiso para ver este reporte. Contacta a un administrador o gerente.';
 
 const VALORES_INICIALES: FiltroConsumoProyecto = { proyectoId: 0, desde: '', hasta: '' };
-
-/** `esquemaFechaOpcional` (`@trazo/compartido`) acepta `undefined` como "sin filtro", pero un
- *  `<input type="date">` vacío entrega `''` — sin esta conversión, Zod interpreta el campo
- *  vacío como una fecha inválida ("La fecha no es válida") en vez de "no se filtró"; mismo
- *  criterio que `reporte-consumo-cliente.tsx`. */
-function vacioComoIndefinido(valor: string): string | undefined {
-  return valor === '' ? undefined : valor;
-}
 
 /** `0.4` → `"40%"` — mismo criterio de redondeo que `mapeadores-documento-reporte.ts` del backend. */
 function formatoPorcentaje(valor: number): string {
@@ -78,6 +71,7 @@ export function PanelConsumoProyecto({ clientes }: { clientes: Cliente[] }) {
 
   const {
     register,
+    control,
     handleSubmit,
     setValue,
     formState: { errors },
@@ -206,12 +200,17 @@ export function PanelConsumoProyecto({ clientes }: { clientes: Cliente[] }) {
         </CampoFiltro>
         <CampoFiltro ancho="corto">
           <label htmlFor="desde">Desde</label>
-          <input
-            id="desde"
-            type="date"
-            className="input"
-            aria-invalid={!!errors.desde}
-            {...register('desde', { setValueAs: vacioComoIndefinido })}
+          <Controller
+            name="desde"
+            control={control}
+            render={({ field }) => (
+              <CampoFecha
+                id="desde"
+                value={field.value ?? ''}
+                onChange={(iso) => field.onChange(iso === '' ? undefined : iso)}
+                ariaInvalid={!!errors.desde}
+              />
+            )}
           />
           {errors.desde && (
             <p role="alert" style={{ fontSize: 12, color: 'var(--color-accent-300)', marginTop: 5 }}>
@@ -221,12 +220,17 @@ export function PanelConsumoProyecto({ clientes }: { clientes: Cliente[] }) {
         </CampoFiltro>
         <CampoFiltro ancho="corto">
           <label htmlFor="hasta">Hasta</label>
-          <input
-            id="hasta"
-            type="date"
-            className="input"
-            aria-invalid={!!errors.hasta}
-            {...register('hasta', { setValueAs: vacioComoIndefinido })}
+          <Controller
+            name="hasta"
+            control={control}
+            render={({ field }) => (
+              <CampoFecha
+                id="hasta"
+                value={field.value ?? ''}
+                onChange={(iso) => field.onChange(iso === '' ? undefined : iso)}
+                ariaInvalid={!!errors.hasta}
+              />
+            )}
           />
           {errors.hasta && (
             <p role="alert" style={{ fontSize: 12, color: 'var(--color-accent-300)', marginTop: 5 }}>

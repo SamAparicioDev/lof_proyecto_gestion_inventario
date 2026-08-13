@@ -32,6 +32,19 @@ no es control de acceso.
   El filtro sigue siendo un `<form method="GET">` nativo: el estado vive en la URL, así que un
   listado filtrado se comparte, se marca y se recarga sin perder nada — y el enlace de exportar
   (US11) hereda los mismos filtros por construcción.
+- **Fechas: `dd/mm/aaaa` SIEMPRE, en pantalla y al escribirlas** (FR-047).
+  - Al MOSTRAR: `formatoFecha` / `formatoFechaHora` de `lib/formato.ts` — nunca la cadena que
+    llega de la API. Para el valor de un filtro que viene de la query string está
+    `formatoFechaFiltro`, que además trata el filtro ausente como "sin aplicar" (los chips de
+    `ResumenFiltros` mostraban `Desde: 2026-07-01` en crudo hasta que se añadió).
+  - Al CAPTURAR: `componentes/comunes/campo-fecha.tsx` (`CampoFecha`). **Prohibido
+    `<input type="date">` suelto**: el navegador lo pinta según SU idioma y no según el `lang`
+    del documento —comprobado en Chromium, ni el `lang` del propio campo lo cambia—, así que con
+    el navegador en inglés el 12/08/2026 se muestra `08/12/2026`, que aquí se lee 8 de
+    diciembre. En un sistema cuya trazabilidad se apoya en fechas, eso no es un detalle
+    estético. `CampoFecha` muestra y acepta `dd/mm/aaaa`, conserva el calendario nativo en un
+    botón y sigue enviando el ISO `aaaa-mm-dd` que exige este contrato, de modo que ni los
+    esquemas Zod compartidos ni la API cambian.
 
 ## Mapa de rutas UI (contrato de acceso por rol)
 

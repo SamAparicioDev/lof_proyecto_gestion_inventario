@@ -27,7 +27,16 @@
  * mensaje general (frontend/CLAUDE.md).
  */
 import { useEffect, useState } from 'react';
-import { useFieldArray, useForm, useWatch, type Path, type UseFormRegisterReturn } from 'react-hook-form';
+import {
+  Controller,
+  useFieldArray,
+  useForm,
+  useWatch,
+  type Control,
+  type Path,
+  type UseFormRegisterReturn,
+} from 'react-hook-form';
+import { CampoFecha as CampoFechaBase } from '@/componentes/comunes/campo-fecha';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
 import { Plus, Trash } from '@phosphor-icons/react/dist/ssr';
@@ -167,8 +176,8 @@ export function IngresoForm({ productos, ingresoId, valoresIniciales }: IngresoF
           <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
             <CampoTexto id="numeroFactura" label="Número de factura" error={errors.numeroFactura?.message} registro={register('numeroFactura')} />
             <CampoTexto id="proveedor" label="Proveedor" error={errors.proveedor?.message} registro={register('proveedor')} />
-            <CampoFecha id="fechaFactura" label="Fecha de la factura" error={errors.fechaFactura?.message} registro={register('fechaFactura')} />
-            <CampoFecha id="fechaRecepcion" label="Fecha de recepción" error={errors.fechaRecepcion?.message} registro={register('fechaRecepcion')} />
+            <CampoFecha id="fechaFactura" label="Fecha de la factura" error={errors.fechaFactura?.message} control={control} name="fechaFactura" />
+            <CampoFecha id="fechaRecepcion" label="Fecha de recepción" error={errors.fechaRecepcion?.message} control={control} name="fechaRecepcion" />
           </div>
           <div className="field">
             <label htmlFor="observaciones">Observaciones (opcional)</label>
@@ -345,27 +354,39 @@ function CampoTexto({
   );
 }
 
+/**
+ * Campo de fecha del formulario. Delega en `CampoFechaBase` (componentes/comunes), que muestra
+ * y acepta `dd/mm/aaaa` en vez del formato que imponga el idioma del navegador — ver el TSDoc
+ * de ese componente. Va con `Controller` y no con `register` porque `CampoFechaBase` es
+ * controlado: entrega el ISO ya armado, no un evento de un `<input>` nativo.
+ */
 function CampoFecha({
   id,
   label,
   error,
-  registro,
+  control,
+  name,
 }: {
   id: string;
   label: string;
   error?: string;
-  registro: UseFormRegisterReturn;
+  control: Control<DatosCrearIngreso>;
+  name: Path<DatosCrearIngreso>;
 }) {
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
-      <input
-        id={id}
-        type="date"
-        className="input"
-        aria-invalid={!!error}
-        aria-describedby={error ? `${id}-error` : undefined}
-        {...registro}
+      <Controller
+        name={name}
+        control={control}
+        render={({ field }) => (
+          <CampoFechaBase
+            id={id}
+            value={typeof field.value === 'string' ? field.value : ''}
+            onChange={field.onChange}
+            ariaInvalid={!!error}
+          />
+        )}
       />
       {error && (
         <p id={`${id}-error`} role="alert" style={{ fontSize: 12, color: 'var(--color-accent-300)', marginTop: 5 }}>

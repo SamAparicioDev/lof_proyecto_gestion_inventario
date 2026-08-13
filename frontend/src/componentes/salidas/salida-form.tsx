@@ -40,7 +40,16 @@
  * general (frontend/CLAUDE.md).
  */
 import { useEffect, useState } from 'react';
-import { useFieldArray, useForm, useWatch, type Path, type UseFormRegisterReturn } from 'react-hook-form';
+import {
+  Controller,
+  useFieldArray,
+  useForm,
+  useWatch,
+  type Control,
+  type Path,
+  type UseFormRegisterReturn,
+} from 'react-hook-form';
+import { CampoFecha as CampoFechaBase } from '@/componentes/comunes/campo-fecha';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
 import { Plus, Trash } from '@phosphor-icons/react/dist/ssr';
@@ -257,7 +266,7 @@ export function SalidaForm({ clientes, productos, salidaId, valoresIniciales, pr
             )}
           </div>
 
-          <CampoFecha id="fechaSalida" label="Fecha de salida" error={errors.fechaSalida?.message} registro={register('fechaSalida')} />
+          <CampoFecha id="fechaSalida" label="Fecha de salida" error={errors.fechaSalida?.message} control={control} name="fechaSalida" />
         </div>
         <div className="field">
           <label htmlFor="observaciones">Observaciones (opcional)</label>
@@ -415,27 +424,39 @@ export function SalidaForm({ clientes, productos, salidaId, valoresIniciales, pr
   );
 }
 
+/**
+ * Campo de fecha del formulario. Delega en `CampoFechaBase` (componentes/comunes), que muestra
+ * y acepta `dd/mm/aaaa` en vez del formato que imponga el idioma del navegador — ver el TSDoc
+ * de ese componente. Va con `Controller` y no con `register` porque `CampoFechaBase` es
+ * controlado: entrega el ISO ya armado, no un evento de un `<input>` nativo.
+ */
 function CampoFecha({
   id,
   label,
   error,
-  registro,
+  control,
+  name,
 }: {
   id: string;
   label: string;
   error?: string;
-  registro: UseFormRegisterReturn;
+  control: Control<DatosCrearSalida>;
+  name: Path<DatosCrearSalida>;
 }) {
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
-      <input
-        id={id}
-        type="date"
-        className="input"
-        aria-invalid={!!error}
-        aria-describedby={error ? `${id}-error` : undefined}
-        {...registro}
+      <Controller
+        name={name}
+        control={control}
+        render={({ field }) => (
+          <CampoFechaBase
+            id={id}
+            value={typeof field.value === 'string' ? field.value : ''}
+            onChange={field.onChange}
+            ariaInvalid={!!error}
+          />
+        )}
       />
       {error && (
         <p id={`${id}-error`} role="alert" style={{ fontSize: 12, color: 'var(--color-accent-300)', marginTop: 5 }}>

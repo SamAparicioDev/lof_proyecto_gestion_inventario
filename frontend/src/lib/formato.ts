@@ -42,6 +42,23 @@ export function formatoFecha(fecha: string | Date): string {
 }
 
 /**
+ * Igual que `formatoFecha`, pero para un valor de FILTRO que llega de la query string y puede
+ * venir vacío o ausente: devuelve `undefined` en ese caso, que es lo que `filtrosActivos`
+ * (`lib/filtros.ts`) entiende como "este filtro no está aplicado".
+ *
+ * Existe porque los chips de "Filtros aplicados" mostraban el valor CRUDO de la URL
+ * (`Desde: 2026-07-01`): la fecha viaja en ISO a propósito —es el formato del contrato— pero
+ * al usuario hay que enseñársela como `01/07/2026`, igual que en el resto del sistema. Un
+ * valor que no sea una fecha reconocible se devuelve tal cual, para no ocultar con un
+ * "Invalid Date" que alguien manipuló la URL a mano.
+ */
+export function formatoFechaFiltro(valorIso: string | null | undefined): string | undefined {
+  if (!valorIso) return undefined;
+  const fecha = new Date(valorIso);
+  return Number.isNaN(fecha.getTime()) ? valorIso : FORMATEADOR_FECHA.format(fecha);
+}
+
+/**
  * Formato de un INSTANTE real (columnas `timestamptz` con hora significativa —
  * `movimientos_inventario.fecha_hora`, `productos.fecha_ultimo_movimiento`,
  * `salidas.fecha_confirmacion`; ver data-model.md § Campos) — a diferencia de

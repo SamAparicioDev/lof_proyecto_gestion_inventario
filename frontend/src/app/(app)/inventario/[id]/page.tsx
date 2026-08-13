@@ -36,6 +36,7 @@ import { ErrorApi } from '@/lib/api/cliente';
 import { formatoFechaHora } from '@/lib/formato';
 import { TablaHistorialCostos } from '@/componentes/inventario/historial-costos';
 import { PanelProducto } from '@/componentes/inventario/panel-producto';
+import { CampoFecha } from '@/componentes/comunes/campo-fecha';
 import { signoMovimiento, TipoMovimientoTag } from '@/componentes/inventario/tipo-movimiento-tag';
 
 const POR_PAGINA_MOVIMIENTOS = 20;
@@ -123,11 +124,11 @@ export default async function PaginaFichaProducto({
         <form method="GET" className="flex flex-wrap items-end gap-3">
           <div className="field">
             <label htmlFor="desde">Desde</label>
-            <input id="desde" name="desde" type="date" className="input" defaultValue={parametros.desde} />
+            <CampoFecha id="desde" name="desde" defaultValue={parametros.desde} />
           </div>
           <div className="field">
             <label htmlFor="hasta">Hasta</label>
-            <input id="hasta" name="hasta" type="date" className="input" defaultValue={parametros.hasta} />
+            <CampoFecha id="hasta" name="hasta" defaultValue={parametros.hasta} />
           </div>
           <button type="submit" className="btn btn-secondary">
             Filtrar

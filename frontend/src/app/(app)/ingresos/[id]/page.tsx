@@ -27,7 +27,7 @@ import { IngresoForm } from '@/componentes/ingresos/ingreso-form';
 import { AccionesIngreso } from '@/componentes/ingresos/acciones-ingreso';
 import { BotonesExportar } from '@/componentes/comunes/botones-exportar';
 
-/** `2026-08-01T00:00:00.000Z` → `2026-08-01`, el formato que espera `<input type="date">` (mismo criterio UTC que `formatoFecha`). */
+/** `2026-08-01T00:00:00.000Z` → `2026-08-01`, el ISO que espera `CampoFecha` (mismo criterio UTC que `formatoFecha`; el usuario lo ve como `dd/mm/aaaa`). */
 function aFechaInput(fechaIso: string): string {
   return fechaIso.slice(0, 10);
 }

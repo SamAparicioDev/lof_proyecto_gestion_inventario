@@ -17,7 +17,8 @@
  * pero aquí 0 no es un valor por defecto razonable (un presupuesto en blanco no es "cero").
  */
 import { useState } from 'react';
-import { useForm, type UseFormRegisterReturn } from 'react-hook-form';
+import { Controller, useForm, type Control, type Path, type UseFormRegisterReturn } from 'react-hook-form';
+import { CampoFecha as CampoFechaBase } from '@/componentes/comunes/campo-fecha';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { esquemaCrearProyecto, type DatosCrearProyecto, type Proyecto } from '@trazo/compartido';
 import { actualizarProyecto, crearProyecto } from '@/lib/api/clientes';
@@ -42,7 +43,7 @@ const VALORES_INICIALES_VACIOS: DatosCrearProyecto = {
   presupuestoEstimado: undefined,
 };
 
-/** `2026-08-01T00:00:00.000Z` → `2026-08-01`, formato de `<input type="date">` (mismo criterio UTC que `formatoFecha`). */
+/** `2026-08-01T00:00:00.000Z` → `2026-08-01`, el ISO que espera `CampoFecha` (mismo criterio UTC que `formatoFecha`). */
 function aFechaInput(fechaIso: string | null): string {
   return fechaIso ? fechaIso.slice(0, 10) : '';
 }
@@ -74,6 +75,7 @@ export function ProyectoForm({ clienteId, proyecto, onCerrar, onGuardado }: Proy
 
   const {
     register,
+    control,
     handleSubmit,
     setError,
     formState: { errors },
@@ -133,13 +135,13 @@ export function ProyectoForm({ clienteId, proyecto, onCerrar, onGuardado }: Proy
               id="proyecto-fecha-inicio"
               label="Fecha de inicio (opcional)"
               error={errors.fechaInicio?.message}
-              registro={register('fechaInicio')}
+              control={control} name="fechaInicio"
             />
             <CampoFecha
               id="proyecto-fecha-cierre"
               label="Cierre estimado (opcional)"
               error={errors.fechaCierreEstimada?.message}
-              registro={register('fechaCierreEstimada')}
+              control={control} name="fechaCierreEstimada"
             />
           </div>
 
@@ -214,27 +216,39 @@ function CampoTexto({
   );
 }
 
+/**
+ * Campo de fecha del formulario. Delega en `CampoFechaBase` (componentes/comunes), que muestra
+ * y acepta `dd/mm/aaaa` en vez del formato que imponga el idioma del navegador — ver el TSDoc
+ * de ese componente. Va con `Controller` y no con `register` porque `CampoFechaBase` es
+ * controlado: entrega el ISO ya armado, no un evento de un `<input>` nativo.
+ */
 function CampoFecha({
   id,
   label,
   error,
-  registro,
+  control,
+  name,
 }: {
   id: string;
   label: string;
   error?: string;
-  registro: UseFormRegisterReturn;
+  control: Control<DatosCrearProyecto>;
+  name: Path<DatosCrearProyecto>;
 }) {
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
-      <input
-        id={id}
-        type="date"
-        className="input"
-        aria-invalid={!!error}
-        aria-describedby={error ? `${id}-error` : undefined}
-        {...registro}
+      <Controller
+        name={name}
+        control={control}
+        render={({ field }) => (
+          <CampoFechaBase
+            id={id}
+            value={typeof field.value === 'string' ? field.value : ''}
+            onChange={field.onChange}
+            ariaInvalid={!!error}
+          />
+        )}
       />
       {error && (
         <p id={`${id}-error`} role="alert" style={{ fontSize: 12, color: 'var(--color-accent-300)', marginTop: 5 }}>

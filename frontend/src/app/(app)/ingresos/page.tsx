@@ -28,9 +28,10 @@ import Link from 'next/link';
 import { Plus } from '@phosphor-icons/react/dist/ssr';
 import type { EstadoIngreso, Ingreso, Paginado } from '@trazo/compartido';
 import { apiServidor } from '@/lib/api/servidor';
-import { formatoFecha, formatoMoneda } from '@/lib/formato';
+import { formatoFecha, formatoFechaFiltro, formatoMoneda } from '@/lib/formato';
 import { EstadoIngresoTag } from '@/componentes/ingresos/estado-ingreso-tag';
 import { BarraFiltros, CampoFiltro } from '@/componentes/comunes/barra-filtros';
+import { CampoFecha } from '@/componentes/comunes/campo-fecha';
 import { BotonesExportar } from '@/componentes/comunes/botones-exportar';
 import { ResumenFiltros } from '@/componentes/comunes/resumen-filtros';
 import { claveDeFiltros, filtrosActivos, mensajeListadoVacio } from '@/lib/filtros';
@@ -93,8 +94,8 @@ export default async function PaginaIngresos({
     { etiqueta: 'Buscar', valor: parametros.buscar },
     { etiqueta: 'Proveedor', valor: parametros.proveedor },
     { etiqueta: 'Estado', valor: ESTADOS.find((estado) => estado.valor === parametros.estado)?.etiqueta },
-    { etiqueta: 'Desde', valor: parametros.desde },
-    { etiqueta: 'Hasta', valor: parametros.hasta },
+    { etiqueta: 'Desde', valor: formatoFechaFiltro(parametros.desde) },
+    { etiqueta: 'Hasta', valor: formatoFechaFiltro(parametros.hasta) },
   ]);
 
   return (
@@ -153,11 +154,11 @@ export default async function PaginaIngresos({
         </CampoFiltro>
         <CampoFiltro ancho="corto">
           <label htmlFor="desde">Desde</label>
-          <input id="desde" name="desde" type="date" className="input" defaultValue={parametros.desde} />
+          <CampoFecha id="desde" name="desde" defaultValue={parametros.desde} />
         </CampoFiltro>
         <CampoFiltro ancho="corto">
           <label htmlFor="hasta">Hasta</label>
-          <input id="hasta" name="hasta" type="date" className="input" defaultValue={parametros.hasta} />
+          <CampoFecha id="hasta" name="hasta" defaultValue={parametros.hasta} />
         </CampoFiltro>
         <button type="submit" className="btn btn-secondary">
           Filtrar
