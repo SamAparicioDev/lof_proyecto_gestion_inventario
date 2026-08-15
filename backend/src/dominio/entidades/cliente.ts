@@ -31,7 +31,7 @@ export interface Cliente {
 }
 
 /**
- * Tipos de imagen admitidos como logotipo (data-model.md, `assets/marca/LEEME.md`).
+ * Tipos de imagen admitidos como logotipo (data-model.md, `backend/assets/marca/LEEME.md`).
  *
  * Vive aquí por herencia del logo por cliente que US11 introdujo y el 2026-08-15 se retiró
  * (FR-066). Hoy su único consumidor es el LOGOTIPO INSTITUCIONAL, que valida sus bytes con el

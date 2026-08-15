@@ -83,7 +83,7 @@ COPY backend/prisma ./backend/prisma
 # El logotipo institucional (FR-067): `LogoInstitucional` lo lee de `assets/marca/` relativo al
 # WORKDIR. Se copia entero y no solo el PNG para que agregar un archivo de marca no exija tocar
 # este Dockerfile. Si la carpeta no trae la imagen, la app arranca igual y exporta sin logo.
-COPY assets ./assets
+COPY backend/assets ./assets
 
 # Usuario sin privilegios (la imagen de Node ya trae `node`): un proceso que solo sirve HTTP
 # no necesita root, y si algún día se explota una vulnerabilidad, el radio de daño es menor.

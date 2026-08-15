@@ -3,7 +3,7 @@
  * (US11, FR-067/FR-068).
  *
  * Es el único logotipo del sistema: lo pinta la aplicación web y va impreso en todos los
- * archivos exportados. Vive en `assets/marca/logo-lof.png` del repositorio y no en la base de
+ * archivos exportados. Vive en `backend/assets/marca/logo-lof.png` y no en la base de
  * datos, porque es parte del DESPLIEGUE —cambia cuando cambia la imagen de la empresa, no
  * cuando el negocio opera— y así viaja con el código en vez de exigir un dato semilla más.
  *
@@ -30,21 +30,22 @@ import { join } from 'node:path';
 import type { LogoDocumento } from '../../aplicacion/reportes/puertos/exportador-reporte';
 import { detectarTipoDeImagenLogo } from '../../dominio/servicios/servicio-imagen-logo';
 
-/** Ruta del logotipo, relativa a la raíz del monorepo. */
+/** Ruta del logotipo dentro del servicio que lo lee. */
 const RUTA_LOGO = join('assets', 'marca', 'logo-lof.png');
 
 /**
- * Niveles que se suben desde `process.cwd()` buscando `assets/marca/`.
+ * Sitios donde se busca el logotipo, en orden.
  *
- * Hace falta porque el directorio de trabajo NO es el mismo en todos los arranques, y darlo por
- * supuesto ya salió mal una vez: `npm run dev:backend` es `npm run start:dev -w backend`, y npm
- * ejecuta los scripts de un workspace DENTRO de su carpeta, así que ahí `cwd` es `backend/` —
- * igual que en `npm run test:integracion -w backend`. En el contenedor, en cambio, `WORKDIR` es
- * `/app`, la raíz. Buscar hacia arriba cubre los dos sin que nadie tenga que acordarse de cuál
- * es cuál, y sin depender de `__dirname` (que apunta a `src/` en desarrollo y a `dist/` en
- * producción, con distinta profundidad).
+ * Son dos porque el directorio de trabajo cambia según cómo se arranque, y darlo por supuesto ya
+ * salió mal una vez: `npm run dev:backend` es `npm run start:dev -w backend`, y npm ejecuta los
+ * scripts de un workspace DENTRO de su carpeta, así que ahí `cwd` es `backend/`. Las pruebas
+ * lanzadas desde la raíz tienen `cwd` en la raíz. Y en el contenedor `WORKDIR` es `/app`, donde
+ * el Dockerfile deja los assets en la raíz.
+ *
+ * Probar los dos prefijos desde `cwd` cubre los tres casos sin depender de `__dirname` (que
+ * apunta a `src/` en desarrollo y a `dist/` en producción, con distinta profundidad).
  */
-const NIVELES_HACIA_LA_RAIZ = 3;
+const PREFIJOS_DE_BUSQUEDA = ['.', 'backend'] as const;
 
 @Injectable()
 export class LogoInstitucional implements OnModuleInit {
@@ -63,9 +64,7 @@ export class LogoInstitucional implements OnModuleInit {
   }
 
   private async cargar(): Promise<LogoDocumento | null> {
-    const candidatas = Array.from({ length: NIVELES_HACIA_LA_RAIZ }, (_, nivel) =>
-      join(process.cwd(), ...Array<string>(nivel).fill('..'), RUTA_LOGO),
-    );
+    const candidatas = PREFIJOS_DE_BUSQUEDA.map((prefijo) => join(process.cwd(), prefijo, RUTA_LOGO));
 
     let contenido: Buffer | null = null;
     let ruta = candidatas[0] as string;
@@ -81,9 +80,9 @@ export class LogoInstitucional implements OnModuleInit {
 
     if (!contenido) {
       this.logger.warn(
-        `No se encontró el logotipo (se buscó ${RUTA_LOGO} desde ${process.cwd()} y ` +
-          `${NIVELES_HACIA_LA_RAIZ - 1} niveles arriba). La aplicación funciona igual: los ` +
-          'archivos exportados se generarán sin logo (FR-068). Ver assets/marca/LEEME.md.',
+        `No se encontró el logotipo. Se buscó en: ${candidatas.join(' · ')}. La aplicación ` +
+          'funciona igual: los archivos exportados se generarán sin logo (FR-068). Ver ' +
+          'backend/assets/marca/LEEME.md.',
       );
       return null;
     }

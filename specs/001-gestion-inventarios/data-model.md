@@ -154,7 +154,7 @@ se modifica dentro de transacciones del servicio de stock (research R4).
 (BYTEA) y `logo_tipo_mime`, con sus `CHECK` de consistencia y de tipo MIME admitido. Se
 eliminaron —columnas y datos— junto con la capacidad: los documentos que salen del sistema los
 firma LOF, no el cliente al que van dirigidos (FR-066/FR-067). El logotipo institucional NO vive
-en la base de datos: es un archivo del repositorio (`assets/marca/logo-lof.png`), porque es parte
+en la base de datos: es un archivo del repositorio (`backend/assets/marca/logo-lof.png`), porque es parte
 del despliegue y no un dato que el negocio administre.
 
 ### proyectos

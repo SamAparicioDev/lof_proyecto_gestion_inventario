@@ -13,6 +13,17 @@ Reemplaza este archivo y reconstruye las imágenes (`docker compose up -d --buil
 hay una segunda copia que actualizar: el frontend no tiene la suya en `public/` precisamente
 para que no puedan quedar desincronizadas.
 
+## Por qué vive DENTRO de `backend/`
+
+Estuvo en `assets/` de la raíz y se movió aquí el 2026-08-15, por dos razones que apuntan al
+mismo sitio:
+
+1. **El backend es el único que lo lee.** Lo incrusta en los exportables y se lo sirve a la web
+   por `GET /api/marca/logo`. Un recurso pertenece al servicio que lo consume.
+2. **Railway solo reconstruye un servicio cuando cambia algo DENTRO de su carpeta.** Con el logo
+   en la raíz, un commit que solo cambiara la imagen no disparaba ningún despliegue: el archivo
+   llegaba a GitHub y no a producción, sin ningún error que lo delatara. Pasó exactamente eso.
+
 ## Requisitos del archivo
 
 | | |

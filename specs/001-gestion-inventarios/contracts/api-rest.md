@@ -136,7 +136,7 @@ Reglas del contrato:
   Es la identidad de la empresa, el mismo dato que aparece impreso en cada documento que sale
   del sistema — no hay nada que proteger. `nosniff` se mantiene igual: son bytes servidos desde
   el mismo origen de la aplicación.
-- **Un solo archivo, un solo dueño**: el logotipo vive en `assets/marca/logo-lof.png` del
+- **Un solo archivo, un solo dueño**: el logotipo vive en `backend/assets/marca/logo-lof.png` del
   repositorio y lo sirve el backend. El frontend lo consume por esta ruta en vez de tener su
   propia copia en `public/`, para que cambiarlo sea cambiar UN archivo y no dos que se
   desincronizan.

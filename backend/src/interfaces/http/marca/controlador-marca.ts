@@ -2,7 +2,7 @@
  * `ControladorMarca` — `/api/marca/logo` (US11, FR-067).
  *
  * Sirve el logotipo de LOF a la aplicación web. Existe para que el logotipo tenga UN solo dueño:
- * el archivo vive en `assets/marca/logo-lof.png` y lo lee el backend, que ya lo necesita para
+ * el archivo vive en `backend/assets/marca/logo-lof.png` y lo lee el backend, que ya lo necesita para
  * incrustarlo en los exportables. Si el frontend tuviera su propia copia en `public/`, cambiar
  * el logo serían dos archivos y tarde o temprano quedarían distintos.
  *
