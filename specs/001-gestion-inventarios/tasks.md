@@ -392,16 +392,16 @@ carpetas, configs y archivos base ya está creado y documentado en el repositori
 **Independent Test**: Dar de alta una categoría, clasificar un producto con ella y comprobar que aparece en el filtro del inventario y que filtrar por ella devuelve ese producto (US15-AS1, AS2)
 
 - [x] T145 [US15] Migración SQL a mano en `backend/prisma/migrations/*_categorias/migration.sql` + modelo `Categoria` y `productos.categoria_id` en `schema.prisma`. **El orden importa y es lo que hace que FR-089 se cumpla**: crear tabla → insertar los valores distintos agrupados por `lower(trim(categoria))` → añadir `categoria_id` → rellenar emparejando por ese mismo criterio → recién entonces `DROP COLUMN categoria`. Índice UNIQUE FUNCIONAL sobre `lower(trim(nombre))` (FR-085), FK `ON DELETE RESTRICT` (FR-087)
-- [ ] T146 [P] [US15] Permisos `categorias.ver` y `categorias.gestionar` en `PERMISOS_DEL_SISTEMA` (seed): `ver` para los TRES roles semilla (sin él no se clasifica ni se filtra, FR-088), `gestionar` para Administrador y Gerente
-- [ ] T147 [P] [US15] Esquemas en `packages/compartido/src/esquemas/categorias.ts` (`esquemaCrearCategoria`, `esquemaListarCategorias`, `esquemaEstadoCategoria`) + `categoriaId` opcional en los esquemas de producto y `categoriaId` en `esquemaFiltroInventario` (sustituye a `categoria`)
-- [ ] T148 [US15] Dominio: entidad `categoria.ts` con la normalización de nombre (`lower(trim)`) como función PURA reutilizable, y puerto `repositorio-categorias.ts`
-- [ ] T149 [US15] Adaptador `repositorio-categorias.prisma.ts` — traduce la violación del índice funcional (P2002) a error de campo `nombre` y la de FK (P2003) a "categoría en uso"
-- [ ] T150 [US15] Casos de uso en `backend/src/aplicacion/categorias/`: listar, crear, actualizar, cambiar estado y eliminar (esta última comprueba PRIMERO cuántos productos la usan y devuelve el número en el mensaje, FR-087)
-- [ ] T151 [US15] `ControladorCategorias` (`/api/categorias`) con `@RequierePermiso`, y ajuste de los controladores de productos e inventario al nuevo `categoriaId`
-- [ ] T152 [US15] `opciones-filtro` del inventario pasa a devolver `categorias: {id, nombre}[]` desde el CATÁLOGO —activas + las inactivas todavía en uso— en vez del `SELECT DISTINCT` sobre productos (FR-088)
-- [ ] T153 [US15] Importación de Excel: la columna "Categoría" se resuelve por NOMBRE contra el catálogo ignorando mayúsculas/espacios; desconocida → error de ESA fila nombrándola, sin bloquear las demás (FR-090). Actualizar también la plantilla y el catálogo exportable
-- [ ] T154 [US15] Frontend `/categorias`: listado + diálogos de alta/edición/estado (patrón de `/usuarios`), y enlace en la navegación filtrado por `categorias.gestionar`
-- [ ] T155 [US15] Frontend: el campo Categoría del formulario de producto pasa de `<input>` a `<select>` del catálogo (solo activas, más la propia si ya está clasificado con una inactiva), y el filtro de inventario y el reporte pasan a filtrar por `categoriaId`
+- [x] T146 [P] [US15] Permisos `categorias.ver` y `categorias.gestionar` en `PERMISOS_DEL_SISTEMA` (seed): `ver` para los TRES roles semilla (sin él no se clasifica ni se filtra, FR-088), `gestionar` para Administrador y Gerente
+- [x] T147 [P] [US15] Esquemas en `packages/compartido/src/esquemas/categorias.ts` (`esquemaCrearCategoria`, `esquemaListarCategorias`, `esquemaEstadoCategoria`) + `categoriaId` opcional en los esquemas de producto y `categoriaId` en `esquemaFiltroInventario` (sustituye a `categoria`)
+- [x] T148 [US15] Dominio: entidad `categoria.ts` con la normalización de nombre (`lower(trim)`) como función PURA reutilizable, y puerto `repositorio-categorias.ts`
+- [x] T149 [US15] Adaptador `repositorio-categorias.prisma.ts` — traduce la violación del índice funcional (P2002) a error de campo `nombre` y la de FK (P2003) a "categoría en uso"
+- [x] T150 [US15] Casos de uso en `backend/src/aplicacion/categorias/`: listar, crear, actualizar, cambiar estado y eliminar (esta última comprueba PRIMERO cuántos productos la usan y devuelve el número en el mensaje, FR-087)
+- [x] T151 [US15] `ControladorCategorias` (`/api/categorias`) con `@RequierePermiso`, y ajuste de los controladores de productos e inventario al nuevo `categoriaId`
+- [x] T152 [US15] `opciones-filtro` del inventario pasa a devolver `categorias: {id, nombre}[]` desde el CATÁLOGO —activas + las inactivas todavía en uso— en vez del `SELECT DISTINCT` sobre productos (FR-088)
+- [x] T153 [US15] Importación de Excel: la columna "Categoría" se resuelve por NOMBRE contra el catálogo ignorando mayúsculas/espacios; desconocida → error de ESA fila nombrándola, sin bloquear las demás (FR-090). Actualizar también la plantilla y el catálogo exportable
+- [x] T154 [US15] Frontend **módulo `/administracion`** (shell + pestañas filtradas por permiso + redirección a la primera sección accesible) y `/administracion/categorias`: listado + diálogos de alta/edición/estado (patrón de `/usuarios`), con una sola entrada "Administración" en la navegación
+- [x] T155 [US15] Frontend: el campo Categoría del formulario de producto pasa de `<input>` a `<select>` del catálogo (solo activas, más la propia si ya está clasificado con una inactiva), y el filtro de inventario y el reporte pasan a filtrar por `categoriaId`
 - [ ] T156 [P] [US15] Pruebas de integración `backend/test/integracion/categorias.spec.ts`: duplicado por mayúsculas/espacios rechazado con campo; eliminar una categoría en uso → 409 con el conteo; desactivada no se ofrece pero el producto la conserva; filtrar inventario por `categoriaId`; y **la migración conserva la clasificación previa** (FR-089)
 
 Proveedores — MISMO patrón que categorías (FR-091), con dos diferencias que no se pueden pasar por alto: el proveedor es OBLIGATORIO en un ingreso, y el de la carga masiva es "del sistema" (FR-093).
@@ -411,7 +411,7 @@ Proveedores — MISMO patrón que categorías (FR-091), con dos diferencias que 
 - [ ] T159 [P] [US15] Esquemas `packages/compartido/src/esquemas/proveedores.ts` + `proveedorId` en los esquemas de ingreso y en el filtro del listado de ingresos
 - [ ] T160 [US15] Dominio, adaptador Prisma, casos de uso y `ControladorProveedores` (`/api/proveedores`) — espejo de T148-T151; `esSistema` bloquea renombrar y eliminar (FR-093)
 - [ ] T161 [US15] Carga masiva: el ingreso sintético resuelve el proveedor del sistema por nombre en vez de escribirlo (FR-093)
-- [ ] T162 [US15] Frontend `/proveedores` (mismo patrón que `/categorias`), selector en el formulario de ingreso y filtro por proveedor en el listado de ingresos
+- [ ] T162 [US15] Frontend `/administracion/proveedores` (mismo patrón que la sección de categorías), selector en el formulario de ingreso y filtro por proveedor en el listado de ingresos
 - [ ] T163 [P] [US15] Pruebas de integración `backend/test/integracion/proveedores.spec.ts`: duplicado insensible a mayúsculas; proveedor en uso no se elimina; el proveedor del sistema no se renombra ni se borra; y **la migración conserva el proveedor de los ingresos previos** (FR-092)
 
 **Checkpoint**: Inventario e ingresos se clasifican y se filtran con catálogos consistentes, sin variantes tipográficas

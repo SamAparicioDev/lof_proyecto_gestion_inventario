@@ -58,6 +58,7 @@ import {
   Gauge,
   Package,
   ShieldCheck,
+  SlidersHorizontal,
   UserGear,
   UsersThree,
 } from '@phosphor-icons/react/dist/ssr';
@@ -92,6 +93,14 @@ export const ELEMENTOS_NAVEGACION: ElementoNavegacion[] = [
   },
   { href: '/usuarios', etiqueta: 'Usuarios', icono: UserGear, permiso: PERMISOS.USUARIOS_GESTIONAR },
   { href: '/roles', etiqueta: 'Roles y permisos', icono: ShieldCheck, permiso: PERMISOS.ROLES_GESTIONAR },
+  // US15: una sola entrada para TODOS los catálogos de apoyo. Se filtra por `categorias.gestionar`
+  // porque es la primera sección del módulo; `/administracion` redirige a la que el rol pueda ver.
+  {
+    href: '/administracion',
+    etiqueta: 'Administración',
+    icono: SlidersHorizontal,
+    permiso: PERMISOS.CATEGORIAS_GESTIONAR,
+  },
 ];
 
 /** Elementos del menú que la sesión puede abrir, en el orden del mapa (UX, no seguridad).

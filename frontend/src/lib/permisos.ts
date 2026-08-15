@@ -70,6 +70,13 @@ export const PERMISOS = {
   USUARIOS_GESTIONAR: 'usuarios.gestionar',
 
   ROLES_GESTIONAR: 'roles.gestionar',
+
+  // US15 — catálogos del módulo de Administración. `*_VER` lo tienen los tres roles (sin él no
+  // se clasifica un producto ni se filtra); `*_GESTIONAR` es lo que abre la pantalla.
+  CATEGORIAS_VER: 'categorias.ver',
+  CATEGORIAS_GESTIONAR: 'categorias.gestionar',
+  PROVEEDORES_VER: 'proveedores.ver',
+  PROVEEDORES_GESTIONAR: 'proveedores.gestionar',
 } as const;
 
 /**
