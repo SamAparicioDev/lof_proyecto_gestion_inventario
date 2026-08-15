@@ -467,14 +467,6 @@ model Cliente {
   fechaRegistro DateTime      @default(now()) @map("fecha_registro") @db.Date
   estado        EstadoCliente @default(ACTIVO)
 
-  /// Logo del cliente (US11, FR-066…FR-069) — bytes de la imagen y su tipo MIME, siempre
-  /// consistentes entre sí (CHECK `clientes_logo_consistente`). Solo `image/png` o
-  /// `image/jpeg` (CHECK `clientes_logo_tipo_mime_admitido`): NUNCA SVG, que es XML capaz de
-  /// llevar scripts. Se validan por los BYTES REALES del archivo, no por su extensión ni por
-  /// el `Content-Type` declarado — ver `dominio/servicios/servicio-imagen-logo.ts`.
-  logo         Bytes?
-  logoTipoMime String? @map("logo_tipo_mime") @db.VarChar(30)
-
   fechaCreacion         DateTime  @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
   usuarioCreacionId     BigInt    @map("usuario_creacion_id")
   usuarioCreacion       Usuario   @relation("ClienteCreadoPor", fields: [usuarioCreacionId], references: [id])

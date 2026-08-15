@@ -72,7 +72,7 @@ export default async function PaginaImportarInventario() {
               titulo="Plantilla vacía"
               ayuda={
                 'Archivo con las columnas y una fila de ejemplo para borrar. Úsalo para dar de alta ' +
-                'productos que todavía no existen en Trazo, con su cantidad inicial si además quieres ' +
+                'productos que todavía no existen en LOF, con su cantidad inicial si además quieres ' +
                 'cargarles stock.'
               }
               href="/api/productos/plantilla-importacion"

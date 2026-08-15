@@ -50,7 +50,7 @@ export default function ErrorApp({ error, reset }: { error: Error & { digest?: s
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h6 style={{ color: 'var(--color-accent)', margin: '0 0 4px' }}>Trazo</h6>
+        <h6 style={{ color: 'var(--color-accent)', margin: '0 0 4px' }}>LOF</h6>
         <h2 style={{ margin: 0 }}>{esFaltaDePermisos ? 'No tienes acceso a esta pantalla' : 'Algo salió mal'}</h2>
       </div>
 

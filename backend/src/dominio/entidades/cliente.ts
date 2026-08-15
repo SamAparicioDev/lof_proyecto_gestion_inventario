@@ -28,31 +28,15 @@ export interface Cliente {
   readonly ciudad: string | null;
   readonly fechaRegistro: Date;
   readonly estado: EstadoCliente;
-  /**
-   * ¿El cliente tiene un logo cargado? (US11, FR-066). Es un BOOLEANO, no los bytes: la
-   * entidad viaja en todo listado y toda ficha, y arrastrar hasta 500 KB de imagen en cada
-   * fila del JSON sería absurdo. Los bytes se leen aparte, solo cuando se van a usar
-   * (`RepositorioClientes.obtenerLogo`, que alimenta tanto `GET /api/clientes/:id/logo` como
-   * el logo embebido en un documento exportado).
-   */
-  readonly tieneLogo: boolean;
 }
 
 /**
- * Tipos de imagen admitidos como logo (US11, FR-066, data-model.md § Logo del cliente).
+ * Tipos de imagen admitidos como logotipo (data-model.md, `assets/marca/LEEME.md`).
  *
- * PNG y JPEG y NADA MÁS — en particular, NUNCA SVG: un SVG es un documento XML que puede
- * contener scripts, y servirlo desde el mismo origen de la aplicación sería una vía de XSS.
- * Es una lista de PERMITIDOS (no de prohibidos) a propósito: un formato futuro tiene que
- * agregarse aquí explícitamente, nunca colarse por omisión.
+ * Vive aquí por herencia del logo por cliente que US11 introdujo y el 2026-08-15 se retiró
+ * (FR-066). Hoy su único consumidor es el LOGOTIPO INSTITUCIONAL, que valida sus bytes con el
+ * mismo servicio de dominio (`servicio-imagen-logo.ts`). NUNCA SVG: es XML capaz de contener
+ * scripts, y se sirve desde el mismo origen que la aplicación.
  */
 export type TipoMimeLogo = 'image/png' | 'image/jpeg';
 
-/** Logo de un cliente ya leído de la persistencia: los bytes y el tipo con el que se sirven.
- *  `Uint8Array` (no `Buffer`) porque el dominio es TypeScript puro y no conoce Node
- *  (Principio VI) — `Buffer` es asignable a `Uint8Array`, así que el adaptador y la capa HTTP
- *  siguen trabajando con el tipo que les resulta natural. */
-export interface LogoCliente {
-  readonly contenido: Uint8Array;
-  readonly tipoMime: TipoMimeLogo;
-}

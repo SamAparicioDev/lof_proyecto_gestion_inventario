@@ -150,24 +150,12 @@ se modifica dentro de transacciones del servicio de stock (research R4).
 | `fecha_registro` | DATE | NOT NULL DEFAULT hoy (FR-034) |
 | `estado` | ENUM `ACTIVO/INACTIVO` | NOT NULL DEFAULT ACTIVO |
 
-**Logo del cliente (US11, FR-066…FR-069)** — dos columnas nullable en `clientes`:
-
-| Columna | Tipo | Constraints |
-|---|---|---|
-| `logo` | BYTEA | NULL — los bytes de la imagen |
-| `logo_tipo_mime` | VARCHAR(30) | NULL — `image/png` o `image/jpeg` ÚNICAMENTE |
-
-Decisiones (todas verificadas en el caso de uso, no solo en la UI):
-- **Se guarda en la BD, no en disco**: son imágenes pequeñas (tope 500 KB) y así el logo viaja
-  con el respaldo de la base sin coordinar un segundo almacén ni rutas de archivos entre
-  entornos (Principio V — la alternativa solo se justifica con volúmenes muy superiores).
-- **PNG/JPEG únicamente, NUNCA SVG** — un SVG es un documento XML que puede contener scripts;
-  servirlo desde el mismo origen de la aplicación sería una vía de XSS. El tipo se valida por
-  los BYTES REALES de la imagen (números mágicos del archivo), no por su extensión ni por el
-  `Content-Type` que declare el navegador, que el cliente controla y puede mentir.
-- El endpoint que lo sirve responde siempre con el `Content-Type` guardado y
-  `Content-Disposition: inline`, nunca como HTML.
-- `logo` y `logo_tipo_mime` son consistentes entre sí: o ambos con valor, o ambos `NULL`.
+**El logo del cliente se retiró** (2026-08-15). `clientes` tuvo dos columnas nullable, `logo`
+(BYTEA) y `logo_tipo_mime`, con sus `CHECK` de consistencia y de tipo MIME admitido. Se
+eliminaron —columnas y datos— junto con la capacidad: los documentos que salen del sistema los
+firma LOF, no el cliente al que van dirigidos (FR-066/FR-067). El logotipo institucional NO vive
+en la base de datos: es un archivo del repositorio (`assets/marca/logo-lof.png`), porque es parte
+del despliegue y no un dato que el negocio administre.
 
 ### proyectos
 

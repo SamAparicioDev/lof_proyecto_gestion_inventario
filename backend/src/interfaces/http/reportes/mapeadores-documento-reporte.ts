@@ -33,7 +33,6 @@
 import type {
   DocumentoReporte,
   ColumnaDocumentoReporte,
-  LogoDocumento,
 } from '../../../aplicacion/reportes/puertos/exportador-reporte';
 import type { ReporteConsumoCliente } from '../../../aplicacion/reportes/reporte-consumo-cliente.caso-uso';
 import type { ReporteConsumoProyecto } from '../../../aplicacion/reportes/reporte-consumo-proyecto.caso-uso';
@@ -55,12 +54,11 @@ const COLUMNAS_CONSUMO_CLIENTE: ColumnaDocumentoReporte[] = [
 ];
 
 /** Aplana `ReporteConsumoCliente` (FR-039) a `DocumentoReporte` para exportar (FR-043). El
- *  reporte corresponde a UN ÚNICO cliente, así que lleva su `logo` cuando lo tiene cargado
- *  (US11/FR-067) — el logo lo resuelve el controlador con `ResolverLogoDocumentoCasoUso`, que
+ *  reporte corresponde a UN ÚNICO cliente. Como todo exportable, el archivo sale con el
+ *  logotipo de LOF (FR-067) — lo pone `ExportadorConLogo`, no este mapeador, que
  *  devuelve `undefined` si no hay ninguno, y en ese caso el archivo sale igual sin él (FR-068). */
 export function mapearConsumoClienteADocumento(
   reporte: ReporteConsumoCliente,
-  logo?: LogoDocumento,
 ): DocumentoReporte {
   const filas = reporte.proyectos.flatMap((proyecto) =>
     proyecto.productos.map((producto) => ({
@@ -91,7 +89,6 @@ export function mapearConsumoClienteADocumento(
     columnas: COLUMNAS_CONSUMO_CLIENTE,
     filas,
     totales,
-    logo,
   };
 }
 
@@ -105,11 +102,10 @@ const COLUMNAS_CONSUMO_PROYECTO: ColumnaDocumentoReporte[] = [
 ];
 
 /** Aplana `ReporteConsumoProyecto` (FR-040) a `DocumentoReporte` para exportar (FR-043). Un
- *  proyecto NO tiene logo propio: lleva el del CLIENTE dueño (FR-069), que el controlador
+ *  el archivo sale con el logotipo de LOF como cualquier otro exportable (FR-067), que
  *  resuelve a partir del `proyectoId` con `ResolverLogoDocumentoCasoUso`. */
 export function mapearConsumoProyectoADocumento(
   reporte: ReporteConsumoProyecto,
-  logo?: LogoDocumento,
 ): DocumentoReporte {
   const filas = reporte.lineas.map((linea) => ({
     fecha: formatoFechaSoloDia(linea.fecha),
@@ -142,7 +138,6 @@ export function mapearConsumoProyectoADocumento(
         valor: reporte.margen === null ? 'Sin presupuesto asignado' : formatoPorcentaje(reporte.margen),
       },
     ],
-    logo,
   };
 }
 

@@ -1,6 +1,6 @@
 /**
  * `detectarTipoDeImagenLogo` — servicio de dominio 100% PURO (Principio VI): decide si un
- * conjunto de bytes ES una imagen admitida como logo de cliente, mirando ÚNICAMENTE los bytes.
+ * conjunto de bytes ES una imagen admitida como logotipo, mirando ÚNICAMENTE los bytes.
  * Cero `await`, cero I/O, cero dependencias de framework — mismo criterio que `ServicioStock` y
  * `aplicarCambioDeCosto` (research R10: se prueba con Jest puro, sin levantar nada).
  *
@@ -16,15 +16,20 @@
  * ## Por qué SVG se rechaza y además se NOMBRA
  *
  * Un SVG es un documento XML que puede contener `<script>` y manejadores de evento; servirlo
- * desde el mismo origen de la aplicación (`GET /api/clientes/:id/logo`) sería XSS ejecutándose
- * con la sesión del usuario. La lista de PERMITIDOS ya lo deja fuera —basta con que no sea PNG
+ * desde el mismo origen de la aplicación (`GET /api/marca/logo`) sería XSS ejecutándose con la
+ * sesión del usuario. La lista de PERMITIDOS ya lo deja fuera —basta con que no sea PNG
  * ni JPEG—, así que `detectarInicioDeXml` NO es la defensa: la defensa es el allowlist. Existe
  * solo para poder decirle al usuario "los logos en SVG no se admiten" en vez del genérico "el
  * archivo no es una imagen válida" (FR-016/FR-047: mensajes en español que explican qué
  * corregir); si alguien la borrara, el SVG se seguiría rechazando igual.
  *
- * Implementa: FR-066 (solo imágenes válidas dentro del tamaño máximo — el TAMAÑO lo corta el
- * transporte, ver `FileInterceptor` en `controlador-clientes.ts`; el FORMATO se decide aquí).
+ * Nota (2026-08-15): nació para el logo POR CLIENTE que subían los usuarios (FR-066, retirado).
+ * Su consumidor de hoy es el LOGOTIPO INSTITUCIONAL, que no lo sube nadie sino que viene con el
+ * despliegue: la validación ya no defiende de un atacante sino de una equivocación silenciosa
+ * —un `.svg` renombrado a `.png` que ni pdfmake ni exceljs sabrían incrustar—, y por eso sigue
+ * mereciendo la pena.
+ *
+ * Implementa: FR-067 (el logotipo es una imagen PNG/JPEG válida; el formato se decide aquí).
  */
 import { ErrorValidacionDominio } from '../comunes/errores';
 import type { TipoMimeLogo } from '../entidades/cliente';

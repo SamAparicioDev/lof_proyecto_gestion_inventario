@@ -12,15 +12,15 @@
  * resuelve los nombres en el servidor y los pasa aquí. Cuando un proyecto no se puede resolver,
  * se cae en el MISMO texto de respaldo que ya usa la pantalla, nunca en un hueco vacío.
  *
- * ## El logo (FR-067/FR-069)
+ * ## El logotipo (FR-067)
  *
  * El documento de UNA salida y el listado FILTRADO por `clienteId` corresponden a un único
- * cliente: llevan su logo. Un listado de salidas SIN filtrar abarca varios clientes y va sin
- * logo (US11-AS4). El logo lo resuelve `ResolverLogoDocumentoCasoUso` y llega ya listo; estos
+ * cliente. Desde el 2026-08-15 el logotipo NO se decide aquí: TODO exportable lleva el de LOF
+ * y lo pone `ExportadorConLogo` (un único punto para las doce rutas `/export`); estos
  * mapeadores solo lo adjuntan, y `undefined` es un valor perfectamente normal (FR-068).
  *
  * Implementa: FR-064 (listado exportado con todas las filas del filtro), FR-065 (documento
- * individual completo con auditoría), FR-067/FR-069 (logo del cliente, heredado por el
+ * individual completo con auditoría), FR-067 (logotipo institucional, que aplica el
  * proyecto), FR-043/SC-007.
  */
 import type { FiltroSalidas } from '@trazo/compartido';
@@ -28,7 +28,6 @@ import type {
   ColumnaDocumentoReporte,
   DatoEncabezadoDocumento,
   DocumentoReporte,
-  LogoDocumento,
 } from '../../../aplicacion/reportes/puertos/exportador-reporte';
 import type { Producto } from '../../../dominio/entidades/producto';
 import type { EstadoSalida, Salida } from '../../../dominio/entidades/salida';
@@ -74,7 +73,7 @@ const COLUMNAS_LISTADO_SALIDAS: ColumnaDocumentoReporte[] = [
  * Listado de salidas → documento tabular (FR-064). `salidas` llega SIN paginar
  * (`RepositorioSalidas.listarTodas`): TODAS las filas del filtro, no la página visible.
  *
- * `destinoPorProyectoId` trae el nombre de cliente y de proyecto de cada salida; `logo` solo
+ * `destinoPorProyectoId` trae el nombre de cliente y de proyecto de cada salida; el logotipo
  * viene cuando el filtro acotó a un único cliente.
  */
 export function mapearListadoSalidasADocumento(
@@ -82,7 +81,6 @@ export function mapearListadoSalidasADocumento(
   filtros: FiltroSalidas,
   destinoPorProyectoId: ReadonlyMap<number, DestinoSalida>,
   nombresDeFiltro: { cliente?: string; proyecto?: string },
-  logo?: LogoDocumento,
 ): DocumentoReporte {
   return {
     titulo: 'Salidas por proyecto',
@@ -114,7 +112,6 @@ export function mapearListadoSalidasADocumento(
         autoriza: salida.usuarioAutorizaId ? `Usuario N.º ${salida.usuarioAutorizaId}` : '—',
       };
     }),
-    logo,
   };
 }
 
@@ -129,7 +126,7 @@ const COLUMNAS_LINEAS_SALIDA: ColumnaDocumentoReporte[] = [
 
 /**
  * Documento individual de una salida (FR-065): cabecera con su destino, líneas, total y
- * auditoría (quién autorizó y cuándo se confirmó). Lleva el logo del cliente dueño del
+ * auditoría (quién autorizó y cuándo se confirmó). El logotipo lo aplica el decorador del
  * proyecto cuando lo tiene cargado (FR-067/FR-069) — es el archivo que se le envía al cliente
  * como soporte de entrega, y por eso es el caso que más justifica toda esta historia.
  */
@@ -137,7 +134,6 @@ export function mapearSalidaADocumento(
   salida: SalidaConDetalles,
   destino: DestinoSalida,
   productosPorId: ReadonlyMap<number, Producto>,
-  logo?: LogoDocumento,
 ): DocumentoReporte {
   const encabezado: DatoEncabezadoDocumento[] = [
     { etiqueta: 'Salida', valor: `N.º ${salida.numero}` },
@@ -173,6 +169,5 @@ export function mapearSalidaADocumento(
       valorLinea: detalle.valorTotal,
     })),
     totales: [{ etiqueta: 'Valor total', valor: formatoMonedaCop(salida.valorTotal) }],
-    logo,
   };
 }

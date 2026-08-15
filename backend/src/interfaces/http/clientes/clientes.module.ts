@@ -12,8 +12,6 @@ import { CambiarEstadoClienteCasoUso } from '../../../aplicacion/clientes/cambia
 import { CambiarEstadoProyectoCasoUso } from '../../../aplicacion/clientes/cambiar-estado-proyecto.caso-uso';
 import { CrearClienteCasoUso } from '../../../aplicacion/clientes/crear-cliente.caso-uso';
 import { CrearProyectoCasoUso } from '../../../aplicacion/clientes/crear-proyecto.caso-uso';
-import { EliminarLogoClienteCasoUso } from '../../../aplicacion/clientes/eliminar-logo-cliente.caso-uso';
-import { GuardarLogoClienteCasoUso } from '../../../aplicacion/clientes/guardar-logo-cliente.caso-uso';
 import { ControladorProyectos } from '../proyectos/controlador-proyectos';
 import { ControladorClientes } from './controlador-clientes';
 
@@ -27,8 +25,6 @@ import { ControladorClientes } from './controlador-clientes';
     ActualizarProyectoCasoUso,
     CambiarEstadoProyectoCasoUso,
     // US11/T118 — logo del cliente (FR-066).
-    GuardarLogoClienteCasoUso,
-    EliminarLogoClienteCasoUso,
   ],
 })
 export class ClientesModule {}

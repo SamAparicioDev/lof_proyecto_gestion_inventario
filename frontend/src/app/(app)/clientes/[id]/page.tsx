@@ -8,16 +8,12 @@
  * proyecto + alta/edición/estado, FR-036/FR-038) e `HistorialSalidas` (salidas reales del
  * cliente vía `GET /api/salidas?clienteId=`, FR-037 — conectada desde la tanda US3).
  *
- * `LogoCliente` va justo debajo de los datos del cliente porque el logo ES uno de sus datos:
- * lo que cambia es que este se ve, y que su efecto se nota en los archivos exportados que
- * corresponden a este cliente (FR-067).
  */
 import { notFound } from 'next/navigation';
 import type { ClienteConProyectos } from '@trazo/compartido';
 import { apiServidor } from '@/lib/api/servidor';
 import { ErrorApi } from '@/lib/api/cliente';
 import { PanelCliente } from '@/componentes/clientes/panel-cliente';
-import { LogoCliente } from '@/componentes/clientes/logo-cliente';
 import { ProyectosCliente } from '@/componentes/clientes/proyectos-cliente';
 import { HistorialSalidas } from '@/componentes/clientes/historial-salidas';
 
@@ -50,7 +46,6 @@ export default async function PaginaDetalleCliente({ params }: { params: Promise
       </div>
 
       <PanelCliente cliente={cliente} />
-      <LogoCliente clienteId={cliente.id} tieneLogo={cliente.tieneLogo} />
       <ProyectosCliente clienteId={cliente.id} proyectos={cliente.proyectos} />
       <HistorialSalidas clienteId={cliente.id} proyectos={cliente.proyectos} />
     </div>

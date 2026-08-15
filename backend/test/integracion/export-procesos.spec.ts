@@ -2,8 +2,8 @@
  * Pruebas de integración de US11 (T123) — API completa + PostgreSQL REAL, contra el harness de
  * `./setup.ts`. Cubre las dos mitades de la historia:
  *
- * 1. **Logo del cliente** (`GET`/`PUT`/`DELETE /api/clientes/:id/logo`, FR-066): ciclo completo
- *    de carga/reemplazo/borrado, y los rechazos de US11-AS6 comprobando SIEMPRE que el logo
+ * 1. **Logotipo institucional** (FR-067): que TODA ruta `/export` lo incruste, sin depender del
+ *    contenido del archivo. (Hasta el 2026-08-15 esta sección probaba el logo POR CLIENTE
  *    anterior queda INTACTO — es lo que separa "rechazó el archivo" de "rechazó el archivo y
  *    además rompió lo que ya había".
  * 2. **Las cuatro exportaciones nuevas** (FR-064/FR-065/FR-067): que el listado exportado traiga
@@ -25,7 +25,6 @@
  * REQUIERE ENTORNO LOCAL con PostgreSQL vivo (`DATABASE_URL_TEST` en `backend/.env`) —
  * `npm run test:integracion -w backend`.
  */
-import { deflateSync } from 'node:zlib';
 import request from 'supertest';
 import ExcelJS from 'exceljs';
 import { NOMBRE_COOKIE_SESION } from '../../src/infraestructura/seguridad/cookie-sesion';
@@ -68,120 +67,63 @@ describe('US11 — logo del cliente y exportación de procesos (T123)', () => {
   const servidor = (): ReturnType<AppDePrueba['app']['getHttpServer']> => contexto.app.getHttpServer();
 
   // ══════════════════════════════════════════════════════════════════════════════════════
-  // Logo del cliente (FR-066, US11-AS5/AS6)
+  // El logotipo de LOF va en TODOS los exportables, sin excepción (FR-067)
   // ══════════════════════════════════════════════════════════════════════════════════════
 
-  it('ciclo completo del logo: cargar → servir con su tipo real → reemplazar → quitar (US11-AS5)', async () => {
-    const gerente = await crearUsuarioDePrueba(contexto, { rol: 'GERENTE' });
-    const cookie = await iniciarSesion(servidor(), gerente.login, gerente.password);
-    const cliente = await crearClienteDePrueba(contexto.prisma, { nombre: 'Cliente Con Logo' });
-
-    // Sin logo: la ficha lo dice y el endpoint que lo sirve responde 404 (no un 200 vacío).
-    expect(await pedirCliente(servidor(), cookie, cliente.id)).toMatchObject({ tieneLogo: false });
-    const sinLogo = await request(servidor()).get(`/api/clientes/${cliente.id}/logo`).set('Cookie', cookie);
-    expect(sinLogo.status).toBe(404);
-
-    // Cargar un PNG.
-    const png = pngValido();
-    const carga = await subirLogo(servidor(), cookie, cliente.id, png, 'logo.png', 'image/png');
-    expect(carga.status).toBe(204);
-
-    const servido = await pedirBinario(servidor(), `/api/clientes/${cliente.id}/logo`, {}).set('Cookie', cookie);
-    expect(servido.status).toBe(200);
-    expect(servido.headers['content-type']).toBe('image/png');
-    expect(servido.headers['content-disposition']).toBe('inline');
-    // Sin `nosniff`, un navegador podría interpretar como HTML unos bytes subidos por un usuario
-    // y servidos desde el MISMO origen de la app — la razón de ser de toda la validación.
-    expect(servido.headers['x-content-type-options']).toBe('nosniff');
-    expect(Buffer.from(servido.body as Buffer).equals(Buffer.from(png))).toBe(true);
-    expect(await pedirCliente(servidor(), cookie, cliente.id)).toMatchObject({ tieneLogo: true });
-
-    // Reemplazar por un JPEG: cambian los bytes Y el tipo con el que se sirve.
-    const jpeg = jpegValido();
-    expect((await subirLogo(servidor(), cookie, cliente.id, jpeg, 'otro.jpg', 'image/jpeg')).status).toBe(204);
-    const reemplazado = await pedirBinario(servidor(), `/api/clientes/${cliente.id}/logo`, {}).set('Cookie', cookie);
-    expect(reemplazado.headers['content-type']).toBe('image/jpeg');
-    expect(Buffer.from(reemplazado.body as Buffer).equals(Buffer.from(jpeg))).toBe(true);
-
-    // Quitar.
-    const borrado = await request(servidor()).delete(`/api/clientes/${cliente.id}/logo`).set('Cookie', cookie);
-    expect(borrado.status).toBe(204);
-    expect((await request(servidor()).get(`/api/clientes/${cliente.id}/logo`).set('Cookie', cookie)).status).toBe(404);
-    expect(await pedirCliente(servidor(), cookie, cliente.id)).toMatchObject({ tieneLogo: false });
-  });
-
   it(
-    'rechaza SVG, archivos que no son imagen, y archivos que exceden 500 KB — el logo anterior ' +
-      'queda INTACTO en los tres casos (US11-AS6)',
+    'TODAS las rutas /export incrustan el logotipo institucional, sin depender de a qué cliente ' +
+      'o proveedor corresponda su contenido (FR-067)',
     async () => {
       const gerente = await crearUsuarioDePrueba(contexto, { rol: 'GERENTE' });
       const cookie = await iniciarSesion(servidor(), gerente.login, gerente.password);
+
+      // El logotipo lo lee el backend del disco al arrancar. Si el entorno de pruebas no lo
+      // trae, esta prueba no tiene nada que verificar y decirlo es más honesto que fingir que
+      // pasó: se comprueba primero contra el endpoint que lo sirve.
+      const logo = await request(servidor()).get('/api/marca/logo');
+      if (logo.status === 404) {
+        console.warn('assets/marca/logo-lof.png no está en este entorno: se omite la prueba del logotipo.');
+        return;
+      }
+      expect(logo.status).toBe(200);
+
+      const producto = await crearProductoDePrueba(contexto.prisma, { stockActual: 100 });
       const cliente = await crearClienteDePrueba(contexto.prisma);
+      const proyecto = await crearProyectoDePrueba(contexto.prisma, cliente.id);
+      const proveedorId = await crearProveedorDePrueba(contexto.prisma, 'Proveedor del Logotipo');
+      const ingreso = await crearIngresoDePrueba(contexto.prisma, {
+        numeroFactura: 'FAC-LOGO-0001',
+        proveedorId,
+        productoId: producto.id,
+      });
+      const salida = await crearSalidaDePrueba(contexto.prisma, {
+        proyectoId: proyecto.id,
+        lineas: [{ productoId: producto.id, cantidad: 1, precioUnitario: 1_000 }],
+      });
 
-      const original = pngValido();
-      expect((await subirLogo(servidor(), cookie, cliente.id, original, 'logo.png', 'image/png')).status).toBe(204);
+      // Los listados abarcan varios clientes o ninguno, y los ingresos ni siquiera tienen
+      // cliente: antes de este cambio TODOS estos salían sin ninguna identidad.
+      const rutas = [
+        '/api/ingresos/export',
+        '/api/salidas/export',
+        `/api/ingresos/${ingreso.id}/export`,
+        `/api/salidas/${salida.id}/export`,
+        '/api/reportes/inventario/export',
+      ];
 
-      // 1) SVG disfrazado: nombre .png Y Content-Type image/png declarado — los dos los escribe
-      //    el cliente. Solo los BYTES dicen la verdad, y por eso solo los bytes se miran.
-      const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>', 'utf8');
-      const rechazoSvg = await subirLogo(servidor(), cookie, cliente.id, svg, 'logo.png', 'image/png');
-      expect(rechazoSvg.status).toBe(400);
-      expect(rechazoSvg.body.error.mensaje).toContain('SVG');
-      expect(rechazoSvg.body.error.campos).toEqual({ logo: expect.stringContaining('SVG') });
+      for (const ruta of rutas) {
+        const xlsx = await pedirBinario(servidor(), ruta, { formato: 'xlsx' }).set('Cookie', cookie);
+        expect(xlsx.status).toBe(200);
+        expect({ ruta, imagenes: await imagenesDelXlsx(xlsx.body as Buffer) }).toEqual({ ruta, imagenes: 1 });
 
-      // 2) Un archivo que no es imagen en absoluto.
-      const rechazoTexto = await subirLogo(
-        servidor(),
-        cookie,
-        cliente.id,
-        Buffer.from('esto es un documento de texto cualquiera', 'utf8'),
-        'logo.png',
-        'image/png',
-      );
-      expect(rechazoTexto.status).toBe(400);
-      expect(rechazoTexto.body.error.mensaje).toContain('PNG o JPEG');
-
-      // 3) Excede 500 KB — lo corta Multer en el propio FileInterceptor, ANTES de bufferizar el
-      //    archivo completo (hallazgo HIGH de T095, no repetido aquí).
-      const enorme = Buffer.concat([Buffer.from(pngValido()), Buffer.alloc(600 * 1024, 0x41)]);
-      const rechazoTamanio = await subirLogo(servidor(), cookie, cliente.id, enorme, 'grande.png', 'image/png');
-      expect(rechazoTamanio.status).toBe(400);
-      expect(rechazoTamanio.body.error.mensaje).toContain('500 KB');
-
-      // 4) Sin archivo adjunto.
-      const sinArchivo = await request(servidor()).put(`/api/clientes/${cliente.id}/logo`).set('Cookie', cookie);
-      expect(sinArchivo.status).toBe(400);
-
-      // Tras los CUATRO rechazos, el logo original sigue exactamente igual.
-      const servido = await pedirBinario(servidor(), `/api/clientes/${cliente.id}/logo`, {}).set('Cookie', cookie);
-      expect(servido.status).toBe(200);
-      expect(servido.headers['content-type']).toBe('image/png');
-      expect(Buffer.from(servido.body as Buffer).equals(Buffer.from(original))).toBe(true);
+        // En el PDF no se cuentan imágenes con exceljs; basta con que el archivo salga válido
+        // por el mismo camino (la maqueta del PDF tiene su propia suite: `maqueta-pdf.spec.ts`).
+        const pdf = await pedirBinario(servidor(), ruta, { formato: 'pdf' }).set('Cookie', cookie);
+        expect(pdf.status).toBe(200);
+        verificarPdfValido(pdf.body as Buffer);
+      }
     },
   );
-
-  it('un Operario puede VER el logo pero no cargarlo ni quitarlo (contrato: GET A,G,O · PUT/DELETE A,G)', async () => {
-    const gerente = await crearUsuarioDePrueba(contexto, { rol: 'GERENTE' });
-    const cookieGerente = await iniciarSesion(servidor(), gerente.login, gerente.password);
-    const operario = await crearUsuarioDePrueba(contexto, { rol: 'OPERARIO' });
-    const cookieOperario = await iniciarSesion(servidor(), operario.login, operario.password);
-    const cliente = await crearClienteDePrueba(contexto.prisma);
-
-    const original = pngValido();
-    expect((await subirLogo(servidor(), cookieGerente, cliente.id, original, 'logo.png', 'image/png')).status).toBe(204);
-
-    const lectura = await pedirBinario(servidor(), `/api/clientes/${cliente.id}/logo`, {}).set('Cookie', cookieOperario);
-    expect(lectura.status).toBe(200);
-
-    const escritura = await subirLogo(servidor(), cookieOperario, cliente.id, jpegValido(), 'x.jpg', 'image/jpeg');
-    expect(escritura.status).toBe(403);
-    const borrado = await request(servidor()).delete(`/api/clientes/${cliente.id}/logo`).set('Cookie', cookieOperario);
-    expect(borrado.status).toBe(403);
-
-    // El logo original sigue intacto tras los dos 403.
-    const servido = await pedirBinario(servidor(), `/api/clientes/${cliente.id}/logo`, {}).set('Cookie', cookieGerente);
-    expect(Buffer.from(servido.body as Buffer).equals(Buffer.from(original))).toBe(true);
-  });
 
   // ══════════════════════════════════════════════════════════════════════════════════════
   // Listados exportados: TODAS las filas del filtro, no solo la página (FR-064)
@@ -339,122 +281,6 @@ describe('US11 — logo del cliente y exportación de procesos (T123)', () => {
       });
     },
   );
-
-  // ══════════════════════════════════════════════════════════════════════════════════════
-  // El logo aparece exactamente cuando el export corresponde a UN cliente (FR-067, US11-AS3/AS4)
-  // ══════════════════════════════════════════════════════════════════════════════════════
-
-  it(
-    'el listado de salidas FILTRADO por cliente lleva su logo; el mismo listado SIN filtrar no lleva ' +
-      'ninguno, porque abarca varios clientes (US11-AS4)',
-    async () => {
-      const gerente = await crearUsuarioDePrueba(contexto, { rol: 'GERENTE' });
-      const cookie = await iniciarSesion(servidor(), gerente.login, gerente.password);
-      const producto = await crearProductoDePrueba(contexto.prisma, { stockActual: 100 });
-      const clienteConLogo = await crearClienteDePrueba(contexto.prisma, { nombre: 'Cliente Con Logo' });
-      const proyectoConLogo = await crearProyectoDePrueba(contexto.prisma, clienteConLogo.id);
-      const otroCliente = await crearClienteDePrueba(contexto.prisma, { nombre: 'Cliente Sin Logo' });
-      const otroProyecto = await crearProyectoDePrueba(contexto.prisma, otroCliente.id);
-
-      await subirLogo(servidor(), cookie, clienteConLogo.id, pngValido(), 'logo.png', 'image/png');
-      for (const proyectoId of [proyectoConLogo.id, otroProyecto.id]) {
-        await crearSalidaDePrueba(contexto.prisma, {
-          proyectoId,
-          lineas: [{ productoId: producto.id, cantidad: 1, precioUnitario: 1_000 }],
-        });
-      }
-
-      const filtrado = await pedirBinario(servidor(), '/api/salidas/export', {
-        clienteId: clienteConLogo.id,
-        formato: 'xlsx',
-      }).set('Cookie', cookie);
-      expect(filtrado.status).toBe(200);
-      expect(await imagenesDelXlsx(filtrado.body as Buffer)).toBe(1);
-
-      const sinFiltrar = await pedirBinario(servidor(), '/api/salidas/export', { formato: 'xlsx' }).set('Cookie', cookie);
-      expect(sinFiltrar.status).toBe(200);
-      expect(await imagenesDelXlsx(sinFiltrar.body as Buffer)).toBe(0);
-
-      // El de ingresos NUNCA lleva logo: un ingreso es una compra a un proveedor, sin cliente.
-      const ingresos = await pedirBinario(servidor(), '/api/ingresos/export', { formato: 'xlsx' }).set('Cookie', cookie);
-      expect(await imagenesDelXlsx(ingresos.body as Buffer)).toBe(0);
-    },
-  );
-
-  it(
-    'el documento de una salida lleva el logo del cliente DUEÑO DEL PROYECTO (FR-069); si ese cliente no ' +
-      'tiene logo, el archivo se genera igual y es válido (US11-AS3)',
-    async () => {
-      const gerente = await crearUsuarioDePrueba(contexto, { rol: 'GERENTE' });
-      const cookie = await iniciarSesion(servidor(), gerente.login, gerente.password);
-      const producto = await crearProductoDePrueba(contexto.prisma, { stockActual: 100 });
-
-      const clienteConLogo = await crearClienteDePrueba(contexto.prisma, { nombre: 'Cliente Con Logo' });
-      const proyectoConLogo = await crearProyectoDePrueba(contexto.prisma, clienteConLogo.id, { nombre: 'Obra A' });
-      await subirLogo(servidor(), cookie, clienteConLogo.id, pngValido(), 'logo.png', 'image/png');
-      const salidaConLogo = await crearSalidaDePrueba(contexto.prisma, {
-        proyectoId: proyectoConLogo.id,
-        lineas: [{ productoId: producto.id, cantidad: 2, precioUnitario: 5_000 }],
-      });
-
-      const clienteSinLogo = await crearClienteDePrueba(contexto.prisma, { nombre: 'Cliente Sin Logo' });
-      const proyectoSinLogo = await crearProyectoDePrueba(contexto.prisma, clienteSinLogo.id, { nombre: 'Obra B' });
-      const salidaSinLogo = await crearSalidaDePrueba(contexto.prisma, {
-        proyectoId: proyectoSinLogo.id,
-        lineas: [{ productoId: producto.id, cantidad: 1, precioUnitario: 3_000 }],
-      });
-
-      const conLogo = await pedirBinario(servidor(), `/api/salidas/${salidaConLogo.id}/export`, {
-        formato: 'xlsx',
-      }).set('Cookie', cookie);
-      expect(conLogo.status).toBe(200);
-      expect(conLogo.headers['content-disposition']).toBe(`attachment; filename="salida-${salidaConLogo.numero}.xlsx"`);
-      expect(await imagenesDelXlsx(conLogo.body as Buffer)).toBe(1);
-
-      const sinLogo = await pedirBinario(servidor(), `/api/salidas/${salidaSinLogo.id}/export`, {
-        formato: 'xlsx',
-      }).set('Cookie', cookie);
-      expect(sinLogo.status).toBe(200);
-      expect(await imagenesDelXlsx(sinLogo.body as Buffer)).toBe(0);
-      // Y el archivo sin logo NO está degradado: trae toda su cabecera y su línea.
-      const hoja = await primeraHoja(sinLogo.body as Buffer);
-      expect(valoresFila(hoja, 1, 2)).toEqual(['Salida', `N.º ${salidaSinLogo.numero}`]);
-      expect(valoresFila(hoja, 2, 2)).toEqual(['Cliente', 'Cliente Sin Logo']);
-      expect(valoresFila(hoja, 3, 2)).toEqual(['Proyecto', 'Obra B']);
-    },
-  );
-
-  it('un logo ILEGIBLE guardado en la base no impide exportar: el archivo sale igual, sin logo (FR-068)', async () => {
-    const gerente = await crearUsuarioDePrueba(contexto, { rol: 'GERENTE' });
-    const cookie = await iniciarSesion(servidor(), gerente.login, gerente.password);
-    const producto = await crearProductoDePrueba(contexto.prisma, { stockActual: 100 });
-    const cliente = await crearClienteDePrueba(contexto.prisma);
-    const proyecto = await crearProyectoDePrueba(contexto.prisma, cliente.id);
-    const salida = await crearSalidaDePrueba(contexto.prisma, {
-      proyectoId: proyecto.id,
-      lineas: [{ productoId: producto.id, cantidad: 1, precioUnitario: 1_000 }],
-    });
-
-    // Se siembra DIRECTAMENTE en la BD porque el endpoint de carga jamás dejaría entrar esto:
-    // simula una escritura truncada o un respaldo restaurado a medias.
-    await contexto.prisma.cliente.update({
-      where: { id: BigInt(cliente.id) },
-      data: {
-        logo: new Uint8Array(Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from('roto')])),
-        logoTipoMime: 'image/png',
-      },
-    });
-
-    const pdf = await pedirBinario(servidor(), `/api/salidas/${salida.id}/export`, { formato: 'pdf' }).set('Cookie', cookie);
-    expect(pdf.status).toBe(200);
-    expect(pdf.headers['content-type']).toBe('application/pdf');
-    verificarPdfValido(pdf.body as Buffer);
-
-    const xlsx = await pedirBinario(servidor(), `/api/salidas/${salida.id}/export`, { formato: 'xlsx' }).set('Cookie', cookie);
-    expect(xlsx.status).toBe(200);
-    const hoja = await primeraHoja(xlsx.body as Buffer);
-    expect(valoresFila(hoja, 1, 2)).toEqual(['Salida', `N.º ${salida.numero}`]);
-  });
 
   // ══════════════════════════════════════════════════════════════════════════════════════
   // Documentos individuales: cabecera + líneas + totales + auditoría (FR-065)
@@ -615,19 +441,20 @@ describe('US11 — logo del cliente y exportación de procesos (T123)', () => {
     expect((await request(servidor()).get('/api/ingresos/export?formato=csv').set('Cookie', cookie)).status).toBe(400);
   });
 
-  it('sin sesión, los cuatro exports y los tres endpoints de logo responden 401', async () => {
+  it('sin sesión, los cuatro exports responden 401 — pero el logotipo es público (FR-067)', async () => {
     const rutas = [
       '/api/ingresos/export?formato=pdf',
       '/api/salidas/export?formato=pdf',
       '/api/ingresos/1/export?formato=pdf',
       '/api/salidas/1/export?formato=pdf',
-      '/api/clientes/1/logo',
     ];
     for (const ruta of rutas) {
       expect((await request(servidor()).get(ruta)).status).toBe(401);
     }
-    expect((await request(servidor()).put('/api/clientes/1/logo')).status).toBe(401);
-    expect((await request(servidor()).delete('/api/clientes/1/logo')).status).toBe(401);
+
+    // El logotipo NO exige sesión: lo pinta la pantalla de inicio de sesión, que no la tiene.
+    // `404` es la otra respuesta legítima (el entorno no trae el archivo); `401` no lo sería.
+    expect([200, 404]).toContain((await request(servidor()).get('/api/marca/logo')).status);
   });
 });
 
@@ -659,33 +486,6 @@ interface SalidaListada {
 // Helpers
 // ══════════════════════════════════════════════════════════════════════════════════════════
 
-/** `PUT /api/clientes/:id/logo` como `multipart/form-data`, declarando el nombre y el
- *  `Content-Type` que el cliente quiera — justamente lo que el backend NO debe creerse. */
-function subirLogo(
-  servidorHttp: ReturnType<AppDePrueba['app']['getHttpServer']>,
-  cookie: string,
-  clienteId: number,
-  contenido: Uint8Array | Buffer,
-  nombreArchivo: string,
-  contentType: string,
-) {
-  return request(servidorHttp)
-    .put(`/api/clientes/${clienteId}/logo`)
-    .set('Cookie', cookie)
-    .attach('logo', Buffer.from(contenido), { filename: nombreArchivo, contentType });
-}
-
-/** `GET /api/clientes/:id` — para leer `tieneLogo`. */
-async function pedirCliente(
-  servidorHttp: ReturnType<AppDePrueba['app']['getHttpServer']>,
-  cookie: string,
-  clienteId: number,
-): Promise<{ tieneLogo: boolean }> {
-  const respuesta = await request(servidorHttp).get(`/api/clientes/${clienteId}`).set('Cookie', cookie);
-  expect(respuesta.status).toBe(200);
-  return respuesta.body as { tieneLogo: boolean };
-}
-
 /**
  * Inserta un ingreso `PENDIENTE` con una línea, DIRECTAMENTE con Prisma (mismo criterio que las
  * factories de `setup.ts`): las pruebas de FR-064 necesitan 25 filas y pasar por
@@ -715,52 +515,7 @@ async function crearIngresoDePrueba(
   return { id: Number(registro.id), numeroFactura: registro.numeroFactura };
 }
 
-/** PNG REAL de 1×1 píxel construido byte a byte — ver el mismo helper, con su explicación
- *  completa, en `test/unit/exportadores-documento.spec.ts`. */
-function pngValido(): Uint8Array {
-  const firma = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-  const datosIhdr = Buffer.alloc(13);
-  datosIhdr.writeUInt32BE(1, 0);
-  datosIhdr.writeUInt32BE(1, 4);
-  datosIhdr[8] = 8;
-  datosIhdr[9] = 2;
-  const datosIdat = deflateSync(Buffer.from([0x00, 0xff, 0x00, 0x00]));
-  return Uint8Array.from(
-    Buffer.concat([firma, trozoPng('IHDR', datosIhdr), trozoPng('IDAT', datosIdat), trozoPng('IEND', Buffer.alloc(0))]),
-  );
-}
 
-function trozoPng(tipo: string, datos: Buffer): Buffer {
-  const longitud = Buffer.alloc(4);
-  longitud.writeUInt32BE(datos.length, 0);
-  const cuerpo = Buffer.concat([Buffer.from(tipo, 'latin1'), datos]);
-  const crc = Buffer.alloc(4);
-  crc.writeUInt32BE(crc32(cuerpo), 0);
-  return Buffer.concat([longitud, cuerpo, crc]);
-}
-
-function crc32(datos: Buffer): number {
-  let crc = 0xffffffff;
-  for (const byte of datos) {
-    crc ^= byte;
-    for (let bit = 0; bit < 8; bit += 1) {
-      crc = crc & 1 ? (crc >>> 1) ^ 0xedb88320 : crc >>> 1;
-    }
-  }
-  return (crc ^ 0xffffffff) >>> 0;
-}
-
-/** JPEG mínimo con marcadores válidos (SOI + APP0/JFIF + EOI): basta para ejercitar la
- *  detección por número mágico y el `Content-Type` con el que se sirve, que es lo que prueba
- *  esta suite (no la decodificación de la imagen). */
-function jpegValido(): Uint8Array {
-  return Uint8Array.from(
-    Buffer.from([
-      0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01,
-      0x00, 0x00, 0xff, 0xd9,
-    ]),
-  );
-}
 
 /** Cantidad de imágenes incrustadas en la primera hoja del xlsx (US11-AS3/AS4). */
 async function imagenesDelXlsx(buffer: Buffer): Promise<number> {

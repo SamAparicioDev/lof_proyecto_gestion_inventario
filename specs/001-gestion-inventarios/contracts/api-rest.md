@@ -102,7 +102,7 @@ Administrador es hoy el único con `usuarios.gestionar` y concede los 30 permiso
 así que ningún rol excede el suyo. Solo restringe lo que US9 hizo posible por primera vez:
 roles propios con `usuarios.gestionar` y un subconjunto del resto.
 
-## Exportación de procesos y logo del cliente (US11, FR-064…FR-069)
+## Exportación de procesos y logo institucional (US11, FR-064…FR-069)
 
 **Exportaciones nuevas** — todas reutilizan el MISMO caso de uso y los MISMOS filtros que su
 pantalla (criterio SC-007 ya establecido para reportes) y el mismo puerto `ExportadorReporte`
@@ -124,36 +124,32 @@ consumidor (Principio V). Los `pagina`/`porPagina` que llegan con el resto de fi
 con el MISMO esquema Zod que la pantalla —para que los filtros no puedan divergir— y se IGNORAN:
 el archivo trae todas las filas (FR-064).
 
-**Logo del cliente**:
+**Logo institucional de LOF** (US11, FR-067/FR-068 — reescrito el 2026-08-15):
 
-| Método y ruta | Roles | Body | Respuesta OK | Errores |
+| Método y ruta | Permiso | Body | Respuesta OK | Errores |
 |---|---|---|---|---|
-| `GET /api/clientes/:id/logo` | A,G,O | — | `200` con los bytes y el `Content-Type` guardado, `Content-Disposition: inline` y `X-Content-Type-Options: nosniff` | `404` si el cliente no existe o no tiene logo |
-| `PUT /api/clientes/:id/logo` | A,G | `multipart/form-data`, campo `logo` (PNG o JPEG, máx. 500 KB) | `204` | `400` no es una imagen válida / formato no admitido / excede el tamaño — el logo anterior queda intacto (US11-AS6) |
-| `DELETE /api/clientes/:id/logo` | A,G | — | `204`; IDEMPOTENTE (quitar un logo que ya no estaba deja el estado pedido) | `404` solo si el CLIENTE no existe |
+| `GET /api/marca/logo` | **público** (sin sesión) | — | `200` con los bytes del logotipo, `Content-Type: image/png`, `Content-Disposition: inline`, `X-Content-Type-Options: nosniff` y `Cache-Control` largo | `404` si el despliegue no trae el archivo |
 
-Precisiones anotadas al implementar T118:
+Reglas del contrato:
 
-- **Permisos**: `GET` exige `clientes.ver` y `PUT`/`DELETE` exigen `clientes.editar` — los que
-  ya existen y cuyos conjuntos de roles son EXACTAMENTE los de la tabla (A,G,O y A,G). El logo
-  es un dato del cliente; un `clientes.gestionar_logo` nuevo sería una casilla que ningún rol
-  distingue de `clientes.editar`. (Contrástese con US12, donde sí hizo falta un permiso nuevo
-  porque `inventario.ver` tenía el conjunto de roles equivocado.)
-- **`GET /api/clientes/:id` y `GET /api/clientes` incorporan `tieneLogo: boolean`** a la forma
-  de `Cliente`. Los BYTES nunca viajan en esos JSON (irían en cada fila de cada listado); el
-  booleano es lo que le permite a la ficha decidir si pinta la vista previa y si ofrece "Subir
-  logo" o "Reemplazar/Quitar", sin provocar un `404` en la mayoría de las fichas.
-- **`nosniff` en la lectura**: son bytes subidos por un usuario y servidos desde el MISMO origen
-  de la aplicación; sin esa cabecera un navegador podría interpretarlos como HTML. Junto con la
-  validación por números mágicos (que impide guardar un SVG) es lo que cierra el vector de XSS.
+- **Es público a propósito**: lo pinta la pantalla de login, que por definición no tiene sesión.
+  Es la identidad de la empresa, el mismo dato que aparece impreso en cada documento que sale
+  del sistema — no hay nada que proteger. `nosniff` se mantiene igual: son bytes servidos desde
+  el mismo origen de la aplicación.
+- **Un solo archivo, un solo dueño**: el logotipo vive en `assets/marca/logo-lof.png` del
+  repositorio y lo sirve el backend. El frontend lo consume por esta ruta en vez de tener su
+  propia copia en `public/`, para que cambiarlo sea cambiar UN archivo y no dos que se
+  desincronizan.
+
+**Las tres rutas de `/api/clientes/:id/logo` (GET/PUT/DELETE) fueron ELIMINADAS** junto con
+`Cliente.tieneLogo`. Un documento lo firma quien lo emite, no su destinatario (ver FR-066).
 
 Reglas de la exportación con logo (FR-067/FR-068):
-- El logo se incluye **solo cuando el export corresponde a UN único cliente**: documento de
-  salida, reporte de consumo por cliente, reporte de consumo por proyecto (usa el logo del
-  cliente dueño del proyecto — FR-069), y listado de salidas filtrado por `clienteId`. Un
-  export que abarca varios clientes o ninguno (inventario, movimientos, ingresos, salidas sin
-  filtrar) va **sin logo**: no existiría uno correcto que mostrar (US11-AS4).
-- `DocumentoReporte` (puerto `ExportadorReporte`) gana un campo **opcional** `logo`; ambas
+- **TODO archivo exportado lleva el logotipo**, sin excepción y sin depender de su contenido.
+  No lo pone cada endpoint: lo inyecta `responderConArchivoExportado`, el único punto por el que
+  pasan las doce rutas `/export` del sistema. Es una garantía por CONSTRUCCIÓN — una exportación
+  futura no puede nacer sin logo por olvido, porque nadie lo añade a mano.
+- `DocumentoReporte` (puerto `ExportadorReporte`) tiene un campo **opcional** `logo`; ambas
   estrategias lo pintan en la esquina del encabezado (exceljs `addImage`, pdfmake vía imagen
   embebida). Si falta o falla su lectura, **el archivo se genera igual, sin logo** — nunca un
   error: el contenido de datos manda sobre la decoración (FR-068).

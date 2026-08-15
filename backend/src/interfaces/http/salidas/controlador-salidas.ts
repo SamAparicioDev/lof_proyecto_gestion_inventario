@@ -84,7 +84,6 @@ import { CancelarSalidaCasoUso } from '../../../aplicacion/salidas/cancelar-sali
 import { CompletarSalidaCasoUso } from '../../../aplicacion/salidas/completar-salida.caso-uso';
 import { ConfirmarSalidaCasoUso } from '../../../aplicacion/salidas/confirmar-salida.caso-uso';
 import { CrearSalidaCasoUso } from '../../../aplicacion/salidas/crear-salida.caso-uso';
-import { ResolverLogoDocumentoCasoUso } from '../../../aplicacion/exportacion/resolver-logo-documento.caso-uso';
 import type { ExportadorReporte } from '../../../aplicacion/reportes/puertos/exportador-reporte';
 import { NoEncontrado } from '../../../dominio/comunes/errores';
 import type { Salida } from '../../../dominio/entidades/salida';
@@ -124,7 +123,6 @@ export class ControladorSalidas {
     @Inject(REPOSITORIO_PROYECTOS) private readonly repositorioProyectos: RepositorioProyectos,
     @Inject(REPOSITORIO_CLIENTES) private readonly repositorioClientes: RepositorioClientes,
     @Inject(REPOSITORIO_PRODUCTOS) private readonly repositorioProductos: RepositorioProductos,
-    private readonly resolverLogo: ResolverLogoDocumentoCasoUso,
     @Inject(EXPORTADOR_EXCEL) private readonly exportadorExcel: ExportadorReporte,
     @Inject(EXPORTADOR_PDF) private readonly exportadorPdf: ExportadorReporte,
   ) {}
@@ -171,13 +169,11 @@ export class ControladorSalidas {
     });
 
     const destinos = await this.resolverDestinos(salidas.map((salida) => salida.proyectoId));
-    const logo = await this.resolverLogo.ejecutar({ clienteId: filtros.clienteId });
     const documento = mapearListadoSalidasADocumento(
       salidas,
       filtros,
       destinos,
       await this.nombresDeFiltro(filtros),
-      logo,
     );
     return this.exportar(documento, filtros.formato, `salidas-${fechaHoyIso()}`, respuesta);
   }
@@ -217,13 +213,11 @@ export class ControladorSalidas {
     const productos = await this.repositorioProductos.buscarPorIds(
       salida.detalles.map((detalle) => detalle.productoId),
     );
-    const logo = await this.resolverLogo.ejecutar({ proyectoId: salida.proyectoId });
 
     const documento = mapearSalidaADocumento(
       salida,
       destinos.get(salida.proyectoId) ?? { cliente: '—', proyecto: `Proyecto N.º ${salida.proyectoId}` },
       new Map(productos.map((producto) => [producto.id, producto])),
-      logo,
     );
     return this.exportar(documento, filtros.formato, `salida-${salida.numero}`, respuesta);
   }

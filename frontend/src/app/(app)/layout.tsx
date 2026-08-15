@@ -28,10 +28,10 @@
 import Link from 'next/link';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { CubeTransparent } from '@phosphor-icons/react/dist/ssr';
 import { obtenerPerfilServidor } from '@/lib/api/auth-servidor';
 import { ENCABEZADO_RUTA_ACTUAL } from '@/lib/sesion-constantes';
 import { ProveedorSesion } from '@/lib/sesion';
+import { LogoLof } from '@/componentes/comunes/logo-lof';
 import { iniciales } from '@/lib/formato';
 import { NavegacionLateral } from '@/componentes/layout/navegacion-lateral';
 import { BotonCerrarSesion } from '@/componentes/layout/boton-cerrar-sesion';
@@ -58,13 +58,7 @@ export default async function LayoutApp({ children }: { children: React.ReactNod
           style={{ borderRight: '1px solid var(--color-divider)', gridColumn: '1' }}
         >
           <div className="flex items-center gap-2.5 px-1.5 py-0.5">
-            <div
-              className="flex size-7 flex-none items-center justify-center rounded-[7px]"
-              style={{ border: '1px solid var(--color-accent)', color: 'var(--color-accent)' }}
-            >
-              <CubeTransparent size={16} />
-            </div>
-            <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 500, fontSize: 16 }}>Trazo</div>
+            <LogoLof alto={28} tamanoTextoRespaldo={16} />
           </div>
 
           <NavegacionLateral permisos={perfil.permisos} />

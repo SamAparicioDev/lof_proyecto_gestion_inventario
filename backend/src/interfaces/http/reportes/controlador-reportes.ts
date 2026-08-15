@@ -60,7 +60,6 @@ import {
   type ReporteMovimientos,
   type ReporteMovimientosEntrada,
 } from '../../../aplicacion/reportes/reporte-movimientos.caso-uso';
-import { ResolverLogoDocumentoCasoUso } from '../../../aplicacion/exportacion/resolver-logo-documento.caso-uso';
 import { EXPORTADOR_EXCEL, EXPORTADOR_PDF } from '../../../infraestructura/exportacion/exportacion.module';
 import { PipeValidacionZod } from '../comunes/pipe-validacion-zod';
 import { RequierePermiso } from '../comunes/requiere-permiso.decorator';
@@ -79,9 +78,6 @@ export class ControladorReportes {
     private readonly reporteConsumoProyecto: ReporteConsumoProyectoCasoUso,
     private readonly reporteInventarioActual: ReporteInventarioActualCasoUso,
     private readonly reporteMovimientos: ReporteMovimientosCasoUso,
-    /** US11/FR-067: los DOS reportes de consumo corresponden a un único cliente, así que
-     *  llevan su logo; inventario y movimientos abarcan varios clientes y no lo piden. */
-    private readonly resolverLogo: ResolverLogoDocumentoCasoUso,
     @Inject(EXPORTADOR_EXCEL) private readonly exportadorExcel: ExportadorReporte,
     @Inject(EXPORTADOR_PDF) private readonly exportadorPdf: ExportadorReporte,
   ) {}
@@ -106,8 +102,7 @@ export class ControladorReportes {
     @Res({ passthrough: true }) respuesta: Response,
   ): Promise<StreamableFile> {
     const reporte = await this.reporteConsumoCliente.ejecutar(entradaConsumoCliente(filtros));
-    const logo = await this.resolverLogo.ejecutar({ clienteId: filtros.clienteId });
-    const documento = mapearConsumoClienteADocumento(reporte, logo);
+    const documento = mapearConsumoClienteADocumento(reporte);
     return this.exportar(documento, filtros.formato, 'consumo-cliente', respuesta);
   }
 
@@ -130,9 +125,7 @@ export class ControladorReportes {
     @Res({ passthrough: true }) respuesta: Response,
   ): Promise<StreamableFile> {
     const reporte = await this.reporteConsumoProyecto.ejecutar(entradaConsumoProyecto(filtros));
-    // FR-069: un proyecto no tiene logo propio — se usa el del cliente dueño.
-    const logo = await this.resolverLogo.ejecutar({ proyectoId: filtros.proyectoId });
-    const documento = mapearConsumoProyectoADocumento(reporte, logo);
+    const documento = mapearConsumoProyectoADocumento(reporte);
     return this.exportar(documento, filtros.formato, 'consumo-proyecto', respuesta);
   }
 

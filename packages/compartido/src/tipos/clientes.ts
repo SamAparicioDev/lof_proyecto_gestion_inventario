@@ -27,13 +27,6 @@ export interface Cliente {
   ciudad: string | null;
   fechaRegistro: string;
   estado: EstadoCliente;
-  /**
-   * ¿El cliente tiene logo cargado? (US11, FR-066). Es un BOOLEANO y no los bytes: la ficha del
-   * cliente lo usa para saber si pedir la vista previa a `GET /api/clientes/:id/logo` (que
-   * responde `404` cuando no hay ninguno) y para ofrecer "Subir logo" o "Reemplazar/Quitar".
-   * Los bytes nunca viajan en este JSON — irían en cada fila de cada listado.
-   */
-  tieneLogo: boolean;
 }
 
 export interface Proyecto {

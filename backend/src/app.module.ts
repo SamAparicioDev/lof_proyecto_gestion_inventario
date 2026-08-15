@@ -47,6 +47,7 @@ import { ReportesModule } from './interfaces/http/reportes/reportes.module';
 import { CategoriasModule } from './interfaces/http/categorias/categorias.module';
 import { ProveedoresModule } from './interfaces/http/proveedores/proveedores.module';
 import { OrdenesCompraModule } from './interfaces/http/ordenes-compra/ordenes-compra.module';
+import { MarcaModule } from './interfaces/http/marca/marca.module';
 import { RolesModule } from './interfaces/http/roles/roles.module';
 import { ControladorSalud } from './interfaces/http/salud/controlador-salud';
 import { SalidasModule } from './interfaces/http/salidas/salidas.module';
@@ -80,6 +81,8 @@ import { UsuariosModule } from './interfaces/http/usuarios/usuarios.module';
     ProveedoresModule,
     // US16: órdenes de compra — el lado del ciclo de compra que faltaba (T171).
     OrdenesCompraModule,
+    // Identidad de LOF: sirve el logotipo a la web y lo comparte con la exportación (FR-067).
+    MarcaModule,
     // US10: panel de control de la ruta de inicio — compone las cifras que ya existen (T115).
     PanelModule,
   ],

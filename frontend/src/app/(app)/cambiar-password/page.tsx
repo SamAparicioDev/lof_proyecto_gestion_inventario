@@ -12,7 +12,7 @@ import type { Metadata } from 'next';
 import { FormularioCambiarPassword } from '@/componentes/auth/formulario-cambiar-password';
 
 export const metadata: Metadata = {
-  title: 'Cambiar contraseña — Trazo',
+  title: 'Cambiar contraseña — LOF',
 };
 
 export default function PaginaCambiarPassword() {

@@ -72,27 +72,6 @@ export function cambiarEstadoProyecto(id: number, estado: EstadoProyecto): Promi
   return api<void>(`/api/proyectos/${id}/estado`, { method: 'PUT', body: JSON.stringify({ estado }) });
 }
 
-/**
- * `PUT /api/clientes/:id/logo` — carga o reemplaza el logo del cliente (US11, FR-066).
- *
- * Va por `api<T>()` como todo lo demás (frontend/CLAUDE.md), con un `FormData` en el cuerpo: el
- * cliente HTTP detecta ese caso y deja que el navegador ponga el `Content-Type` con su
- * `boundary` (ver su TSDoc). Los errores de validación llegan como `ErrorApi` con `campos.logo`,
- * igual que cualquier error de campo del resto de formularios.
- *
- * El backend NO se cree ni el nombre ni el tipo declarado del archivo: valida los BYTES. Este
- * lado solo filtra por comodidad (`accept` del input), nunca como control.
- */
-export function subirLogoCliente(clienteId: number, archivo: File): Promise<void> {
-  const cuerpo = new FormData();
-  cuerpo.append('logo', archivo);
-  return api<void>(`/api/clientes/${clienteId}/logo`, { method: 'PUT', body: cuerpo });
-}
-
-/** `DELETE /api/clientes/:id/logo` — quita el logo del cliente (US11, FR-066). */
-export function eliminarLogoCliente(clienteId: number): Promise<void> {
-  return api<void>(`/api/clientes/${clienteId}/logo`, { method: 'DELETE' });
-}
 
 /** Reexport de conveniencia — así los componentes de este módulo importan un solo archivo. */
 export type { Cliente, Proyecto };

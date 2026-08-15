@@ -1,5 +1,5 @@
 /**
- * Layout raíz del frontend de Trazo.
+ * Layout raíz del frontend de LOF.
  *
  * Define el idioma del documento (es-CO — toda la interfaz es en español, FR-047), carga
  * Inter autohospedada con `next/font/google` (evita la llamada de red a Google Fonts en
@@ -22,7 +22,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'Trazo — Gestión de Inventarios',
+  title: 'LOF — Gestión de Inventarios',
   description:
     'Sistema de gestión de inventarios con trazabilidad de consumo por cliente y proyecto.',
 };

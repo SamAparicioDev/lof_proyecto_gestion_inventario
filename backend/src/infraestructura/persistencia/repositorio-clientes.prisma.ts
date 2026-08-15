@@ -19,7 +19,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, type EstadoCliente as EstadoClientePrisma } from '@prisma/client';
 import { Duplicado, NoEncontrado } from '../../dominio/comunes/errores';
-import type { Cliente, EstadoCliente, LogoCliente, TipoMimeLogo } from '../../dominio/entidades/cliente';
+import type { Cliente, EstadoCliente } from '../../dominio/entidades/cliente';
 import type {
   DatosCliente,
   FiltrosListarClientes,
@@ -30,12 +30,11 @@ import { PrismaService } from './prisma.service';
 
 /**
  * Columnas de `clientes` que se leen para construir la entidad `Cliente` del dominio. Es un
- * `select` EXPLÍCITO, no el `findMany` completo, por una razón concreta de US11: `logo` es una
- * columna `BYTEA` de hasta 500 KB y un `SELECT *` la traería en CADA fila de CADA listado de
- * clientes. El booleano `tieneLogo` se deriva de `logoTipoMime` (30 bytes) en vez de los bytes:
- * el CHECK `clientes_logo_consistente` garantiza que las dos columnas son `NULL` o tienen valor
- * a la vez, así que preguntar por el tipo responde exactamente lo mismo que preguntar por el
- * contenido. Los bytes solo cruzan la red cuando alguien los pide de verdad (`obtenerLogo`).
+ * `select` EXPLÍCITO y no un `findMany` completo: así agregar una columna a la tabla no la
+ * cuela en cada fila de cada listado sin que nadie lo decida.
+ *
+ * (Hasta el 2026-08-15 esa precaución tenía un motivo concreto: `logo` era una columna `BYTEA`
+ * de hasta 500 KB. Esa capacidad se retiró — ver FR-066 — y las dos columnas ya no existen.)
  */
 const COLUMNAS_CLIENTE = {
   id: true,
@@ -47,10 +46,9 @@ const COLUMNAS_CLIENTE = {
   ciudad: true,
   fechaRegistro: true,
   estado: true,
-  logoTipoMime: true,
 } satisfies Prisma.ClienteSelect;
 
-/** Fila de `clientes` tal como la devuelve `COLUMNAS_CLIENTE` (sin los bytes del logo). */
+/** Fila de `clientes` tal como la devuelve `COLUMNAS_CLIENTE`. */
 type FilaCliente = Prisma.ClienteGetPayload<{ select: typeof COLUMNAS_CLIENTE }>;
 
 @Injectable()
@@ -154,81 +152,6 @@ export class RepositorioClientesPrisma implements RepositorioClientes {
       .filter((ciudad): ciudad is string => ciudad !== null && ciudad.trim() !== '');
   }
 
-  /**
-   * Bytes del logo (US11, FR-066). Es la ÚNICA lectura del proyecto que trae la columna
-   * `BYTEA`, y por eso es un método propio y no un campo de `buscarPorId` (ver TSDoc de
-   * `COLUMNAS_CLIENTE`).
-   *
-   * Devuelve `null` tanto si el cliente no existe como si no tiene logo: para quien pregunta
-   * —el endpoint que lo sirve y el resolutor de logo de las exportaciones— son el mismo hecho
-   * ("no hay logo que mostrar"), y ninguno de los dos es un error (FR-068).
-   *
-   * El `tipoMime` guardado se acota con el CHECK `clientes_logo_tipo_mime_admitido`, así que
-   * `esTipoMimeLogo` solo puede fallar si alguien escribió en la tabla saltándose la
-   * aplicación Y el CHECK; en ese caso se trata como "sin logo" en vez de servir bytes con un
-   * `Content-Type` que la aplicación no reconoce (fail-closed).
-   */
-  async obtenerLogo(id: number): Promise<LogoCliente | null> {
-    const registro = await this.prisma.cliente.findUnique({
-      where: { id: BigInt(id) },
-      select: { logo: true, logoTipoMime: true },
-    });
-    if (!registro?.logo || !esTipoMimeLogo(registro.logoTipoMime)) return null;
-    return { contenido: registro.logo, tipoMime: registro.logoTipoMime };
-  }
-
-  /** Guarda o reemplaza el logo, escribiendo SIEMPRE las dos columnas juntas (CHECK
-   *  `clientes_logo_consistente`) y poblando la auditoría de modificación (FR-045). */
-  async guardarLogo(
-    id: number,
-    logo: { contenido: Uint8Array; tipoMime: TipoMimeLogo },
-    usuarioId: number,
-  ): Promise<void> {
-    try {
-      await this.prisma.cliente.update({
-        where: { id: BigInt(id) },
-        data: {
-          // `new Uint8Array(...)` copia los bytes a un `ArrayBuffer` propio: el puerto del
-          // dominio expresa el contenido como `Uint8Array` a secas (no conoce Node ni Prisma),
-          // mientras que el tipo `Bytes` de Prisma exige `Uint8Array<ArrayBuffer>`. La copia es
-          // de 500 KB como máximo y ocurre una vez por carga de logo.
-          logo: new Uint8Array(logo.contenido),
-          logoTipoMime: logo.tipoMime,
-          usuarioModificacionId: BigInt(usuarioId),
-          fechaModificacion: new Date(),
-        },
-      });
-    } catch (error) {
-      throw traducirErrorEscrituraCliente(error);
-    }
-  }
-
-  /** Deja ambas columnas del logo en `NULL` (FR-066). Idempotente: quitar un logo que ya no
-   *  estaba deja el cliente exactamente en el estado pedido, que es lo que `DELETE` promete. */
-  async eliminarLogo(id: number, usuarioId: number): Promise<void> {
-    try {
-      await this.prisma.cliente.update({
-        where: { id: BigInt(id) },
-        data: {
-          logo: null,
-          logoTipoMime: null,
-          usuarioModificacionId: BigInt(usuarioId),
-          fechaModificacion: new Date(),
-        },
-      });
-    } catch (error) {
-      throw traducirErrorEscrituraCliente(error);
-    }
-  }
-}
-
-/** Tipos MIME que el sistema admite como logo — mismos que el CHECK de la BD y que
- *  `TipoMimeLogo` (`dominio/entidades/cliente.ts`). */
-const TIPOS_MIME_LOGO: readonly string[] = ['image/png', 'image/jpeg'];
-
-/** Guarda de tipo sobre el `logo_tipo_mime` leído de la BD (ver TSDoc de `obtenerLogo`). */
-function esTipoMimeLogo(valor: string | null): valor is TipoMimeLogo {
-  return valor !== null && TIPOS_MIME_LOGO.includes(valor);
 }
 
 /** Filtro `buscar` (nombre/NIT, insensible a mayúsculas) + estado (`GET /api/clientes`). */
@@ -250,8 +173,7 @@ function construirWhereListarClientes(filtros: FiltrosListarClientes): Prisma.Cl
   return condiciones.length > 0 ? { AND: condiciones } : {};
 }
 
-/** Traduce un registro Prisma de `clientes` a la entidad de dominio. `tieneLogo` sale de
- *  `logoTipoMime`, no de los bytes — ver TSDoc de `COLUMNAS_CLIENTE`. */
+/** Traduce un registro Prisma de `clientes` a la entidad de dominio. */
 function aClienteDominio(registro: FilaCliente): Cliente {
   return {
     id: Number(registro.id),
@@ -263,7 +185,6 @@ function aClienteDominio(registro: FilaCliente): Cliente {
     ciudad: registro.ciudad,
     fechaRegistro: registro.fechaRegistro,
     estado: mapearEstadoClienteDeDominio(registro.estado),
-    tieneLogo: registro.logoTipoMime !== null,
   };
 }
 

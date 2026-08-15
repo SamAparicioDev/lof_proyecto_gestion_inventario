@@ -185,22 +185,22 @@ Al entrar al sistema, el usuario aterriza en un panel que responde de un vistazo
 
 ---
 
-### User Story 11 - Exportar cualquier proceso, con la identidad del cliente (Priority: P2)
+### User Story 11 - Exportar cualquier proceso, con la identidad de LOF (Priority: P2)
 
-Cualquier listado o documento del sistema —no solo los reportes— se exporta a PDF y Excel: el historial de ingresos, el de salidas, y cada documento individual (una salida concreta, un ingreso concreto). Además, cada cliente puede tener su logo cargado en el sistema, y todo export que corresponda a un único cliente lo lleva impreso, de modo que el archivo sirve para enviárselo al cliente tal cual.
+Cualquier listado o documento del sistema —no solo los reportes— se exporta a PDF y Excel: el historial de ingresos, el de salidas, las órdenes de compra, y cada documento individual. Todos salen firmados con el logo de LOF, de modo que el archivo sirve para enviarlo tal cual a un cliente o a un proveedor.
 
-**Why this priority**: hoy solo los 4 reportes se exportan; el resto de la operación (ingresos y salidas, que es donde vive el día a día) obliga a leerlo en pantalla o copiarlo a mano. Y un PDF sin identidad visual es un documento interno: con el logo del cliente pasa a ser algo entregable — un soporte de entrega que se puede adjuntar en un correo o imprimir para firmar.
+**Why this priority**: hoy solo los 4 reportes se exportan; el resto de la operación (ingresos y salidas, que es donde vive el día a día) obliga a leerlo en pantalla o copiarlo a mano. Y un PDF sin identidad visual es un documento interno: con el logotipo pasa a ser algo entregable — un soporte que se adjunta en un correo o se imprime para firmar.
 
-**Independent Test**: Se carga el logo de un cliente, se exporta un documento de salida de ese cliente a PDF y a Excel, y se verifica que ambos archivos abren correctamente, contienen exactamente los datos de la pantalla y muestran el logo; luego se exporta un listado que abarca varios clientes y se verifica que no muestra ningún logo (no habría uno correcto que mostrar).
+**Corrección del 2026-08-15 (decisión del dueño del proyecto)**: en su redacción original esta historia cargaba un logo POR CLIENTE y lo imprimía solo en los exports que correspondían a uno solo. Se retiró: un documento lo firma quien lo EMITE, no su destinatario, así que un logo por ficha era una imagen que mantener para decorar algo que igual identificaba a LOF. Ahora hay un único logotipo institucional y va en todos los exportables sin excepción — incluidos los que abarcan varios clientes o ninguno, que antes salían sin nada.
+
+**Independent Test**: Se exporta un documento de salida a PDF y a Excel, y un listado que abarca varios clientes, y se verifica que los tres abren correctamente, contienen exactamente los datos de la pantalla y muestran el logo de LOF.
 
 **Acceptance Scenarios**:
 
 1. **Given** el historial de ingresos o de salidas con filtros aplicados, **When** el usuario exporta a PDF o Excel, **Then** obtiene un archivo con TODAS las filas que cumplen esos filtros (no solo la página visible) y con los filtros indicados en el encabezado.
 2. **Given** una salida o un ingreso concreto, **When** el usuario lo exporta, **Then** obtiene el documento completo (cabecera, líneas, totales y datos de auditoría) en PDF o Excel.
-3. **Given** un cliente con logo cargado, **When** se exporta cualquier documento o reporte correspondiente a ese único cliente, **Then** el archivo muestra su logo; **Given** un cliente sin logo, **Then** el archivo se genera igual, sin logo y sin ningún hueco ni error.
-4. **Given** un export que abarca varios clientes (por ejemplo, el historial completo de salidas sin filtrar, o el reporte de inventario), **When** se exporta, **Then** no se muestra ningún logo de cliente, porque no hay uno solo al que el documento corresponda.
-5. **Given** un Administrador o Gerente en la ficha de un cliente, **When** carga una imagen de logo, **Then** el sistema la acepta solo si es una imagen válida dentro del tamaño permitido, y puede reemplazarla o quitarla después.
-6. **Given** un archivo que no es una imagen válida (o una imagen que excede el tamaño permitido), **When** se intenta cargar como logo, **Then** el sistema lo rechaza con un mensaje claro en español y el logo anterior del cliente queda intacto.
+3. **Given** CUALQUIER exportación del sistema —reporte, listado o documento individual, en PDF o en Excel—, **When** el usuario la descarga, **Then** el archivo lleva el logo de LOF, sin depender de a qué cliente o proveedor corresponda su contenido.
+4. **Given** un despliegue donde el archivo del logotipo falta o está corrupto, **When** se exporta cualquier cosa, **Then** el archivo se genera IGUAL, sin logo y sin ningún hueco ni error: el contenido manda sobre la decoración (FR-068).
 
 ---
 
@@ -400,9 +400,9 @@ Cuando falta mercancía, el negocio arma una ORDEN DE COMPRA dirigida a un prove
 
 - **FR-064**: Los listados de ingresos y de salidas DEBEN poder exportarse a PDF y Excel con los mismos filtros aplicados en pantalla, incluyendo TODAS las filas que cumplen el filtro (no solo la página visible) — la paginación es una comodidad de lectura, no un recorte de los datos.
 - **FR-065**: Un ingreso y una salida individuales DEBEN poder exportarse como documento completo (cabecera, líneas, totales y datos de auditoría) a PDF y Excel.
-- **FR-066**: El sistema DEBE permitir cargar, reemplazar y quitar el logo de cada cliente (roles Administrador/Gerente), aceptando únicamente imágenes válidas dentro de un tamaño máximo definido.
-- **FR-067**: Todo archivo exportado que corresponda a un ÚNICO cliente DEBE mostrar su logo; los exports que abarcan varios clientes o ninguno se generan sin logo. Un cliente sin logo cargado nunca impide ni degrada la exportación.
-- **FR-068**: El logo DEBE aplicarse tanto al PDF como al Excel, y su ausencia o su fallo de lectura NUNCA puede impedir que el archivo se genere: el contenido de datos manda sobre la decoración.
+- **FR-066**: ~~Cargar, reemplazar y quitar el logo de cada cliente.~~ **RETIRADO (2026-08-15, decisión del dueño del proyecto)**: los documentos que salen del sistema los firma LOF, no el cliente al que van dirigidos. Un logo por cliente obligaba a mantener una imagen por ficha para decorar un documento que igual identifica a quien lo emite. La capacidad, sus tres endpoints y las columnas que la sostenían se eliminaron; el logo institucional de FR-067 la sustituye por completo.
+- **FR-067**: TODO archivo exportado —sin excepción, sea reporte, listado o documento individual— DEBE llevar el logo institucional de LOF. No depende del contenido del archivo ni de a quién vaya dirigido: es la identidad de quien lo emite, así que el logo se aplica en el punto por el que pasan todas las exportaciones y no en cada una por separado. Así ninguna exportación futura puede nacer sin él por olvido.
+- **FR-068**: El logo DEBE aplicarse tanto al PDF como al Excel, y su ausencia o su fallo de lectura NUNCA puede impedir que el archivo se genere: el contenido de datos manda sobre la decoración. Un archivo sin logotipo sirve; un `500` no.
 - **FR-069**: Los proyectos NO tienen logo propio: un export de un proyecto muestra el logo del cliente al que pertenece (la identidad visual es de la empresa, no del trabajo puntual).
 
 **Costo del producto y su historial (US12)**
