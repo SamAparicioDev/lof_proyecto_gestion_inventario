@@ -23,6 +23,7 @@ import {
   crearAppDePrueba,
   crearClienteDePrueba,
   crearProductoDePrueba,
+  crearCategoriaDePrueba,
   crearProyectoDePrueba,
   crearSalidaDePrueba,
   crearUsuarioDePrueba,
@@ -41,7 +42,7 @@ interface PaginaBody<T> {
 
 /** Fila de `GET /api/inventario` — solo los campos que estas pruebas miran. */
 interface FilaInventarioBody {
-  producto: { id: number; categoria: string | null; ubicacion: string | null; estado: string };
+  producto: { id: number; categoria: { id: number; nombre: string } | null; ubicacion: string | null; estado: string };
   stock: number;
   comprometido: number;
   disponible: number;
@@ -77,23 +78,27 @@ describe('Filtros de listado — US13 (T138)', () => {
     const usuario = await crearUsuarioDePrueba(contexto, { rol: 'GERENTE' });
     const cookie = await iniciarSesion(servidor(), usuario.login, usuario.password);
 
+    // US15: la categoría es una fila del catálogo, no un texto en el producto.
+    const ferreteria = await crearCategoriaDePrueba(contexto.prisma, 'Ferretería', usuario.id);
+    const electricos = await crearCategoriaDePrueba(contexto.prisma, 'Eléctricos', usuario.id);
+
     const objetivo = await crearProductoDePrueba(contexto.prisma, {
-      categoria: 'Ferretería',
+      categoriaId: ferreteria,
       ubicacion: 'Bodega 1',
     });
     const mismaCategoriaOtraUbicacion = await crearProductoDePrueba(contexto.prisma, {
-      categoria: 'Ferretería',
+      categoriaId: ferreteria,
       ubicacion: 'Bodega 2',
     });
     const otraCategoria = await crearProductoDePrueba(contexto.prisma, {
-      categoria: 'Eléctricos',
+      categoriaId: electricos,
       ubicacion: 'Bodega 1',
     });
     const sinClasificacion = await crearProductoDePrueba(contexto.prisma, {});
 
     const porCategoria = await request(servidor())
       .get('/api/inventario')
-      .query({ categoria: 'Ferretería', porPagina: 100 })
+      .query({ categoriaId: ferreteria, porPagina: 100 })
       .set('Cookie', cookie);
     expect(porCategoria.status).toBe(200);
     const idsCategoria = idsDeInventario(porCategoria.body);
@@ -113,7 +118,7 @@ describe('Filtros de listado — US13 (T138)', () => {
     // Y lógico: solo el que cumple LAS DOS condiciones.
     const combinado = await request(servidor())
       .get('/api/inventario')
-      .query({ categoria: 'Ferretería', ubicacion: 'Bodega 1', porPagina: 100 })
+      .query({ categoriaId: ferreteria, ubicacion: 'Bodega 1', porPagina: 100 })
       .set('Cookie', cookie);
     expect(combinado.status).toBe(200);
     expect(idsDeInventario(combinado.body)).toEqual([objetivo.id]);
@@ -129,16 +134,18 @@ describe('Filtros de listado — US13 (T138)', () => {
     const usuario = await crearUsuarioDePrueba(contexto, { rol: 'OPERARIO' });
     const cookie = await iniciarSesion(servidor(), usuario.login, usuario.password);
 
-    await crearProductoDePrueba(contexto.prisma, { categoria: 'Ferretería', ubicacion: 'Bodega 1' });
-    await crearProductoDePrueba(contexto.prisma, { categoria: 'Ferretería', ubicacion: 'Bodega 2' });
-    await crearProductoDePrueba(contexto.prisma, { categoria: 'Eléctricos', ubicacion: null });
+    const ferreteria = await crearCategoriaDePrueba(contexto.prisma, 'Ferretería', usuario.id);
+    const electricos = await crearCategoriaDePrueba(contexto.prisma, 'Eléctricos', usuario.id);
+    await crearProductoDePrueba(contexto.prisma, { categoriaId: ferreteria, ubicacion: 'Bodega 1' });
+    await crearProductoDePrueba(contexto.prisma, { categoriaId: ferreteria, ubicacion: 'Bodega 2' });
+    await crearProductoDePrueba(contexto.prisma, { categoriaId: electricos, ubicacion: null });
     await crearProductoDePrueba(contexto.prisma, {}); // sin categoría ni ubicación
 
     const respuesta = await request(servidor()).get('/api/inventario/opciones-filtro').set('Cookie', cookie);
     expect(respuesta.status).toBe(200);
 
-    const cuerpo = respuesta.body as { categorias: string[]; ubicaciones: string[] };
-    expect(cuerpo.categorias).toEqual(['Eléctricos', 'Ferretería']); // ordenadas y sin repetir
+    const cuerpo = respuesta.body as { categorias: { id: number; nombre: string }[]; ubicaciones: string[] };
+    expect(cuerpo.categorias.map((c) => c.nombre)).toEqual(['Eléctricos', 'Ferretería']); // del catálogo, ordenadas
     expect(cuerpo.ubicaciones).toEqual(['Bodega 1', 'Bodega 2']); // los nulos no aportan opción
   });
 
@@ -403,7 +410,7 @@ describe('Filtros de listado — US13 (T138)', () => {
     const producto = await crearProductoDePrueba(contexto.prisma, { stockActual: 50 });
 
     const respuesta = await request(servidor())
-      .get('/api/inventario?disponibleMin=&disponibleMax=&categoria=&ubicacion=&porPagina=100')
+      .get('/api/inventario?disponibleMin=&disponibleMax=&ubicacion=&porPagina=100')
       .set('Cookie', cookie);
     expect(respuesta.status).toBe(200);
     expect(idsDeInventario(respuesta.body)).toContain(producto.id);

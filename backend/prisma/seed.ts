@@ -114,6 +114,11 @@ const PERMISOS_DEL_SISTEMA = [
   { clave: 'usuarios.gestionar', modulo: 'usuarios', descripcion: 'Administrar usuarios: alta, edición, estado y restablecimiento de contraseña.' },
 
   { clave: 'roles.gestionar', modulo: 'roles', descripcion: 'Administrar roles y los permisos de cada rol.' },
+
+  // US15 (FR-088): VER el catálogo es trabajo diario —sin él no se clasifica un producto ni se
+  // usa el filtro por categoría—, así que lo tienen los tres roles; administrarlo, no.
+  { clave: 'categorias.ver', modulo: 'categorias', descripcion: 'Consultar el catálogo de categorías para clasificar productos y filtrar.' },
+  { clave: 'categorias.gestionar', modulo: 'categorias', descripcion: 'Administrar el catálogo de categorías: alta, edición y estado.' },
 ] as const;
 
 /**
@@ -125,6 +130,7 @@ const PERMISOS_OPERARIO = [
   'inventario.ver',
   'productos.ver',
   'productos.crear',
+  'categorias.ver',
   'clientes.ver',
   'ingresos.ver',
   'ingresos.crear',

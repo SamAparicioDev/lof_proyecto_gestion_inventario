@@ -96,7 +96,7 @@ function EncabezadoInventario() {
 interface ParametrosBusqueda {
   buscar?: string;
   soloStockBajo?: string;
-  categoria?: string;
+  categoriaId?: string;
   ubicacion?: string;
   estado?: string;
   disponibleMin?: string;
@@ -109,7 +109,7 @@ function construirQuery(parametros: ParametrosBusqueda, paginaDestino?: number):
   const query = new URLSearchParams();
   if (parametros.buscar) query.set('buscar', parametros.buscar);
   if (parametros.soloStockBajo === 'true') query.set('soloStockBajo', 'true');
-  if (parametros.categoria) query.set('categoria', parametros.categoria);
+  if (parametros.categoriaId) query.set('categoriaId', parametros.categoriaId);
   if (parametros.ubicacion) query.set('ubicacion', parametros.ubicacion);
   if (parametros.estado) query.set('estado', parametros.estado);
   if (parametros.disponibleMin) query.set('disponibleMin', parametros.disponibleMin);
@@ -173,13 +173,15 @@ export default async function PaginaInventario({
   const totalPaginas = Math.max(1, Math.ceil(pagina.total / pagina.porPagina));
   const puedeImportar = tienePermiso(perfil?.permisos, PERMISOS.PRODUCTOS_IMPORTAR);
   const puedeCrear = tienePermiso(perfil?.permisos, PERMISOS.PRODUCTOS_CREAR);
-  const categorias = opcionesConValorVigente(opciones.categorias, parametros.categoria);
+  // US15: las categorías llegan del CATÁLOGO ya resueltas (activas + inactivas en uso), así que
+  // no hace falta `opcionesConValorVigente`: la lista ya contiene la que esté filtrada.
+  const categorias = opciones.categorias;
   const ubicaciones = opcionesConValorVigente(opciones.ubicaciones, parametros.ubicacion);
 
   // El orden es el mismo de los campos de la barra, para que el resumen se lea igual que se llenó.
   const filtros = filtrosActivos([
     { etiqueta: 'Buscar', valor: parametros.buscar },
-    { etiqueta: 'Categoría', valor: parametros.categoria },
+    { etiqueta: 'Categoría', valor: categorias.find((c) => String(c.id) === parametros.categoriaId)?.nombre },
     { etiqueta: 'Ubicación', valor: parametros.ubicacion },
     { etiqueta: 'Estado', valor: etiquetaEstado(parametros.estado) },
     { etiqueta: 'Disponible desde', valor: parametros.disponibleMin },
@@ -218,11 +220,11 @@ export default async function PaginaInventario({
         </CampoFiltro>
         <CampoFiltro>
           <label htmlFor="categoria">Categoría</label>
-          <select id="categoria" name="categoria" className="input" defaultValue={parametros.categoria ?? ''}>
+          <select id="categoria" name="categoriaId" className="input" defaultValue={parametros.categoriaId ?? ''}>
             <option value="">Todas</option>
             {categorias.map((categoria) => (
-              <option key={categoria} value={categoria}>
-                {categoria}
+              <option key={categoria.id} value={categoria.id}>
+                {categoria.nombre}
               </option>
             ))}
           </select>

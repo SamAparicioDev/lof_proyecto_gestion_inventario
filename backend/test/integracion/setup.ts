@@ -132,6 +132,9 @@ const TABLAS_DE_NEGOCIO = [
   'proyectos',
   'clientes',
   'productos',
+  // US15: va DESPUÉS de `productos` porque la FK `productos.categoria_id` es RESTRICT; el
+  // `CASCADE` del TRUNCATE la resolvería igual, pero el orden explícito documenta la dependencia.
+  'categorias',
   'usuarios',
 ] as const;
 
@@ -360,7 +363,7 @@ export interface OpcionesProductoDePrueba {
    * devuelve exactamente el conjunto esperado. Se dejan opcionales y sin valor por defecto
    * (`null`/`ACTIVO`) para que ninguna suite anterior cambie de comportamiento.
    */
-  categoria?: string | null;
+  categoriaId?: number | null;
   ubicacion?: string | null;
   estado?: 'ACTIVO' | 'INACTIVO';
   /**
@@ -388,6 +391,23 @@ export interface ProductoDePruebaCreado {
  * ingresos puedan partir de un stock inicial conocido y verificar que `recibir`/`anular`
  * mutan `stock_actual` EXACTAMENTE lo esperado (Principio I, research R4).
  */
+/**
+ * Crea una categoría del catálogo (US15) y devuelve su id, para las pruebas que necesitan
+ * clasificar productos. El nombre lleva sufijo único porque el índice funcional
+ * `lower(btrim(nombre))` rechaza duplicados entre pruebas de la misma suite.
+ */
+export async function crearCategoriaDePrueba(
+  prisma: PrismaService,
+  nombre: string,
+  usuarioCreacionId: number,
+): Promise<number> {
+  const categoria = await prisma.categoria.create({
+    data: { nombre, usuarioCreacionId: BigInt(usuarioCreacionId) },
+    select: { id: true },
+  });
+  return Number(categoria.id);
+}
+
 export async function crearProductoDePrueba(
   prisma: PrismaService,
   opciones: OpcionesProductoDePrueba = {},
@@ -401,7 +421,7 @@ export async function crearProductoDePrueba(
       descripcion: opciones.descripcion ?? 'Producto de prueba de integración',
       stockActual: opciones.stockActual ?? 0,
       umbralStockBajo: opciones.umbralStockBajo ?? 0,
-      categoria: opciones.categoria ?? null,
+      categoriaId: opciones.categoriaId === undefined || opciones.categoriaId === null ? null : BigInt(opciones.categoriaId),
       ubicacion: opciones.ubicacion ?? null,
       estado: opciones.estado ?? 'ACTIVO',
       usuarioCreacionId: BigInt(usuarioCreacionId),

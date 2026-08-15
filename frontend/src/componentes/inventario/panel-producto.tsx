@@ -35,7 +35,7 @@ const MENSAJE_ERROR_RED = 'No fue posible comunicarse con el servidor. Intenta d
 function aValoresFormulario(fila: FilaInventario): DatosActualizarProducto {
   return {
     descripcion: fila.producto.descripcion,
-    categoria: fila.producto.categoria ?? '',
+    categoriaId: fila.producto.categoria?.id ?? null,
     ubicacion: fila.producto.ubicacion ?? '',
     umbralStockBajo: fila.producto.umbralStockBajo,
     // US12: el costo se precarga con el vigente para que una edición de otro campo no lo
@@ -93,7 +93,7 @@ export function PanelProducto({ fila }: { fila: FilaInventario }) {
 
       <dl className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', margin: 0 }}>
         <DatoSoloLectura etiqueta="Descripción" valor={fila.producto.descripcion} />
-        <DatoSoloLectura etiqueta="Categoría" valor={fila.producto.categoria ?? '—'} />
+        <DatoSoloLectura etiqueta="Categoría" valor={fila.producto.categoria?.nombre ?? '—'} />
         <DatoSoloLectura etiqueta="Ubicación" valor={fila.producto.ubicacion ?? '—'} />
         <DatoSoloLectura etiqueta="Umbral de stock bajo" valor={String(fila.producto.umbralStockBajo)} />
         {/* Costo de referencia vigente (US12/FR-071): editable desde "Editar", y su procedencia
@@ -135,6 +135,7 @@ export function PanelProducto({ fila }: { fila: FilaInventario }) {
           productoId={fila.producto.id}
           sku={fila.producto.sku}
           valoresIniciales={aValoresFormulario(fila)}
+          categoriaActual={fila.producto.categoria}
           onCerrar={() => setEditando(false)}
           onGuardado={() => router.refresh()}
         />

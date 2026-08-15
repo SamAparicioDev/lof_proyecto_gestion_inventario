@@ -24,15 +24,16 @@
  * la edición y del cambio de estado, que son A,G. Por eso este diálogo NO se oculta al
  * Operario en ninguna de sus dos entradas: es una acción que sí puede ejecutar.
  */
+import { SelectorCategoria } from '@/componentes/categorias/selector-categoria';
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { esquemaCrearProducto, type DatosCrearProducto, type ProductoResumen } from '@trazo/compartido';
 import { crearProducto } from '@/lib/api/productos';
 import { ErrorApi } from '@/lib/api/cliente';
 
 const MENSAJE_ERROR_RED = 'No fue posible comunicarse con el servidor. Intenta de nuevo.';
-const CAMPOS_VALIDOS = new Set(['sku', 'descripcion', 'categoria', 'ubicacion', 'umbralStockBajo']);
+const CAMPOS_VALIDOS = new Set(['sku', 'descripcion', 'categoriaId', 'ubicacion', 'umbralStockBajo']);
 
 interface DialogoProductoNuevoProps {
   onCerrar: () => void;
@@ -45,12 +46,13 @@ export function DialogoProductoNuevo({ onCerrar, onCreado }: DialogoProductoNuev
 
   const {
     register,
+    control,
     handleSubmit,
     setError,
     formState: { errors },
   } = useForm<DatosCrearProducto>({
     resolver: zodResolver(esquemaCrearProducto),
-    defaultValues: { sku: '', descripcion: '', categoria: '', ubicacion: '', umbralStockBajo: 0 },
+    defaultValues: { sku: '', descripcion: '', categoriaId: null, ubicacion: '', umbralStockBajo: 0 },
   });
 
   async function alEnviar(datos: DatosCrearProducto): Promise<void> {
@@ -128,7 +130,13 @@ export function DialogoProductoNuevo({ onCerrar, onCreado }: DialogoProductoNuev
 
           <div className="field">
             <label htmlFor="producto-nuevo-categoria">Categoría (opcional)</label>
-            <input id="producto-nuevo-categoria" className="input" {...register('categoria')} />
+            <Controller
+              name="categoriaId"
+              control={control}
+              render={({ field }) => (
+                <SelectorCategoria id="producto-nuevo-categoria" value={field.value} onChange={field.onChange} />
+              )}
+            />
           </div>
 
           <div className="field">

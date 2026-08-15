@@ -33,16 +33,17 @@
  * hay sistema de toasts).
  */
 import { useState } from 'react';
-import { useForm, type UseFormRegisterReturn } from 'react-hook-form';
+import { Controller, useForm, type UseFormRegisterReturn } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { esquemaActualizarProducto, type DatosActualizarProducto } from '@trazo/compartido';
+import { SelectorCategoria } from '@/componentes/categorias/selector-categoria';
 import { actualizarProducto } from '@/lib/api/productos';
 import { ErrorApi } from '@/lib/api/cliente';
 
 const MENSAJE_ERROR_RED = 'No fue posible comunicarse con el servidor. Intenta de nuevo.';
 const CAMPOS_VALIDOS = new Set<keyof DatosActualizarProducto>([
   'descripcion',
-  'categoria',
+  'categoriaId',
   'ubicacion',
   'umbralStockBajo',
   'ultimoCosto',
@@ -53,18 +54,21 @@ interface ProductoFormProps {
   /** Solo lectura: identifica el producto que se edita; el SKU no es editable (ver TSDoc). */
   sku: string;
   valoresIniciales: DatosActualizarProducto;
+  /** Categoría que el producto ya tiene, para no perderla si fue desactivada (FR-086). */
+  categoriaActual?: { id: number; nombre: string } | null;
   /** Cierra el diálogo sin guardar (botón "Cancelar", clic en el fondo). */
   onCerrar: () => void;
   /** Tras guardar con éxito, antes de cerrar — el llamador hace `router.refresh()`. */
   onGuardado: () => void;
 }
 
-export function ProductoForm({ productoId, sku, valoresIniciales, onCerrar, onGuardado }: ProductoFormProps) {
+export function ProductoForm({ productoId, sku, valoresIniciales, categoriaActual, onCerrar, onGuardado }: ProductoFormProps) {
   const [errorGeneral, setErrorGeneral] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
 
   const {
     register,
+    control,
     handleSubmit,
     setError,
     formState: { errors },
@@ -118,12 +122,26 @@ export function ProductoForm({ productoId, sku, valoresIniciales, onCerrar, onGu
             error={errors.descripcion?.message}
             registro={register('descripcion')}
           />
-          <CampoTexto
-            id="producto-editar-categoria"
-            label="Categoría (opcional)"
-            error={errors.categoria?.message}
-            registro={register('categoria')}
-          />
+          <div className="field">
+            <label htmlFor="producto-editar-categoria">Categoría (opcional)</label>
+            <Controller
+              name="categoriaId"
+              control={control}
+              render={({ field }) => (
+                <SelectorCategoria
+                  id="producto-editar-categoria"
+                  value={field.value}
+                  onChange={field.onChange}
+                  categoriaActual={categoriaActual}
+                />
+              )}
+            />
+            {errors.categoriaId && (
+              <p role="alert" style={{ fontSize: 12, color: 'var(--color-accent-300)', marginTop: 5 }}>
+                {errors.categoriaId.message}
+              </p>
+            )}
+          </div>
           <CampoTexto
             id="producto-editar-ubicacion"
             label="Ubicación (opcional)"

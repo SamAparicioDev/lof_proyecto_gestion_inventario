@@ -31,22 +31,22 @@
 import type { OrigenCambioCosto } from '../entidades/cambio-costo-producto';
 import type { EstadoProducto, Producto } from '../entidades/producto';
 
-/** Datos de alta de un producto — auditoría incluida (FR-045: quién lo creó). `categoria`
- *  es texto libre opcional (FR-052, US8) — mismo criterio que `ubicacion`. */
+/** Datos de alta de un producto — auditoría incluida (FR-045: quién lo creó). `categoriaId`
+ *  referencia el catálogo y sigue siendo opcional (US15, FR-086). */
 export interface DatosNuevoProducto {
   readonly sku: string;
   readonly descripcion: string;
-  readonly categoria: string | null;
+  readonly categoriaId: number | null;
   readonly ubicacion: string | null;
   readonly umbralStockBajo: number;
   readonly usuarioCreacionId: number;
 }
 
 /** Datos editables de un producto (el SKU no se edita tras el alta — ver entidad `Producto`).
- *  `categoria` es texto libre opcional (FR-052, US8) — mismo criterio que `ubicacion`. */
+ *  `categoriaId` referencia el catálogo y sigue siendo opcional (US15, FR-086). */
 export interface DatosActualizarProducto {
   readonly descripcion: string;
-  readonly categoria: string | null;
+  readonly categoriaId: number | null;
   readonly ubicacion: string | null;
   readonly umbralStockBajo: number;
   readonly usuarioModificacionId: number;
@@ -85,7 +85,7 @@ export interface FiltrosListarProductos {
    * selector que alimenta `valoresDeClasificacion`, y con valores tomados de ahí una subcadena
    * solo introduciría falsos positivos ("Bodega 1" arrastraría "Bodega 10").
    */
-  readonly categoria?: string;
+  readonly categoriaId?: number;
   readonly ubicacion?: string;
   readonly pagina: number;
   readonly porPagina: number;
@@ -99,7 +99,9 @@ export interface FiltrosListarProductos {
  * Ordenados alfabéticamente y sin nulos: un producto sin categoría no aporta una opción vacía.
  */
 export interface ValoresClasificacionProductos {
-  readonly categorias: string[];
+  /** Desde US15 salen del CATÁLOGO (activas + inactivas todavía en uso), no de un DISTINCT
+   *  sobre productos: el filtro ofrece lo que el negocio administra (FR-088). */
+  readonly categorias: { readonly id: number; readonly nombre: string }[];
   readonly ubicaciones: string[];
 }
 

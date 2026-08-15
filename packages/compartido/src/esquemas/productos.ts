@@ -6,8 +6,8 @@
  * (el mismo esquema de alta sirve para el dialog de "alta rápida" desde ingresos — un
  * producto nuevo se crea con los mismos campos sin importar desde dónde), FR-016/FR-047
  * (mensajes de validación en español que indican el campo y la corrección esperada) y
- * FR-052 (campo `categoria`, texto libre opcional, editable tanto desde la carga masiva
- * como desde el alta/edición manual). Los límites de longitud replican los `VARCHAR` de
+ * FR-086 (`categoriaId`: referencia al catálogo desde el alta/edición manual; la carga masiva
+ * la sigue escribiendo por nombre, FR-090). Los límites de longitud replican los `VARCHAR` de
  * `data-model.md` para que la validación de UX (frontend) y la autoritativa (backend)
  * coincidan exactamente con lo que la BD acepta.
  *
@@ -27,7 +27,14 @@ export const esquemaCrearProducto = z.object({
     .trim()
     .min(1, 'La descripción es obligatoria')
     .max(300, 'La descripción no puede superar 300 caracteres'),
-  categoria: z.string().trim().max(100, 'La categoría no puede superar 100 caracteres').optional(),
+  /** US15 (FR-086): la categoría dejó de escribirse y pasó a elegirse del catálogo. `null`
+   *  desclasifica un producto ya clasificado; omitirlo lo deja como está. */
+  categoriaId: z
+    .number({ invalid_type_error: 'La categoría no es válida' })
+    .int('La categoría no es válida')
+    .positive('La categoría no es válida')
+    .nullable()
+    .optional(),
   ubicacion: z.string().trim().max(100, 'La ubicación no puede superar 100 caracteres').optional(),
   umbralStockBajo: z
     .number({ invalid_type_error: 'El umbral de stock bajo debe ser un número' })
@@ -50,7 +57,7 @@ export type DatosCrearProducto = z.infer<typeof esquemaCrearProducto>;
  */
 export const esquemaActualizarProducto = z.object({
   descripcion: esquemaCrearProducto.shape.descripcion,
-  categoria: esquemaCrearProducto.shape.categoria,
+  categoriaId: esquemaCrearProducto.shape.categoriaId,
   ubicacion: esquemaCrearProducto.shape.ubicacion,
   umbralStockBajo: esquemaCrearProducto.shape.umbralStockBajo,
   ultimoCosto: z
@@ -77,7 +84,10 @@ export const esquemaFilaImportacionProducto = z
   .object({
     sku: esquemaCrearProducto.shape.sku,
     descripcion: esquemaCrearProducto.shape.descripcion,
-    categoria: esquemaCrearProducto.shape.categoria,
+    /** En el Excel la categoría se escribe por NOMBRE y el backend la resuelve contra el
+     *  catálogo ignorando mayúsculas y espacios (FR-090): pedirle un id a quien llena una hoja
+     *  de cálculo no tendría sentido. Una categoría desconocida invalida esa fila. */
+    categoria: z.string().trim().max(100, 'La categoría no puede superar 100 caracteres').optional(),
     ubicacion: esquemaCrearProducto.shape.ubicacion,
     umbralStockBajo: esquemaCrearProducto.shape.umbralStockBajo,
     cantidadInicial: z

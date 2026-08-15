@@ -163,7 +163,7 @@ export function mapearInventarioADocumento(reporte: ReporteInventarioActual): Do
   const filas = reporte.productos.map((fila) => ({
     sku: fila.producto.sku,
     descripcion: fila.producto.descripcion,
-    categoria: fila.producto.categoria ?? 'Sin categoría',
+    categoria: fila.producto.categoria?.nombre ?? 'Sin categoría',
     ubicacion: fila.producto.ubicacion ?? 'Sin ubicación',
     stock: fila.stock,
     comprometido: fila.comprometido,

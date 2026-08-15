@@ -84,6 +84,36 @@ endpoint consulta, dando una falsa sensación de control (research R16).
 PK compuesta `(rol_id, permiso_id)`. Es la tabla que el Administrador edita realmente al
 marcar/desmarcar permisos de un rol (FR-055).
 
+### categorias (US15)
+
+| Columna | Tipo | Constraints |
+|---|---|---|
+| `id` | BIGINT PK | |
+| `nombre` | VARCHAR(100) | NOT NULL; **UNIQUE sobre `lower(trim(nombre))`** vía índice funcional — no un UNIQUE normal (FR-085) |
+| `descripcion` | VARCHAR(300) | NULL |
+| `estado` | ENUM `ACTIVA/INACTIVA` | NOT NULL DEFAULT ACTIVA (baja lógica, nunca DELETE) |
+
+Reglas (FR-084…FR-087, verificadas en el caso de uso, no solo en la UI):
+
+- **La unicidad es funcional, no literal.** Un `UNIQUE(nombre)` normal dejaría convivir
+  "Ferretería", "ferretería " y "FERRETERÍA", que es exactamente el problema que US15 viene a
+  resolver. **Las tildes no se normalizan**: "Ferreteria" y "Ferretería" son distintas para el
+  índice (haría falta la extensión `unaccent`), decisión consciente y anotada en FR-085. El índice se crea sobre `lower(trim(nombre))`, así que la base de datos es la red
+  final aunque alguien inserte por SQL. El nombre se guarda tal como lo escribió el usuario:
+  se normaliza para COMPARAR, no para almacenar.
+- **Nunca se elimina si está en uso** (FR-087): la FK de `productos.categoria_id` es
+  `ON DELETE RESTRICT`, y el caso de uso comprueba antes y devuelve un mensaje que dice cuántos
+  productos la usan. La baja es `estado = INACTIVA`.
+- Una categoría INACTIVA no se ofrece para clasificar productos nuevos, pero los productos que
+  ya la tenían la conservan (FR-086) — mismo criterio que un producto dado de baja, que sigue
+  apareciendo en el historial.
+
+**Migración desde el texto libre de US8 (FR-089)**: la columna `productos.categoria` se
+convierte en catálogo sin perder nada — se insertan en `categorias` los valores distintos ya
+presentes (agrupando por `lower(trim(...))`, que es lo que colapsa las variantes tipográficas),
+se rellena `categoria_id` emparejando por ese mismo criterio, y solo entonces se elimina la
+columna vieja. Va en un `migration.sql` escrito a mano: Prisma no genera un traspaso de datos.
+
 ### productos
 
 | Columna | Tipo | Constraints |
@@ -91,7 +121,7 @@ marcar/desmarcar permisos de un rol (FR-055).
 | `id` | BIGINT PK | |
 | `sku` | VARCHAR(50) | NOT NULL, **UNIQUE** (FR-010) |
 | `descripcion` | VARCHAR(300) | NOT NULL |
-| `categoria` | VARCHAR(100) | NULL (texto libre; agregado en US8, FR-052 — mismo criterio que `ubicacion`, sin catálogo propio de categorías en v1) |
+| `categoria_id` | BIGINT FK → categorias | NULL (US15, FR-086 — la categoría sigue siendo opcional, pero ya no es texto libre: sustituye a la columna `categoria VARCHAR(100)` de US8) |
 | `ubicacion` | VARCHAR(100) | NULL (texto libre, un solo almacén) |
 | `umbral_stock_bajo` | DECIMAL(12,2) | NOT NULL DEFAULT 0, CHECK `>= 0` (FR-010/FR-022) |
 | `stock_actual` | DECIMAL(12,2) | NOT NULL DEFAULT 0, **CHECK `stock_actual >= 0`** (Principio I — red final en BD) |
@@ -379,7 +409,8 @@ cruzado sería sobre-ingeniería para este caso de uso (Principio V, YAGNI).
 
 | Tabla | Índice | Justifica |
 |---|---|---|
-| productos | UNIQUE(sku); btree(descripcion); btree(estado); btree(categoria); btree(ubicacion) | búsqueda FR-023; los dos últimos, filtro por categoría/ubicación de FR-075 (US13) — medido en rendimiento.md § (g), que además corrige la expectativa de que sirvieran al `DISTINCT` de FR-076 |
+| productos | UNIQUE(sku); btree(descripcion); btree(estado); btree(categoria_id); btree(ubicacion) | búsqueda FR-023; los dos últimos, filtro por categoría/ubicación de FR-075 (US13) — medido en rendimiento.md § (g), que además corrige la expectativa de que sirvieran al `DISTINCT` de FR-076. Desde US15 el índice es sobre la FK `categoria_id`, no sobre el texto |
+| categorias | UNIQUE funcional sobre `lower(trim(nombre))`; btree(estado) | unicidad insensible a mayúsculas/espacios (FR-085) y listado de las activas para los selectores (FR-088) |
 | ingresos | UNIQUE(numero_factura); btree(fecha_recepcion); btree(estado) | historial/filtros FR-018 |
 | salidas | UNIQUE(numero); btree(proyecto_id, estado); btree(fecha_salida); btree(estado); btree(usuario_autoriza_id) | filtros FR-033, comprometido R4; el último, filtro por autorizante de FR-075 (US13) |
 | detalles_salidas | btree(producto_id); UNIQUE(salida_id, producto_id) | agregado de comprometido R4 |

@@ -58,7 +58,7 @@ const MENSAJE_ERROR_RED = 'No fue posible comunicarse con el servidor. Intenta d
 function aValoresFormulario(fila: FilaInventario): DatosActualizarProducto {
   return {
     descripcion: fila.producto.descripcion,
-    categoria: fila.producto.categoria ?? '',
+    categoriaId: fila.producto.categoria?.id ?? null,
     ubicacion: fila.producto.ubicacion ?? '',
     umbralStockBajo: fila.producto.umbralStockBajo,
     // US12: mismo criterio que `panel-producto.tsx` — el costo viaja precargado con el vigente
@@ -187,6 +187,7 @@ export function TablaInventario({ filas, hayFiltros }: { filas: FilaInventario[]
           productoId={filaEditando.producto.id}
           sku={filaEditando.producto.sku}
           valoresIniciales={aValoresFormulario(filaEditando)}
+          categoriaActual={filaEditando.producto.categoria}
           onCerrar={() => setFilaEditando(null)}
           onGuardado={() => router.refresh()}
         />

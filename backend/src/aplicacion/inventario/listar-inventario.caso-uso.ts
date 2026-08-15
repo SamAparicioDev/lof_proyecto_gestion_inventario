@@ -20,7 +20,7 @@
  *
  * ## Reparto de los filtros (US13, FR-075…FR-077)
  *
- * `buscar`, `estado`, `categoria` y `ubicacion` son columnas de `productos`: los resuelve el
+ * `buscar`, `estado`, `categoriaId` y `ubicacion` son columnas de `productos`: los resuelve el
  * REPOSITORIO, en SQL, con índice detrás (data-model.md § Índices). `soloStockBajo` y el rango
  * `disponibleMin`/`disponibleMax` se resuelven AQUÍ, en memoria, porque ambos se miden contra
  * `disponible` (= stock − comprometido) y `comprometido` exige el agregado sobre `salidas` que
@@ -51,7 +51,7 @@ import { construirFilaInventario, disponibleEnRango, type FilaInventario } from 
  * medido sobre `disponible` (stock bajo o rango) exige recortar antes de paginar — mismo
  * criterio que `RepositorioProductosPrisma.listar` usa para su propia versión en memoria del
  * filtro crudo (research R9): el catálogo de Trazo es de miles de productos, no millones
- * (Principio V). Los filtros de columna (`buscar`/`estado`/`categoria`/`ubicacion`) ya acotaron
+ * (Principio V). Los filtros de columna (`buscar`/`estado`/`categoriaId`/`ubicacion`) ya acotaron
  * el conjunto en SQL antes de llegar aquí, así que en la práctica se materializa mucho menos.
  */
 const LIMITE_CANDIDATOS_EN_MEMORIA = 100000;
@@ -59,7 +59,7 @@ const LIMITE_CANDIDATOS_EN_MEMORIA = 100000;
 export interface ListarInventarioEntrada {
   readonly buscar?: string;
   readonly soloStockBajo?: boolean;
-  readonly categoria?: string;
+  readonly categoriaId?: number;
   readonly ubicacion?: string;
   readonly estado?: EstadoProducto;
   readonly disponibleMin?: number;
@@ -130,7 +130,7 @@ function filtrosDeColumna(entrada: ListarInventarioEntrada) {
   return {
     buscar: entrada.buscar,
     estado: entrada.estado,
-    categoria: entrada.categoria,
+    categoriaId: entrada.categoriaId,
     ubicacion: entrada.ubicacion,
     soloStockBajo: false,
   };

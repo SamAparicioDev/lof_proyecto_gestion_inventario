@@ -25,7 +25,9 @@ export interface FilaInventario {
     id: number;
     sku: string;
     descripcion: string;
-    categoria: string | null;
+    /** US15: referencia al catálogo, con el nombre resuelto para poder pintarlo sin otra
+     *  petición. Era una cadena de texto libre hasta US14. */
+    categoria: { id: number; nombre: string } | null;
     ubicacion: string | null;
     umbralStockBajo: number;
     /**
@@ -113,6 +115,8 @@ export interface MovimientoHistorialProducto {
  * filtro que exige adivinar no se usa. Los productos SIN valor no aportan una opción vacía.
  */
 export interface OpcionesFiltroInventario {
-  categorias: string[];
+  /** US15 (FR-088): salen del CATÁLOGO de categorías, no de los valores presentes en los
+   *  productos. `ubicaciones` sigue siendo texto libre deduplicado. */
+  categorias: { id: number; nombre: string }[];
   ubicaciones: string[];
 }

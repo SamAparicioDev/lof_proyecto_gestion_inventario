@@ -166,7 +166,7 @@ export class ControladorProductos {
     return this.crearProducto.ejecutar({
       sku: datos.sku,
       descripcion: datos.descripcion,
-      categoria: datos.categoria ?? null,
+      categoriaId: datos.categoriaId ?? null,
       ubicacion: datos.ubicacion ?? null,
       umbralStockBajo: datos.umbralStockBajo,
       usuarioId: usuario.id,
@@ -195,7 +195,7 @@ export class ControladorProductos {
     await this.actualizarProducto.ejecutar({
       productoId: id,
       descripcion: datos.descripcion,
-      categoria: datos.categoria ?? null,
+      categoriaId: datos.categoriaId ?? null,
       ubicacion: datos.ubicacion ?? null,
       umbralStockBajo: datos.umbralStockBajo,
       ultimoCosto: datos.ultimoCosto,

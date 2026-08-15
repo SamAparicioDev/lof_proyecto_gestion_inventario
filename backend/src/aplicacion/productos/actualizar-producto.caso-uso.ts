@@ -28,7 +28,7 @@
  * Un cambio de costo NO toca el stock ni escribe movimientos de inventario (FR-073).
  *
  * Implementa: FR-010 (edición de descripción/ubicación/umbral de stock bajo), FR-052 (campo
- * `categoria`), FR-071/FR-072/FR-074 (costo corregible, registrado y solo si cambió).
+ * `categoriaId` del catálogo, US15), FR-071/FR-072/FR-074 (costo corregible, registrado y solo si cambió).
  */
 import { Inject, Injectable } from '@nestjs/common';
 import type { CasoDeUso } from '../comunes/caso-de-uso';
@@ -38,7 +38,7 @@ import { REPOSITORIO_PRODUCTOS, type RepositorioProductos } from '../../dominio/
 export interface ActualizarProductoEntrada {
   readonly productoId: number;
   readonly descripcion: string;
-  readonly categoria: string | null;
+  readonly categoriaId: number | null;
   readonly ubicacion: string | null;
   readonly umbralStockBajo: number;
   /**
@@ -57,7 +57,7 @@ export class ActualizarProductoCasoUso implements CasoDeUso<ActualizarProductoEn
   async ejecutar(entrada: ActualizarProductoEntrada): Promise<void> {
     await this.repositorioProductos.actualizar(entrada.productoId, {
       descripcion: entrada.descripcion,
-      categoria: entrada.categoria,
+      categoriaId: entrada.categoriaId,
       ubicacion: entrada.ubicacion,
       umbralStockBajo: entrada.umbralStockBajo,
       usuarioModificacionId: entrada.usuarioId,

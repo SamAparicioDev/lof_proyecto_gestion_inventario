@@ -51,6 +51,11 @@
  */
 import { Inject, Injectable } from '@nestjs/common';
 import type { CasoDeUso } from '../comunes/caso-de-uso';
+import { normalizarNombreCategoria } from '../../dominio/entidades/categoria';
+import {
+  REPOSITORIO_CATEGORIAS,
+  type RepositorioCategorias,
+} from '../../dominio/puertos/repositorio-categorias';
 import { ErrorDominio, ErrorValidacionDominio } from '../../dominio/comunes/errores';
 import { REPOSITORIO_INGRESOS, type LineaNuevoIngreso, type RepositorioIngresos } from '../../dominio/puertos/repositorio-ingresos';
 import { REPOSITORIO_PRODUCTOS, type RepositorioProductos } from '../../dominio/puertos/repositorio-productos';
@@ -104,12 +109,17 @@ export class ImportarProductosCasoUso implements CasoDeUso<ImportarProductosEntr
     @Inject(REPOSITORIO_PRODUCTOS) private readonly repositorioProductos: RepositorioProductos,
     @Inject(REPOSITORIO_INGRESOS) private readonly repositorioIngresos: RepositorioIngresos,
     @Inject(LECTOR_IMPORTACION_PRODUCTOS) private readonly lectorImportacion: LectorImportacionProductos,
+    @Inject(REPOSITORIO_CATEGORIAS) private readonly repositorioCategorias: RepositorioCategorias,
   ) {}
 
   async ejecutar(entrada: ImportarProductosEntrada): Promise<ResumenImportacion> {
     const { filasValidas, erroresIniciales } = await this.lectorImportacion.leer(entrada.archivo);
     verificarLimiteDeFilas(filasValidas.length + erroresIniciales.length);
 
+    // Una hoja de cálculo repite la misma categoría en decenas de filas; resolverla una vez por
+    // archivo evita una consulta por fila sin cambiar el resultado (el catálogo no se modifica
+    // durante la importación).
+    const categoriasResueltas = new Map<string, number | null>();
     const errores: ErrorFilaImportacion[] = [...erroresIniciales];
     const filasConStockPendiente: FilaConStockPendiente[] = [];
     let creados = 0;
@@ -117,7 +127,7 @@ export class ImportarProductosCasoUso implements CasoDeUso<ImportarProductosEntr
     let costosActualizados = 0;
 
     for (const fila of filasValidas) {
-      const resultado = await this.procesarCatalogo(fila, entrada.usuarioId);
+      const resultado = await this.procesarCatalogo(fila, entrada.usuarioId, categoriasResueltas);
       if (!resultado.exito) {
         errores.push({ fila: fila.numeroFila, mensaje: resultado.mensaje });
         continue;
@@ -164,13 +174,46 @@ export class ImportarProductosCasoUso implements CasoDeUso<ImportarProductosEntr
    * la fila no traía valor unitario o cuando el que traía coincidía con el vigente — el caso de
    * uso no vuelve a comparar nada por su cuenta, la regla es del dominio.
    */
+  /**
+   * Nombre del Excel → id del catálogo. Devuelve `null` si la fila no trae categoría (es
+   * opcional, FR-086) y `undefined` si trae una que NO existe — que es lo que el llamador
+   * traduce a error de fila.
+   */
+  private async resolverCategoria(
+    nombre: string | undefined,
+    cache: Map<string, number | null>,
+  ): Promise<number | null | undefined> {
+    if (!nombre) return null;
+
+    const clave = normalizarNombreCategoria(nombre);
+    if (cache.has(clave)) {
+      const encontrada = cache.get(clave) ?? null;
+      return encontrada ?? undefined;
+    }
+
+    const categoria = await this.repositorioCategorias.buscarPorNombreNormalizado(clave);
+    cache.set(clave, categoria ? categoria.id : null);
+    return categoria ? categoria.id : undefined;
+  }
+
   private async procesarCatalogo(
     fila: FilaValidaImportacionProducto,
     usuarioId: number,
+    categoriasResueltas: Map<string, number | null>,
   ): Promise<
     { exito: true; creado: boolean; productoId: number; costoCambio: boolean } | { exito: false; mensaje: string }
   > {
     try {
+      // FR-090: en el Excel la categoría se escribe por NOMBRE. Se resuelve contra el catálogo
+      // ignorando mayúsculas y espacios; si no existe, se rechaza ESTA fila nombrándola, sin
+      // bloquear las demás (misma regla de proceso parcial que FR-051). Crearla al vuelo sería
+      // más cómodo y reintroduciría justo lo que US15 vino a eliminar: categorías nacidas de un
+      // error de tecleo.
+      const categoriaId = await this.resolverCategoria(fila.datos.categoria, categoriasResueltas);
+      if (categoriaId === undefined) {
+        return { exito: false, mensaje: `La categoría "${fila.datos.categoria}" no existe en el catálogo` };
+      }
+
       const existente = await this.repositorioProductos.buscarPorSku(fila.datos.sku);
       const creado = !existente;
       let productoId: number;
@@ -178,7 +221,7 @@ export class ImportarProductosCasoUso implements CasoDeUso<ImportarProductosEntr
       if (existente) {
         await this.repositorioProductos.actualizar(existente.id, {
           descripcion: fila.datos.descripcion,
-          categoria: fila.datos.categoria ?? null,
+          categoriaId,
           ubicacion: fila.datos.ubicacion ?? null,
           umbralStockBajo: fila.datos.umbralStockBajo,
           usuarioModificacionId: usuarioId,
@@ -188,7 +231,7 @@ export class ImportarProductosCasoUso implements CasoDeUso<ImportarProductosEntr
         const producto = await this.repositorioProductos.crear({
           sku: fila.datos.sku,
           descripcion: fila.datos.descripcion,
-          categoria: fila.datos.categoria ?? null,
+          categoriaId,
           ubicacion: fila.datos.ubicacion ?? null,
           umbralStockBajo: fila.datos.umbralStockBajo,
           usuarioCreacionId: usuarioId,

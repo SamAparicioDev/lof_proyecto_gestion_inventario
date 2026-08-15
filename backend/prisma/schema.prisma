@@ -74,6 +74,14 @@ enum EstadoProducto {
   @@map("estado_producto")
 }
 
+/** US15 — en femenino porque el sustantivo lo es; los mensajes al usuario se leen mejor. */
+enum EstadoCategoria {
+  ACTIVA
+  INACTIVA
+
+  @@map("estado_categoria")
+}
+
 /** Estado de un cliente (catálogo comercial — FR-034). */
 enum EstadoCliente {
   ACTIVO
@@ -245,6 +253,8 @@ model Usuario {
   // Back-relations de auditoría desde las demás tablas de negocio.
   productosCreados      Producto[]             @relation("ProductoCreadoPor")
   productosModificados  Producto[]             @relation("ProductoModificadoPor")
+  categoriasCreadas     Categoria[]            @relation("CategoriaCreadaPor")
+  categoriasModificadas Categoria[]            @relation("CategoriaModificadaPor")
   clientesCreados       Cliente[]              @relation("ClienteCreadoPor")
   clientesModificados   Cliente[]              @relation("ClienteModificadoPor")
   proyectosCreados      Proyecto[]             @relation("ProyectoCreadoPor")
@@ -275,8 +285,11 @@ model Producto {
   id                    BigInt         @id @default(autoincrement())
   sku                   String         @unique @db.VarChar(50)
   descripcion           String         @db.VarChar(300)
-  /** Texto libre, opcional; agregado en US8 (FR-052) — sin catálogo propio de categorías en v1. */
-  categoria             String?        @db.VarChar(100)
+  /** Clasificación OPCIONAL contra el catálogo de categorías (US15, FR-086). Nació en US8 como
+   *  texto libre y se convirtió en referencia sin perder ningún valor (FR-089, ver la migración
+   *  `20260814235000_categorias_como_catalogo`). */
+  categoriaId           BigInt?        @map("categoria_id")
+  categoria             Categoria?     @relation(fields: [categoriaId], references: [id])
   ubicacion             String?        @db.VarChar(100)
   umbralStockBajo       Decimal        @default(0) @map("umbral_stock_bajo") @db.Decimal(12, 2)
   stockActual           Decimal        @default(0) @map("stock_actual") @db.Decimal(12, 2)
@@ -302,10 +315,42 @@ model Producto {
   @@index([descripcion])
   @@index([estado])
   // US13 (T132): sostienen el filtro por categoría/ubicación de `/inventario` y el
-  // `SELECT DISTINCT` que alimenta sus selectores (FR-075/FR-076).
-  @@index([categoria])
+  // `SELECT DISTINCT` que alimenta el selector de ubicaciones (FR-075/FR-076). Desde US15 el
+  // de categoría es sobre la FK, no sobre el texto, y su selector sale del catálogo (FR-088).
+  @@index([categoriaId])
   @@index([ubicacion])
   @@map("productos")
+}
+
+/**
+ * Catálogo de categorías de producto (US15, FR-084…FR-087).
+ *
+ * La unicidad del nombre NO es un `@unique` de Prisma: es un índice FUNCIONAL sobre
+ * `lower(btrim(nombre))` creado en la migración, porque el requisito es que "Ferretería",
+ * "ferreteria" y "FERRETERIA " no puedan coexistir (FR-085). Prisma no sabe expresar un índice
+ * sobre una expresión, así que el modelo lo declara aquí solo como comentario y la autoridad
+ * vive en el SQL — igual que los `CHECK` de stock y el trigger de inmutabilidad.
+ *
+ * Nunca se elimina si algún producto la usa: la FK es `RESTRICT` y la baja es lógica
+ * (`estado = INACTIVA`), para no despojar de su clasificación a lo ya registrado (Principio II).
+ */
+model Categoria {
+  id          BigInt          @id @default(autoincrement())
+  nombre      String          @db.VarChar(100)
+  descripcion String?         @db.VarChar(300)
+  estado      EstadoCategoria @default(ACTIVA)
+
+  fechaCreacion         DateTime  @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
+  usuarioCreacionId     BigInt    @map("usuario_creacion_id")
+  usuarioCreacion       Usuario   @relation("CategoriaCreadaPor", fields: [usuarioCreacionId], references: [id])
+  fechaModificacion     DateTime? @map("fecha_modificacion") @db.Timestamptz(6)
+  usuarioModificacionId BigInt?   @map("usuario_modificacion_id")
+  usuarioModificacion   Usuario?  @relation("CategoriaModificadaPor", fields: [usuarioModificacionId], references: [id])
+
+  productos Producto[]
+
+  @@index([estado])
+  @@map("categorias")
 }
 
 /**
@@ -451,6 +496,7 @@ model Ingreso {
   @@index([estado])
   @@map("ingresos")
 }
+
 
 /** Línea de factura. `ON DELETE CASCADE` solo se ejerce mientras el ingreso es PENDIENTE
  * (editable) — la aplicación nunca elimina líneas de un ingreso RECIBIDO/VERIFICADO. */

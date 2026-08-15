@@ -12,8 +12,8 @@
  *
  * Implementa: FR-010 (alta de producto con SKU/descripción/ubicación/umbral de stock bajo),
  * FR-012 (baja lógica vía `estado`, nunca DELETE), FR-020 (base de la ficha de inventario) y
- * FR-052 (campo `categoria`, texto libre opcional, agregado en US8 — mismo criterio que
- * `ubicacion`, sin catálogo propio de categorías en v1).
+ * FR-052/FR-086 (`categoria`: nació en US8 como texto libre y desde US15 es una referencia al
+ * catálogo de categorías — sigue siendo OPCIONAL, pero ya no se escribe a mano).
  */
 
 /** Estado de un producto del catálogo — INACTIVO es baja lógica, nunca se elimina (FR-012). */
@@ -23,7 +23,10 @@ export interface Producto {
   readonly id: number;
   readonly sku: string;
   readonly descripcion: string;
-  readonly categoria: string | null;
+  /** Referencia al catálogo (US15). Se lleva el nombre además del id porque TODAS las
+   *  pantallas que muestran un producto muestran el nombre, y resolverlo aparte obligaría a una
+   *  segunda consulta por fila. */
+  readonly categoria: { readonly id: number; readonly nombre: string } | null;
   readonly ubicacion: string | null;
   readonly umbralStockBajo: number;
   readonly stockActual: number;

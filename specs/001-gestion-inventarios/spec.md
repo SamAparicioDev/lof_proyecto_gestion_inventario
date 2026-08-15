@@ -242,6 +242,27 @@ Cualquier usuario con sesión iniciada abre su perfil y corrige su nombre comple
 
 ---
 
+### User Story 15 - Catálogos parametrizables: categorías y proveedores (Priority: P2)
+
+La categoría que se pide al crear un producto, y el proveedor que se pide al registrar un ingreso, dejan de escribirse a mano y pasan a elegirse de catálogos que el negocio administra: se dan de alta, se renombran y se dan de baja desde su propia pantalla, y los filtros de búsqueda ofrecen exactamente esos valores.
+
+**Why this priority**: hoy la categoría es texto libre (se introdujo así en US8), y eso produce "Ferretería", "ferreteria" y "FERRETERIA " como tres categorías distintas para el ojo del sistema. Un inventario clasificado con variantes tipográficas no se puede filtrar ni agrupar de forma fiable, que es justo para lo que sirve una categoría. No es P1 porque el inventario funciona sin ello, pero la clasificación se degrada con cada producto que se da de alta, así que cuanto más tarde se corrija, más datos hay que limpiar.
+
+**Independent Test**: Se prueba dando de alta una categoría, creando un producto que la use, y comprobando que aparece como opción en el filtro del inventario y que filtrar por ella devuelve ese producto. Entrega valor por sí sola: clasificación consistente y filtrable.
+
+**Acceptance Scenarios**:
+
+1. **Given** un usuario con permiso para gestionar categorías, **When** crea una categoría, **Then** queda disponible de inmediato para clasificar productos y como opción del filtro de inventario.
+2. **Given** el formulario de alta o edición de un producto, **When** el usuario indica la categoría, **Then** la elige de una lista del catálogo —no la escribe—, y la categoría sigue siendo opcional (un producto sin clasificar es válido).
+3. **Given** dos categorías que solo se diferencian en mayúsculas o espacios ("Ferretería" y "ferretería "), **When** se intenta crear la segunda, **Then** el sistema la rechaza como duplicada, señalando el campo en español.
+4. **Given** una categoría con productos asociados, **When** se intenta eliminarla, **Then** el sistema NO la elimina: se desactiva, de modo que deja de ofrecerse para clasificar productos nuevos pero los productos que ya la usan conservan su clasificación y su historial.
+5. **Given** el catálogo de categorías, **When** un usuario sin permiso de gestión abre la aplicación, **Then** puede seguir viendo y filtrando por categorías (las necesita para trabajar), pero no puede crearlas ni modificarlas.
+6. **Given** una carga masiva de productos desde Excel, **When** una fila trae una categoría que no existe en el catálogo, **Then** esa fila se rechaza con un mensaje que nombra la categoría desconocida, sin bloquear las demás filas del archivo.
+7. **Given** el formulario de un ingreso de mercancía, **When** el usuario indica el proveedor, **Then** lo elige del catálogo de proveedores en vez de escribirlo, y el listado de ingresos permite filtrar por proveedor con esa misma lista.
+8. **Given** un proveedor con ingresos registrados, **When** se intenta eliminarlo, **Then** el sistema lo desactiva en lugar de borrarlo, de modo que los ingresos históricos conservan a quién se le compró (Principio II).
+
+---
+
 ### Edge Cases
 
 - **Salida mayor al disponible**: debe rechazarse siempre, incluida la carrera entre dos usuarios simultáneos sobre el mismo producto (solo una confirmación puede ganar).
@@ -387,6 +408,24 @@ Cualquier usuario con sesión iniciada abre su perfil y corrige su nombre comple
 - **FR-082**: Por esta vía NO se pueden modificar el nombre de usuario (identifica los registros históricos), el rol (definiría los propios permisos) ni el estado (nadie se da de baja a sí mismo); enviarlos no DEBE tener ningún efecto.
 - **FR-083**: El correo DEBE seguir siendo único entre usuarios; un correo ya usado se rechaza señalando el campo, sin aplicar ningún cambio.
 
+**User Story 15 - Catálogos parametrizables (categorías y proveedores)**
+
+Las reglas FR-084…FR-090 están escritas para categorías; **FR-091 las extiende íntegras a
+proveedores**, porque son el mismo problema (un dato de negocio que se escribía a mano en cada
+documento) y merecen la misma solución, no dos comportamientos distintos que el usuario tenga
+que recordar por separado.
+
+- **FR-084**: Las categorías de producto DEBEN vivir en un catálogo propio, administrable (alta, edición, activación/desactivación); dejan de ser texto libre escrito en cada producto.
+- **FR-085**: El nombre de una categoría DEBE ser único ignorando mayúsculas y espacios sobrantes, de modo que "Ferretería", "ferretería " y "FERRETERÍA" no puedan coexistir como categorías distintas. **Las tildes SÍ distinguen**: "Ferreteria" y "Ferretería" son, para el sistema, dos categorías diferentes. Ignorarlas exigiría la extensión `unaccent` de PostgreSQL y se dejó fuera a propósito; si el negocio lo pide, es un cambio de una línea en el índice funcional y en `normalizarNombreCategoria`.
+- **FR-086**: La categoría de un producto DEBE seguir siendo OPCIONAL y elegirse del catálogo; un producto sin categoría es válido. Al clasificar solo DEBEN ofrecerse categorías activas; un producto ya clasificado con una categoría desactivada conserva su clasificación.
+- **FR-087**: Una categoría en uso NO DEBE poder eliminarse: la baja es lógica (desactivación), para que los productos y el historial que la referencian no pierdan su clasificación (Principio II).
+- **FR-088**: Los filtros por categoría (inventario y reportes) DEBEN alimentarse del catálogo, no de los valores presentes en los productos; y consultar o filtrar por categoría NO DEBE exigir permiso de gestión — verla es parte del trabajo diario, administrarla no.
+- **FR-089**: La migración a catálogo NO DEBE perder la clasificación existente: cada valor de texto ya presente en los productos se convierte en una categoría del catálogo y los productos quedan apuntando a ella.
+- **FR-090**: En la carga masiva desde Excel la categoría DEBE seguir escribiéndose por NOMBRE y resolverse contra el catálogo ignorando mayúsculas y espacios; una categoría inexistente invalida ESA fila, con un mensaje que la nombra, sin bloquear el resto del archivo (misma regla de proceso parcial de FR-051).
+- **FR-091**: El proveedor de un ingreso DEBE vivir en su propio catálogo administrable con las MISMAS reglas que las categorías (FR-084…FR-088): unicidad ignorando mayúsculas y espacios, baja lógica cuando está en uso, y filtros alimentados del catálogo. A diferencia de la categoría, el proveedor es OBLIGATORIO en un ingreso: una factura sin saber a quién se le compró no es trazable.
+- **FR-092**: La migración a catálogo de proveedores NO DEBE perder ningún dato: cada proveedor ya escrito en un ingreso se convierte en una fila del catálogo y el ingreso queda apuntando a ella (mismo criterio que FR-089).
+- **FR-093**: El proveedor sintético que la carga masiva usa para su ingreso automático ("Carga masiva de inventario", FR-050) DEBE existir en el catálogo y NO DEBE poder eliminarse ni renombrarse, porque el proceso automático depende de él — misma protección que los roles del sistema (FR-059).
+
 **Auditoría y trazabilidad (transversal)**
 
 - **FR-045**: Toda operación de creación, edición, cambio de estado o anulación DEBE registrar usuario y fecha/hora; los registros con relevancia de inventario DEBEN conservar además el documento asociado.
@@ -396,7 +435,9 @@ Cualquier usuario con sesión iniciada abre su perfil y corrige su nombre comple
 ### Key Entities
 
 - **Usuario**: persona que opera el sistema; nombre completo, email, login, rol (Administrador/Gerente/Operario), estado activo/inactivo, fecha de creación. Referenciado por todos los registros que crea o autoriza.
-- **Producto**: artículo almacenable; SKU único, descripción, categoría (texto libre, opcional), ubicación en almacén, umbral de stock bajo, estado. Su stock se deriva de los movimientos.
+- **Producto**: artículo almacenable; SKU único, descripción, categoría (referencia OPCIONAL al catálogo de categorías, US15), ubicación en almacén, umbral de stock bajo, estado. Su stock se deriva de los movimientos.
+- **Categoría**: clasificación de productos administrada como catálogo (US15); nombre único ignorando mayúsculas y espacios, descripción opcional, estado activa/inactiva. Nunca se elimina si está en uso: se desactiva, para no despojar de su clasificación a los productos que la referencian.
+- **Proveedor**: empresa o persona a la que se compra la mercancía, administrada como catálogo (US15, FR-091); nombre único ignorando mayúsculas y espacios, datos de contacto opcionales (NIT, teléfono, email), estado activo/inactivo, y una marca de "del sistema" para el proveedor que usa la carga masiva (FR-093). Referenciado de forma OBLIGATORIA por cada ingreso.
 - **Cliente**: empresa o persona a la que se destinan salidas; nombre, NIT único, contacto (teléfono, email), dirección, ciudad, estado, fecha de registro. Tiene uno o más proyectos.
 - **Proyecto**: trabajo específico de un cliente; nombre, descripción, fechas de inicio y cierre estimada, responsable, presupuesto estimado, estado (Activo/Completado/Suspendido). Destino obligatorio de las salidas.
 - **Ingreso (factura)**: documento de entrada de mercancía; número de factura único, proveedor (texto), fechas de factura y recepción, observaciones, estado (Pendiente/Recibido/Verificado), usuario que registra, valor total. Compuesto por líneas de detalle.

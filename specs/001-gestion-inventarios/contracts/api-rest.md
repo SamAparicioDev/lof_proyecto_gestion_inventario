@@ -279,12 +279,35 @@ ningún requisito lo pide y el recorte correcto vive en el selector.
 | Método y ruta | Roles | Body/Query (Zod) | Respuesta OK | Errores |
 |---|---|---|---|---|
 | `GET /api/productos?buscar=` | A,G,O | `esquemaListarProductos` {buscar?} | `200` `ProductoResumen[]` {id,sku,descripcion,ultimoCosto,disponible} — listado simple SIN paginar, solo para poblar selectores (extensión T035; `ultimoCosto`/`disponible` añadidos en T052 para el formulario de salidas — `disponible = stockActual − comprometidoPorProducto` de TODAS las salidas PENDIENTE, sin excluir nada, ver TSDoc de `listar-resumen-productos.caso-uso.ts`) | — |
-| `POST /api/productos` | A,G,O | `esquemaCrearProducto` {sku, descripcion, categoria?, ubicacion?, umbralStockBajo?} | `201` {id} (alta rápida desde ingresos — FR-011) | `400` SKU duplicado |
-| `PUT /api/productos/:id` | A,G | `esquemaActualizarProducto` {descripcion, categoria?, ubicacion?, umbralStockBajo?, ultimoCosto?} | `204` | `404` |
+| `POST /api/productos` | A,G,O | `esquemaCrearProducto` {sku, descripcion, categoriaId?, ubicacion?, umbralStockBajo?} | `201` {id} (alta rápida desde ingresos — FR-011) | `400` SKU duplicado; `400` categoría inexistente o inactiva |
+| `PUT /api/productos/:id` | A,G | `esquemaActualizarProducto` {descripcion, categoriaId?, ubicacion?, umbralStockBajo?, ultimoCosto?} | `204` | `404`; `400` categoría inexistente o inactiva |
 | `PUT /api/productos/:id/estado` | A,G | {estado} | `204` (nunca DELETE — FR-012) | `404` |
 
-`categoria` agregado en US8 (FR-052) — mismo criterio que `ubicacion`: texto libre, opcional,
-sin catálogo propio de categorías en v1.
+`categoria` nació en US8 (FR-052) como texto libre. **Desde US15 es una referencia al catálogo**:
+el cuerpo lleva `categoriaId` (numérico, opcional, `null` para desclasificar) y las respuestas
+devuelven el objeto `categoria: { id, nombre } | null`, que es lo que la pantalla necesita
+mostrar sin una segunda petición. Se acepta una categoría INACTIVA solo si el producto ya la
+tenía: reasignar a una inactiva se rechaza (FR-086).
+
+## Categorías (`/api/categorias`) (US15, FR-084…FR-088)
+
+| Método y ruta | Permiso | Body/Query (Zod) | Respuesta OK | Errores |
+|---|---|---|---|---|
+| `GET /api/categorias` | `categorias.ver` | `esquemaListarCategorias` {buscar?, estado?} | `200` `Categoria[]` {id, nombre, descripcion, estado} ordenadas por nombre | — |
+| `POST /api/categorias` | `categorias.gestionar` | `esquemaCrearCategoria` {nombre, descripcion?} | `201` {id} | `400` nombre duplicado (campo `nombre`) |
+| `PUT /api/categorias/:id` | `categorias.gestionar` | `esquemaCrearCategoria` | `204` | `404`; `400` duplicado |
+| `PUT /api/categorias/:id/estado` | `categorias.gestionar` | {estado: `ACTIVA\|INACTIVA`} | `204` | `404` |
+| `DELETE /api/categorias/:id` | `categorias.gestionar` | — | `204` SOLO si no tiene productos | `409` con el número de productos que la usan (FR-087) |
+
+Reglas del contrato:
+
+- **`categorias.ver` lo tienen los tres roles semilla**, no solo quien administra: sin él no se
+  puede clasificar un producto ni usar el filtro por categoría, que es trabajo diario (FR-088).
+  `categorias.gestionar` es lo restringido.
+- **El duplicado se decide ignorando mayúsculas y espacios** (FR-085) y se responde `400` con
+  `campos: { nombre: … }`, no un `409` genérico: es un error de un campo del formulario.
+- **`DELETE` es la excepción a "nunca se borra"**: una categoría recién creada por error y sin
+  usar sí puede eliminarse. En cuanto la usa un producto, `409` y la vía es desactivarla.
 
 ## Carga masiva de inventario (`/api/productos/importar*`) — solo A,G (US8, FR-048…FR-051)
 
@@ -362,18 +385,21 @@ que SC-013 se conserva sin tocar una sola aserción de autorización existente.
 
 | Método y ruta | Roles | Query (Zod) | Respuesta OK |
 |---|---|---|---|
-| `GET /api/inventario` | A,G,O | `esquemaFiltroInventario` {buscar?, soloStockBajo?, **categoria?, ubicacion?, estado?, disponibleMin?, disponibleMax?** (US13), pagina, porPagina} | página de `{ producto, stock, comprometido, disponible, stockBajo }` |
-| `GET /api/inventario/opciones-filtro` | A,G,O | — | `200` `{ categorias: string[], ubicaciones: string[] }` — los valores que EXISTEN hoy en el catálogo, sin repetir y ordenados alfabéticamente (US13, FR-076) |
+| `GET /api/inventario` | A,G,O | `esquemaFiltroInventario` {buscar?, soloStockBajo?, **categoriaId?** (US15), ubicacion?, estado?, disponibleMin?, disponibleMax?, pagina, porPagina} | página de `{ producto, stock, comprometido, disponible, stockBajo }` |
+| `GET /api/inventario/opciones-filtro` | A,G,O | — | `200` `{ categorias: {id, nombre}[], ubicaciones: string[] }` — **desde US15 las categorías salen del CATÁLOGO** (todas las activas, más las inactivas que algún producto siga usando, para que un listado filtrado por una categoría dada de baja siga siendo reproducible), no de un `DISTINCT` sobre productos (FR-088). `ubicaciones` sigue siendo el `DISTINCT` de texto libre de US13/FR-076 |
 | `GET /api/inventario/:productoId` | A,G,O | — | ficha del producto con cifras actuales (mismo shape que una fila) — `404` si no existe |
 | `GET /api/inventario/:productoId/movimientos` | A,G,O | {desde?, hasta?, pagina…} | página de movimientos (fecha, tipo, documento, cantidad, usuario, cliente/proyecto) |
 
 **Filtros nuevos de US13** (anotados ANTES de implementarlos, T130):
 
-- **`categoria`/`ubicacion`**: igualdad EXACTA contra el valor guardado, no subcadena. Son texto
-  libre sin catálogo propio (FR-052), así que el usuario no puede adivinar cómo se escribieron:
-  por eso el filtro se ofrece como SELECCIÓN de lo que existe, alimentado por
-  `GET /api/inventario/opciones-filtro` (FR-076), y con valores tomados de esa lista la igualdad
-  es lo correcto (una subcadena haría que "Bodega 1" arrastrara "Bodega 10").
+- **`ubicacion`**: igualdad EXACTA contra el valor guardado, no subcadena. Es texto libre, así que
+  el usuario no puede adivinar cómo se escribió: por eso el filtro se ofrece como SELECCIÓN de lo
+  que existe, alimentado por `GET /api/inventario/opciones-filtro` (FR-076), y con valores
+  tomados de esa lista la igualdad es lo correcto (una subcadena haría que "Bodega 1" arrastrara
+  "Bodega 10").
+- **`categoriaId`** (US15): ya no es un texto sino el id del catálogo, así que el problema de
+  "cómo se escribió" desaparece de raíz — el filtro compara claves, no cadenas. Sustituye al
+  parámetro `categoria` de US13.
 - **`estado`** (`ACTIVO|INACTIVO`): OMITIRLO sigue devolviendo AMBOS, que es lo que esta pantalla
   hace desde T111 y lo que el panel cuenta como "Productos en inventario" (ver § Panel de
   control). El filtro solo agrega la capacidad de acotar; no cambia el default de nadie.
@@ -388,7 +414,8 @@ que SC-013 se conserva sin tocar una sola aserción de autorización existente.
   resuelve por orden de declaración, mismo cuidado que `@Get('export')` en T120.
 
 `producto` (en ambas respuestas) = `{ id, sku, descripcion, categoria, ubicacion, umbralStockBajo,
-ultimoCosto, estado, fechaUltimoMovimiento }`. **Anotación T128 (US12)**: `ultimoCosto` se añade
+ultimoCosto, estado, fechaUltimoMovimiento }`, donde desde US15 `categoria` es
+`{ id, nombre } | null` en lugar de una cadena. **Anotación T128 (US12)**: `ultimoCosto` se añade
 por el MISMO motivo que `umbralStockBajo` en T062 — el costo pasa a ser editable desde la ficha
 (FR-071) y el formulario debe precargar el vigente; enviarlo vacío registraría un cambio que nadie
 pidió. No expone nada nuevo: `GET /api/productos` ya devuelve `ultimoCosto` con el mismo alcance de

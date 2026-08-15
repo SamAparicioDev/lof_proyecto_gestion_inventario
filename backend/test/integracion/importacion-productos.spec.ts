@@ -99,9 +99,9 @@ describe('Carga masiva de inventario — /api/productos/{plantilla-importacion,i
       // que ese sí es un cambio de costo y queda registrado con `origen: IMPORTACION`.
       expect(resumen).toEqual({ creados: 1, actualizados: 0, conStockInicial: 1, costosActualizados: 1, errores: [] });
 
-      const producto = await contexto.prisma.producto.findUniqueOrThrow({ where: { sku: 'IMPORT-NUEVO-001' } });
+      const producto = await contexto.prisma.producto.findUniqueOrThrow({ include: { categoria: true }, where: { sku: 'IMPORT-NUEVO-001' } });
       expect(producto.descripcion).toBe('Producto nuevo por carga masiva');
-      expect(producto.categoria).toBe('Ferretería');
+      expect(producto.categoria?.nombre).toBe('Ferretería');
       expect(producto.ubicacion).toBe('Estante B-2');
       expect(producto.umbralStockBajo.toNumber()).toBe(5);
       expect(producto.stockActual.toNumber()).toBe(20); // stock_actual resultante correcto
@@ -169,10 +169,11 @@ describe('Carga masiva de inventario — /api/productos/{plantilla-importacion,i
       expect(totalConEseSku).toBe(1); // ACTUALIZÓ, nunca duplicó
 
       const productoActualizado = await contexto.prisma.producto.findUniqueOrThrow({
+        include: { categoria: true },
         where: { id: BigInt(existente.id) },
       });
       expect(productoActualizado.descripcion).toBe('Descripción actualizada por carga masiva');
-      expect(productoActualizado.categoria).toBe('Eléctrico');
+      expect(productoActualizado.categoria?.nombre).toBe('Eléctrico');
       expect(productoActualizado.ubicacion).toBe('Estante C-1');
       expect(productoActualizado.umbralStockBajo.toNumber()).toBe(8);
       expect(productoActualizado.stockActual.toNumber()).toBe(10); // sin cambios: la fila no traía cantidadInicial
@@ -222,7 +223,7 @@ describe('Carga masiva de inventario — /api/productos/{plantilla-importacion,i
         where: { sku: 'IMPORT-PARCIAL-VALIDA-001' },
       });
       expect(productoA.stockActual.toNumber()).toBe(7);
-      await contexto.prisma.producto.findUniqueOrThrow({ where: { sku: 'IMPORT-PARCIAL-VALIDA-002' } });
+      await contexto.prisma.producto.findUniqueOrThrow({ include: { categoria: true }, where: { sku: 'IMPORT-PARCIAL-VALIDA-002' } });
     },
   );
 

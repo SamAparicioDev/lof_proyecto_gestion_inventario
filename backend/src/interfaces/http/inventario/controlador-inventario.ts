@@ -76,7 +76,7 @@ export class ControladorInventario {
     const pagina = await this.listarInventario.ejecutar({
       buscar: filtros.buscar,
       soloStockBajo: filtros.soloStockBajo,
-      categoria: filtros.categoria,
+      categoriaId: filtros.categoriaId,
       ubicacion: filtros.ubicacion,
       estado: filtros.estado,
       disponibleMin: filtros.disponibleMin,

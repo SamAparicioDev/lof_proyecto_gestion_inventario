@@ -28,7 +28,16 @@
  * FR-072/FR-074 (costo corregible con registro atómico, solo si cambió).
  */
 import { Injectable } from '@nestjs/common';
-import { Prisma, type EstadoProducto as EstadoProductoPrisma, type Producto as ProductoPrisma } from '@prisma/client';
+import { Prisma, type EstadoProducto as EstadoProductoPrisma } from '@prisma/client';
+
+/**
+ * Toda lectura de producto arrastra su categoría (US15). No es un `include` de conveniencia:
+ * la entidad de dominio `Producto` lleva `{ id, nombre }` porque cada pantalla que muestra un
+ * producto muestra el nombre de su categoría, y resolverlo aparte sería una consulta por fila.
+ */
+const INCLUIR_CATEGORIA = { categoria: { select: { id: true, nombre: true } } } as const;
+
+type ProductoPrisma = Prisma.ProductoGetPayload<{ include: typeof INCLUIR_CATEGORIA }>;
 import { Duplicado, NoEncontrado } from '../../dominio/comunes/errores';
 import type { EstadoProducto, Producto } from '../../dominio/entidades/producto';
 import type {
@@ -59,12 +68,12 @@ export class RepositorioProductosPrisma implements RepositorioProductos {
   ) {}
 
   async buscarPorId(id: number): Promise<Producto | null> {
-    const registro = await this.prisma.producto.findUnique({ where: { id: BigInt(id) } });
+    const registro = await this.prisma.producto.findUnique({ where: { id: BigInt(id) }, include: INCLUIR_CATEGORIA });
     return registro ? aProductoDominio(registro) : null;
   }
 
   async buscarPorSku(sku: string): Promise<Producto | null> {
-    const registro = await this.prisma.producto.findUnique({ where: { sku } });
+    const registro = await this.prisma.producto.findUnique({ where: { sku }, include: INCLUIR_CATEGORIA });
     return registro ? aProductoDominio(registro) : null;
   }
 
@@ -72,6 +81,7 @@ export class RepositorioProductosPrisma implements RepositorioProductos {
   async buscarPorIds(ids: readonly number[]): Promise<Producto[]> {
     if (ids.length === 0) return [];
     const registros = await this.prisma.producto.findMany({
+      include: INCLUIR_CATEGORIA,
       where: { id: { in: ids.map((id) => BigInt(id)) } },
     });
     return registros.map(aProductoDominio);
@@ -83,11 +93,12 @@ export class RepositorioProductosPrisma implements RepositorioProductos {
         data: {
           sku: datos.sku,
           descripcion: datos.descripcion,
-          categoria: datos.categoria,
+          categoriaId: datos.categoriaId === null ? null : BigInt(datos.categoriaId),
           ubicacion: datos.ubicacion,
           umbralStockBajo: datos.umbralStockBajo,
           usuarioCreacionId: BigInt(datos.usuarioCreacionId),
         },
+        include: INCLUIR_CATEGORIA,
       });
       return aProductoDominio(registro);
     } catch (error) {
@@ -101,7 +112,7 @@ export class RepositorioProductosPrisma implements RepositorioProductos {
         where: { id: BigInt(id) },
         data: {
           descripcion: datos.descripcion,
-          categoria: datos.categoria,
+          categoriaId: datos.categoriaId === null ? null : BigInt(datos.categoriaId),
           ubicacion: datos.ubicacion,
           umbralStockBajo: datos.umbralStockBajo,
           usuarioModificacionId: BigInt(datos.usuarioModificacionId),
@@ -175,6 +186,7 @@ export class RepositorioProductosPrisma implements RepositorioProductos {
     if (!filtros.soloStockBajo) {
       const [registros, total] = await this.prisma.$transaction([
         this.prisma.producto.findMany({
+          include: INCLUIR_CATEGORIA,
           where,
           orderBy: { id: 'asc' },
           skip: (filtros.pagina - 1) * filtros.porPagina,
@@ -187,7 +199,7 @@ export class RepositorioProductosPrisma implements RepositorioProductos {
 
     // Ver nota de cabecera: sin SQL crudo, el cruce stock_actual <= umbral_stock_bajo se
     // resuelve en memoria sobre los candidatos que ya pasaron el filtro `buscar`.
-    const candidatos = await this.prisma.producto.findMany({ where, orderBy: { id: 'asc' } });
+    const candidatos = await this.prisma.producto.findMany({ where, orderBy: { id: 'asc' }, include: INCLUIR_CATEGORIA });
     const bajoUmbral = candidatos.filter((registro) => registro.stockActual.lte(registro.umbralStockBajo));
     const inicio = (filtros.pagina - 1) * filtros.porPagina;
     return {
@@ -201,7 +213,7 @@ export class RepositorioProductosPrisma implements RepositorioProductos {
    *  `skip`/`take`. */
   async listarTodos(filtros?: FiltrosListarTodosProductos): Promise<Producto[]> {
     const where = construirWhereBusqueda(filtros?.buscar);
-    const registros = await this.prisma.producto.findMany({ where, orderBy: { id: 'asc' } });
+    const registros = await this.prisma.producto.findMany({ where, orderBy: { id: 'asc' }, include: INCLUIR_CATEGORIA });
     return registros.map(aProductoDominio);
   }
 
@@ -215,10 +227,14 @@ export class RepositorioProductosPrisma implements RepositorioProductos {
    */
   async valoresDeClasificacion(): Promise<ValoresClasificacionProductos> {
     const [categorias, ubicaciones] = await Promise.all([
-      this.prisma.producto.groupBy({
-        by: ['categoria'],
-        where: { categoria: { not: null } },
-        orderBy: { categoria: 'asc' },
+      // US15 (FR-088): las categorías salen del CATÁLOGO, ya no de un `groupBy` sobre productos.
+      // Se ofrecen las ACTIVAS y, además, las inactivas que algún producto siga usando: sin esas
+      // últimas, un listado guardado o compartido con `?categoriaId=` de una categoría dada de
+      // baja mostraría el filtro aplicado sin poder nombrarlo en el selector.
+      this.prisma.categoria.findMany({
+        where: { OR: [{ estado: 'ACTIVA' }, { productos: { some: {} } }] },
+        select: { id: true, nombre: true },
+        orderBy: { nombre: 'asc' },
       }),
       this.prisma.producto.groupBy({
         by: ['ubicacion'],
@@ -227,7 +243,7 @@ export class RepositorioProductosPrisma implements RepositorioProductos {
       }),
     ]);
     return {
-      categorias: soloTextosPresentes(categorias.map((fila) => fila.categoria)),
+      categorias: categorias.map((categoria) => ({ id: Number(categoria.id), nombre: categoria.nombre })),
       ubicaciones: soloTextosPresentes(ubicaciones.map((fila) => fila.ubicacion)),
     };
   }
@@ -263,7 +279,7 @@ function construirWhereBusqueda(buscar: string | undefined): Prisma.ProductoWher
 function construirWhereListar(filtros: FiltrosListarProductos): Prisma.ProductoWhereInput {
   const where: Prisma.ProductoWhereInput = construirWhereBusqueda(filtros.buscar);
   if (filtros.estado) where.estado = mapearEstadoAPrisma(filtros.estado);
-  if (filtros.categoria) where.categoria = filtros.categoria;
+  if (filtros.categoriaId) where.categoriaId = BigInt(filtros.categoriaId);
   if (filtros.ubicacion) where.ubicacion = filtros.ubicacion;
   return where;
 }
@@ -274,7 +290,9 @@ function aProductoDominio(registro: ProductoPrisma): Producto {
     id: Number(registro.id),
     sku: registro.sku,
     descripcion: registro.descripcion,
-    categoria: registro.categoria,
+    categoria: registro.categoria
+      ? { id: Number(registro.categoria.id), nombre: registro.categoria.nombre }
+      : null,
     ubicacion: registro.ubicacion,
     umbralStockBajo: registro.umbralStockBajo.toNumber(),
     stockActual: registro.stockActual.toNumber(),

@@ -244,7 +244,7 @@ describe('Catálogo exportable en formato de plantilla — GET /api/productos/ca
       expect(await contexto.prisma.movimientoInventario.count()).toBe(totalMovimientosAntes);
 
       // El producto dado de baja se actualizó, pero NO se reactivó (la importación no toca `estado`).
-      const inactivo = await contexto.prisma.producto.findUniqueOrThrow({ where: { sku: 'CAT-EXPORT-003' } });
+      const inactivo = await contexto.prisma.producto.findUniqueOrThrow({ include: { categoria: true }, where: { sku: 'CAT-EXPORT-003' } });
       expect(inactivo.estado).toBe('INACTIVO');
     },
   );
@@ -280,9 +280,9 @@ describe('Catálogo exportable en formato de plantilla — GET /api/productos/ca
         errores: [],
       });
 
-      const actualizado = await contexto.prisma.producto.findUniqueOrThrow({ where: { sku: 'CAT-EXPORT-002' } });
+      const actualizado = await contexto.prisma.producto.findUniqueOrThrow({ include: { categoria: true }, where: { sku: 'CAT-EXPORT-002' } });
       expect(actualizado.descripcion).toBe('Descripción corregida desde Excel');
-      expect(actualizado.categoria).toBe('Ferretería');
+      expect(actualizado.categoria?.nombre).toBe('Ferretería');
       expect(actualizado.ubicacion).toBe('Estante D-9');
       expect(actualizado.umbralStockBajo.toNumber()).toBe(4);
 
@@ -319,13 +319,29 @@ describe('Catálogo exportable en formato de plantilla — GET /api/productos/ca
   /** Siembra `CATALOGO_SEMBRADO` DIRECTAMENTE con Prisma: `POST /api/productos` siempre nace con
    *  `stockActual`/`ultimoCosto` en 0, y esta suite necesita justo lo contrario — productos con
    *  stock y costo reales, para que "las columnas de stock viajan vacías" sea demostrable. */
+  /** US15: la categoría vive en el catálogo. Se crean bajo demanda y se reutilizan entre los
+   *  productos sembrados que comparten categoría — el índice funcional del nombre rechazaría
+   *  el duplicado. No se puede usar `connectOrCreate`: la unicidad es sobre
+   *  `lower(btrim(nombre))`, una expresión que Prisma no conoce. */
+  const categoriasSembradas = new Map<string, number>();
+  async function idCategoria(nombre: string, usuarioCreacionId: number): Promise<number> {
+    const existente = categoriasSembradas.get(nombre);
+    if (existente !== undefined) return existente;
+    const creada = await contexto.prisma.categoria.create({
+      data: { nombre, usuarioCreacionId: BigInt(usuarioCreacionId) },
+      select: { id: true },
+    });
+    categoriasSembradas.set(nombre, Number(creada.id));
+    return Number(creada.id);
+  }
+
   async function sembrarCatalogo(usuarioCreacionId: number): Promise<void> {
     for (const producto of CATALOGO_SEMBRADO) {
       await contexto.prisma.producto.create({
         data: {
           sku: producto.sku,
           descripcion: producto.descripcion,
-          categoria: producto.categoria,
+          categoriaId: producto.categoria ? await idCategoria(producto.categoria, usuarioCreacionId) : null,
           ubicacion: producto.ubicacion,
           umbralStockBajo: producto.umbralStockBajo,
           stockActual: producto.stockActual,

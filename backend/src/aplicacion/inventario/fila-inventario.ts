@@ -40,7 +40,7 @@ export interface FilaInventario {
     readonly id: number;
     readonly sku: string;
     readonly descripcion: string;
-    readonly categoria: string | null;
+    readonly categoria: { readonly id: number; readonly nombre: string } | null;
     readonly ubicacion: string | null;
     readonly umbralStockBajo: number;
     readonly ultimoCosto: number;

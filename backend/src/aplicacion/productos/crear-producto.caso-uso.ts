@@ -10,7 +10,7 @@
  * este caso de uso no necesita pre-validar unicidad ni capturar el error.
  *
  * Implementa: FR-010 (alta de producto con SKU/descripción/ubicación/umbral de stock
- * bajo), FR-011 (alta rápida reutilizable desde ingresos) y FR-052 (campo `categoria`).
+ * bajo), FR-011 (alta rápida reutilizable desde ingresos) y FR-086 (`categoriaId`: referencia al catálogo, opcional).
  */
 import { Inject, Injectable } from '@nestjs/common';
 import type { CasoDeUso } from '../comunes/caso-de-uso';
@@ -20,7 +20,7 @@ import { REPOSITORIO_PRODUCTOS, type RepositorioProductos } from '../../dominio/
 export interface CrearProductoEntrada {
   readonly sku: string;
   readonly descripcion: string;
-  readonly categoria: string | null;
+  readonly categoriaId: number | null;
   readonly ubicacion: string | null;
   readonly umbralStockBajo: number;
   /** Quién da de alta el producto — nunca confiar en un valor del body (FR-045). */
@@ -39,7 +39,7 @@ export class CrearProductoCasoUso implements CasoDeUso<CrearProductoEntrada, Cre
     const producto = await this.repositorioProductos.crear({
       sku: entrada.sku,
       descripcion: entrada.descripcion,
-      categoria: entrada.categoria,
+      categoriaId: entrada.categoriaId,
       ubicacion: entrada.ubicacion,
       umbralStockBajo: entrada.umbralStockBajo,
       usuarioCreacionId: entrada.usuarioId,

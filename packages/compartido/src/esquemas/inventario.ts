@@ -37,8 +37,8 @@ function esquemaFechaOpcional(mensajeInvalida: string) {
  * Query de `GET /api/inventario` (contracts/api-rest.md § Inventario).
  *
  * Filtros agregados en US13 (FR-075…FR-077), todos opcionales y combinables entre sí:
- * - `categoria`/`ubicacion`: igualdad EXACTA, no subcadena. Son texto libre sin catálogo propio
- *   (FR-052), así que el usuario no puede adivinar cómo se escribieron: la pantalla los ofrece
+ * - `ubicacion`: igualdad EXACTA, no subcadena. Es texto libre sin catálogo propio, así que el
+ *   usuario no puede adivinar cómo se escribió: la pantalla lo ofrece
  *   como selección de lo que EXISTE (`GET /api/inventario/opciones-filtro`, FR-076) y con
  *   valores tomados de ahí la igualdad es lo correcto — una subcadena haría que "Bodega 1"
  *   arrastrara "Bodega 10".
@@ -54,7 +54,13 @@ export const esquemaFiltroInventario = z
   .object({
     buscar: z.string().trim().optional(),
     soloStockBajo: esquemaBooleanoOpcionalDeQuery,
-    categoria: esquemaTextoFiltro(),
+    /** US15: se filtra por el id del catálogo, no por texto — así el problema de "cómo se
+     *  escribió" desaparece de raíz (FR-088). */
+    categoriaId: z.coerce
+      .number({ invalid_type_error: 'La categoría no es válida' })
+      .int('La categoría no es válida')
+      .positive('La categoría no es válida')
+      .optional(),
     ubicacion: esquemaTextoFiltro(),
     estado: z
       .enum(['ACTIVO', 'INACTIVO'], { errorMap: () => ({ message: 'El estado no es válido' }) })

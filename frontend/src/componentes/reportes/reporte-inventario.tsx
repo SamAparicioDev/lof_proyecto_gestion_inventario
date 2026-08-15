@@ -257,7 +257,7 @@ export function PanelReporteInventario() {
                           <Link href={`/inventario/${fila.producto.id}`}>{fila.producto.sku}</Link>
                         </td>
                         <td>{fila.producto.descripcion}</td>
-                        <td className="text-muted">{fila.producto.categoria ?? '—'}</td>
+                        <td className="text-muted">{fila.producto.categoria?.nombre ?? '—'}</td>
                         <td className="text-muted">{fila.producto.ubicacion ?? '—'}</td>
                         <td>{fila.stock}</td>
                         <td>{fila.comprometido}</td>
