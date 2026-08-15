@@ -35,6 +35,7 @@
  * | Reportes | `reportes.ver` | `GET /api/reportes/*` |
  * | Usuarios | `usuarios.gestionar` | todo `/api/usuarios` |
  * | Roles y permisos | `roles.gestionar` | `/api/roles`, `GET /api/permisos` |
+ * | Administración | `categorias.gestionar` **o** `proveedores.gestionar` | el módulo tiene varias secciones y basta con poder abrir una |
  *
  * ## "Panel" es el único elemento SIN permiso (US10/T116)
  *
@@ -74,6 +75,16 @@ export interface ElementoNavegacion {
    *  Ausente = la pantalla no exige ninguno y se muestra a toda sesión autenticada (hoy solo
    *  "Panel" — ver "«Panel» es el único elemento SIN permiso" en el encabezado). */
   permiso?: ClavePermisoUI;
+  /**
+   * Para los elementos que son un MÓDULO con varias secciones (hoy solo "Administración"): se
+   * muestra si la sesión puede abrir CUALQUIERA de ellas, no una en concreto.
+   *
+   * Nació de un defecto real (2026-08-15): la entrada se filtraba por `categorias.gestionar`, la
+   * primera sección del módulo, así que un rol con `proveedores.gestionar` pero sin la otra no
+   * veía el módulo en el menú — aunque `/administracion` sí sabía redirigirlo a la sección que
+   * sí podía abrir. El menú escondía una puerta que la aplicación tenía abierta.
+   */
+  permisosAlternativos?: readonly ClavePermisoUI[];
 }
 
 export const ELEMENTOS_NAVEGACION: ElementoNavegacion[] = [
@@ -101,18 +112,28 @@ export const ELEMENTOS_NAVEGACION: ElementoNavegacion[] = [
   },
   { href: '/usuarios', etiqueta: 'Usuarios', icono: UserGear, permiso: PERMISOS.USUARIOS_GESTIONAR },
   { href: '/roles', etiqueta: 'Roles y permisos', icono: ShieldCheck, permiso: PERMISOS.ROLES_GESTIONAR },
-  // US15: una sola entrada para TODOS los catálogos de apoyo. Se filtra por `categorias.gestionar`
-  // porque es la primera sección del módulo; `/administracion` redirige a la que el rol pueda ver.
+  // US15: una sola entrada para TODOS los catálogos de apoyo. Se muestra si la sesión puede
+  // administrar ALGUNO de ellos; `/administracion` la lleva a la primera que pueda abrir.
   {
     href: '/administracion',
     etiqueta: 'Administración',
     icono: SlidersHorizontal,
-    permiso: PERMISOS.CATEGORIAS_GESTIONAR,
+    permisosAlternativos: [PERMISOS.CATEGORIAS_GESTIONAR, PERMISOS.PROVEEDORES_GESTIONAR],
   },
 ];
 
-/** Elementos del menú que la sesión puede abrir, en el orden del mapa (UX, no seguridad).
- *  Un elemento sin `permiso` declarado se muestra siempre (ver encabezado). */
+/**
+ * Elementos del menú que la sesión puede abrir, en el orden del mapa (UX, no seguridad).
+ *
+ * Tres casos, en este orden: sin permiso declarado se muestra siempre (hoy solo "Panel"); con
+ * `permisosAlternativos` basta con tener UNO de ellos (un módulo con varias secciones); con
+ * `permiso` hace falta ese exacto.
+ */
 export function navegacionPermitida(permisos: readonly string[] | undefined | null): ElementoNavegacion[] {
-  return ELEMENTOS_NAVEGACION.filter((elemento) => !elemento.permiso || tienePermiso(permisos, elemento.permiso));
+  return ELEMENTOS_NAVEGACION.filter((elemento) => {
+    if (elemento.permisosAlternativos) {
+      return elemento.permisosAlternativos.some((clave) => tienePermiso(permisos, clave));
+    }
+    return !elemento.permiso || tienePermiso(permisos, elemento.permiso);
+  });
 }
