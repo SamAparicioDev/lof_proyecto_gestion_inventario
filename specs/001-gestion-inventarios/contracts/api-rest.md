@@ -462,7 +462,7 @@ cálculo adicional.
 |---|---|---|---|---|
 | `GET /api/ingresos?buscar=&estado=&desde=&hasta=&proveedorId=` | A,G,O | `esquemaFiltroIngresos` {buscar?, estado?, desde?, hasta?, **proveedorId?** (US13/US15), pagina, porPagina} | página de cabeceras con totales | — |
 | `GET /api/ingresos/:id` | A,G,O | — | ingreso con líneas | `404` |
-| `POST /api/ingresos` | A,G,O | `esquemaCrearIngreso` {numeroFactura, fechaFactura, **proveedorId**, fechaRecepcion, observaciones?, lineas[≥1]{productoId, cantidad>0, precioUnitario>0}} | `201` {id} en PENDIENTE; totales calculados (FR-014) | `400` factura duplicada (FR-015)/validación (FR-016)/proveedor inexistente o inactivo |
+| `POST /api/ingresos` | A,G,O | `esquemaCrearIngreso` {numeroFactura, fechaFactura, **proveedorId**, fechaRecepcion, observaciones?, **ordenCompraId?** (US16), lineas[≥1]{productoId, cantidad>0, precioUnitario>0}} | `201` {id} en PENDIENTE; totales calculados (FR-014) | `400` factura duplicada (FR-015)/validación (FR-016)/proveedor inexistente o inactivo |
 | `PUT /api/ingresos/:id` | A,G,O | mismo esquema | `204` (solo PENDIENTE — US1-AS5) | `409` estado no editable |
 | `POST /api/ingresos/:id/recibir` | A,G,O | — | `204`; transacción atómica suma stock + movimientos ENTRADA (FR-017/FR-021) | `409` estado inválido |
 | `POST /api/ingresos/:id/verificar` | A,G | — | `204` (RECIBIDO→VERIFICADO, inmutable) | `409` |
@@ -482,6 +482,46 @@ EXACTA por id, que es lo que hace el resultado reproducible (FR-088 aplicado a p
 ser redundantes y se combinan con Y lógico. Como todo filtro del listado, viaja también al
 export (`GET /api/ingresos/export`) por construcción: vive en `CriteriosIngresos`, que
 `FiltrosListarIngresos` extiende.
+
+## Órdenes de compra (`/api/ordenes-compra`) (US16, FR-094…FR-100)
+
+| Método y ruta | Permiso | Body/Query (Zod) | Respuesta OK | Errores |
+|---|---|---|---|---|
+| `GET /api/ordenes-compra?buscar=&proveedorId=&estado=&desde=&hasta=` | `ordenes_compra.ver` | `esquemaFiltroOrdenesCompra` {buscar?, proveedorId?, estado?, desde?, hasta?, pagina, porPagina} | página de cabeceras con `proveedor: {id, nombre}` y totales | — |
+| `GET /api/ordenes-compra/sugerencias?proveedorId=` | `ordenes_compra.crear` | `proveedorId` obligatorio | `200` `SugerenciaCompra[]` (ver abajo) | `404` proveedor inexistente |
+| `GET /api/ordenes-compra/export?formato=pdf\|xlsx&…` | `ordenes_compra.ver` | mismos filtros que el listado | stream con TODAS las filas del filtro (FR-064) | — |
+| `GET /api/ordenes-compra/:id` | `ordenes_compra.ver` | — | orden con líneas | `404` |
+| `GET /api/ordenes-compra/:id/export?formato=pdf\|xlsx` | `ordenes_compra.ver` | — | documento completo: número, proveedor con contacto, líneas, total y auditoría (FR-097) | `404` |
+| `POST /api/ordenes-compra` | `ordenes_compra.crear` | `esquemaCrearOrdenCompra` {proveedorId, fechaOrden, fechaEntregaEsperada?, observaciones?, lineas[≥1]{productoId, cantidad>0, precioUnitario>0}} | `201` {id, numero} en BORRADOR; total calculado (FR-094) | `400` validación / proveedor inexistente o inactivo |
+| `PUT /api/ordenes-compra/:id` | `ordenes_compra.editar` | mismo esquema | `204` — **solo en BORRADOR** (FR-096) | `409` estado no editable; `404` |
+| `POST /api/ordenes-compra/:id/enviar` | `ordenes_compra.enviar` | — | `204` BORRADOR→ENVIADA; deja de ser editable | `409` estado inválido |
+| `POST /api/ordenes-compra/:id/anular` | `ordenes_compra.anular` | {motivo} (obligatorio) | `204` desde BORRADOR o ENVIADA | `409` una orden RECIBIDA o ya ANULADA no se anula |
+
+**`SugerenciaCompra`** (FR-098) — `{ productoId, sku, descripcion, disponible, umbralStockBajo, cantidadSugerida, precioSugerido }`:
+
+- Solo productos ACTIVOS **bajo umbral** (`disponible <= umbralStockBajo`, misma regla que el
+  inventario) **que ese proveedor ya haya suministrado** en algún ingreso anterior. No se
+  sugiere cemento a quien vende compresores.
+- `cantidadSugerida` = `umbral × 2 − disponible`, redondeada hacia arriba. Reponer justo hasta
+  el umbral dejaría el producto en alerta permanente (la alerta es `disponible <= umbral`), así
+  que la sugerencia lleva el stock al primer valor con margen real. Es una propuesta editable.
+- `precioSugerido` = el `ultimo_costo` del producto, que es lo último que se pagó por él.
+- Una lista vacía es una respuesta legítima (`200 []`), no un error: significa que a ese
+  proveedor no hay nada que pedirle hoy.
+
+Reglas del contrato:
+
+- **La orden NO mueve stock en ningún estado** (FR-096). El único efecto de inventario del ciclo
+  de compra sigue siendo `POST /api/ingresos/:id/recibir`.
+- **`ordenes_compra.ver`/`.crear`/`.editar` los tienen los tres roles**; `.enviar` y `.anular`
+  quedan en Administrador y Gerente: son las dos acciones que comprometen o liberan un gasto
+  frente a un tercero (FR-100).
+- **El número se muestra como `OC-000042`** (formato de presentación); en la API viaja como
+  entero en `numero`, igual que el de las salidas.
+- **Enlace con el ingreso (FR-099)**: `POST /api/ingresos` acepta `ordenCompraId` OPCIONAL. Si
+  viene, la orden debe estar ENVIADA y ser del MISMO proveedor del ingreso (si no, `400` con
+  `campos.ordenCompraId`). Cuando ese ingreso se RECIBE, la orden pasa a `RECIBIDA` en la MISMA
+  transacción que mueve el stock.
 
 ## Clientes y proyectos (`/api/clientes`, `/api/proyectos`) (FR-034…FR-038)
 

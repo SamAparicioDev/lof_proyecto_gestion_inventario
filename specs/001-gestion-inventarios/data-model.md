@@ -213,6 +213,38 @@ una diferencia: el `SET NOT NULL` va DESPUÉS del relleno y actúa como comproba
 ingreso quedó sin emparejar; si alguno lo hiciera, la migración aborta entera en vez de dejar
 ingresos huérfanos de proveedor.
 
+### ordenes_compra (US16)
+
+| Columna | Tipo | Constraints |
+|---|---|---|
+| `id` | BIGINT PK | |
+| `numero` | BIGINT | NOT NULL, **UNIQUE** — correlativo de `contadores['orden_compra']` (FR-095, mismo mecanismo que las salidas) |
+| `proveedor_id` | BIGINT FK → proveedores | NOT NULL, `ON DELETE RESTRICT` (FR-094) |
+| `fecha_orden` | DATE | NOT NULL |
+| `fecha_entrega_esperada` | DATE | NULL (informativa: es lo que se le pide al proveedor, no un compromiso del sistema) |
+| `observaciones` | TEXT | NULL |
+| `estado` | ENUM `BORRADOR/ENVIADA/RECIBIDA/ANULADA` | NOT NULL DEFAULT BORRADOR (FR-096) |
+| `valor_total` | DECIMAL(14,2) | NOT NULL DEFAULT 0 (recalculado al guardar líneas — FR-094) |
+| `motivo_anulacion` | TEXT | NULL (obligatorio a nivel de aplicación al anular) |
+
+### detalles_ordenes_compra (US16)
+
+| Columna | Tipo | Constraints |
+|---|---|---|
+| `id` | BIGINT PK | |
+| `orden_compra_id` | BIGINT FK → ordenes_compra | NOT NULL, `ON DELETE CASCADE` (solo se ejerce mientras la orden es BORRADOR) |
+| `producto_id` | BIGINT FK → productos | NOT NULL, `ON DELETE RESTRICT` |
+| `cantidad` | DECIMAL(12,2) | NOT NULL, CHECK `> 0` |
+| `precio_unitario` | DECIMAL(14,2) | NOT NULL, CHECK `> 0` — precio ESTIMADO: el real lo fija la factura |
+| `valor_total` | DECIMAL(14,2) | NOT NULL |
+
+UNIQUE `(orden_compra_id, producto_id)`: un producto por línea, mismo criterio que
+`detalles_ingresos`.
+
+**Una orden NO escribe en `movimientos_inventario`** (FR-096) y por eso no aparece en
+`documento_tipo`: es un compromiso de compra, no un movimiento de mercancía. El stock se mueve
+cuando el INGRESO vinculado se recibe, con el flujo atómico que ya existe (FR-017).
+
 ### ingresos
 
 | Columna | Tipo | Constraints |
@@ -227,6 +259,7 @@ ingresos huérfanos de proveedor.
 | `valor_total` | DECIMAL(14,2) | NOT NULL DEFAULT 0 (recalculado al guardar líneas — FR-014) |
 | `usuario_registra_id` | FK → usuarios | NOT NULL (FR-018) |
 | `motivo_anulacion` | TEXT | NULL (obligatorio a nivel de aplicación al anular — FR-019) |
+| `orden_compra_id` | BIGINT FK → ordenes_compra | NULL (US16, FR-099 — presente solo si el ingreso nació de una orden; un ingreso sin orden previa sigue siendo válido) |
 
 ### detalles_ingresos
 
@@ -324,7 +357,7 @@ siempre dentro de la transacción que modifica `stock_actual`.
 
 | Columna | Tipo | Constraints |
 |---|---|---|
-| `clave` | VARCHAR(30) PK | p. ej. `'salida'` |
+| `clave` | VARCHAR(30) PK | `'salida'` (FR-026) y `'orden_compra'` (US16, FR-095) |
 | `valor` | BIGINT | NOT NULL DEFAULT 0 |
 
 Uso exclusivo vía `UPDATE ... RETURNING` dentro de transacciones (research R5). Sin campos de
@@ -340,6 +373,9 @@ clientes 1───n proyectos
 proyectos 1───n salidas
 categorias 1───n productos          (opcional — FR-086)
 proveedores 1───n ingresos          (OBLIGATORIO — FR-091)
+proveedores 1───n ordenes_compra    (OBLIGATORIO — FR-094)
+ordenes_compra 1───n detalles_ordenes_compra n───1 productos
+ordenes_compra 1───n ingresos       (OPCIONAL — FR-099: el ingreso que la surte)
 ingresos 1───n detalles_ingresos n───1 productos
 salidas  1───n detalles_salidas  n───1 productos
 productos 1───n movimientos_inventario n───1 (ingresos|salidas) [documento_tipo+documento_id]
@@ -442,6 +478,8 @@ cruzado sería sobre-ingeniería para este caso de uso (Principio V, YAGNI).
 | productos | UNIQUE(sku); btree(descripcion); btree(estado); btree(categoria_id); btree(ubicacion) | búsqueda FR-023; los dos últimos, filtro por categoría/ubicación de FR-075 (US13) — medido en rendimiento.md § (g), que además corrige la expectativa de que sirvieran al `DISTINCT` de FR-076. Desde US15 el índice es sobre la FK `categoria_id`, no sobre el texto |
 | categorias | UNIQUE funcional sobre `lower(trim(nombre))`; btree(estado) | unicidad insensible a mayúsculas/espacios (FR-085) y listado de las activas para los selectores (FR-088) |
 | proveedores | UNIQUE funcional sobre `lower(trim(nombre))`; btree(estado) | lo mismo que `categorias`, aplicado a proveedores (FR-091) |
+| ordenes_compra | UNIQUE(numero); btree(proveedor_id, estado); btree(fecha_orden); btree(estado) | listado y filtros de US16; el compuesto responde "qué le pedí a este proveedor y qué sigue pendiente" |
+| detalles_ordenes_compra | btree(producto_id); UNIQUE(orden_compra_id, producto_id) | historial por producto, un producto por línea |
 | ingresos | UNIQUE(numero_factura); btree(fecha_recepcion); btree(estado); btree(proveedor_id) | historial/filtros FR-018; el último, filtro por proveedor de FR-075, que desde US15 es una igualdad por FK y no un `LIKE` sobre texto |
 | salidas | UNIQUE(numero); btree(proyecto_id, estado); btree(fecha_salida); btree(estado); btree(usuario_autoriza_id) | filtros FR-033, comprometido R4; el último, filtro por autorizante de FR-075 (US13) |
 | detalles_salidas | btree(producto_id); UNIQUE(salida_id, producto_id) | agregado de comprometido R4 |

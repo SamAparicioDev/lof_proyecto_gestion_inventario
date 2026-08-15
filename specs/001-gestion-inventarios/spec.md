@@ -263,6 +263,26 @@ La categoría que se pide al crear un producto, y el proveedor que se pide al re
 
 ---
 
+### User Story 16 - Órdenes de compra al proveedor (Priority: P2)
+
+Cuando falta mercancía, el negocio arma una ORDEN DE COMPRA dirigida a un proveedor: elige los productos y las cantidades, la exporta en PDF y se la envía. La orden queda registrada con su número, de modo que en cualquier momento se puede responder "¿qué le pedimos a Formex y qué falta por llegar?".
+
+**Why this priority**: hoy el sistema solo sabe de mercancía que YA llegó. Todo lo que se pidió y todavía no ha llegado vive en el correo o en la cabeza de quien lo pidió, y por eso se pide dos veces lo mismo o no se reclama lo que nunca llegó. No es P1 porque el inventario funciona sin ello —el ingreso se puede registrar igual—, pero es la única parte del ciclo de compra que el sistema no cubre. Se apoya enteramente en el catálogo de proveedores de US15: sin él, una orden no tendría a quién dirigirse.
+
+**Independent Test**: Se prueba creando una orden para un proveedor con dos productos, exportándola a PDF y comprobando que el documento trae el número de orden, el proveedor, las líneas y el total. Entrega valor por sí sola: un documento formal que enviarle al proveedor y un registro de lo pedido.
+
+**Acceptance Scenarios**:
+
+1. **Given** un usuario con permiso para crear órdenes, **When** elige un proveedor, **Then** el sistema le sugiere los productos bajo umbral que ESE proveedor ya le ha suministrado, con una cantidad sugerida que él puede cambiar o descartar.
+2. **Given** una orden en BORRADOR, **When** el usuario la edita, **Then** puede agregar, quitar y modificar líneas; el total se recalcula solo.
+3. **Given** una orden en BORRADOR, **When** un Administrador o Gerente la marca como ENVIADA, **Then** deja de ser editable, porque a partir de ahí el proveedor ya tiene un compromiso en la mano.
+4. **Given** una orden ENVIADA, **When** el usuario exporta su PDF, **Then** obtiene un documento con el número de orden, los datos del proveedor, las líneas con cantidades y precios, el total y quién la generó.
+5. **Given** una orden ENVIADA cuya mercancía llega, **When** el usuario registra el ingreso desde la propia orden, **Then** el formulario llega precargado con su proveedor y sus líneas, el ingreso queda vinculado a la orden, y al recibirlo la orden pasa a RECIBIDA.
+6. **Given** una orden ENVIADA que el proveedor no va a atender, **When** un Administrador o Gerente la anula indicando el motivo, **Then** queda ANULADA con ese motivo y deja de contarse como pendiente de llegar.
+7. **Given** cualquier orden de compra, **When** se consulta el inventario, **Then** el stock NO ha cambiado: una orden es un compromiso de compra, no un movimiento de mercancía.
+
+---
+
 ### Edge Cases
 
 - **Salida mayor al disponible**: debe rechazarse siempre, incluida la carrera entre dos usuarios simultáneos sobre el mismo producto (solo una confirmación puede ganar).
@@ -426,6 +446,16 @@ que recordar por separado.
 - **FR-092**: La migración a catálogo de proveedores NO DEBE perder ningún dato: cada proveedor ya escrito en un ingreso se convierte en una fila del catálogo y el ingreso queda apuntando a ella (mismo criterio que FR-089).
 - **FR-093**: El proveedor sintético que la carga masiva usa para su ingreso automático ("Carga masiva de inventario", FR-050) DEBE existir en el catálogo y NO DEBE poder eliminarse ni renombrarse, porque el proceso automático depende de él — misma protección que los roles del sistema (FR-059).
 
+**Órdenes de compra (US16)**
+
+- **FR-094**: Una orden de compra DEBE dirigirse a UN proveedor ACTIVO del catálogo (US15) y llevar al menos una línea con producto, cantidad y precio unitario estimado; su valor total se calcula a partir de las líneas, nunca se teclea.
+- **FR-095**: Cada orden DEBE recibir un número correlativo único y consecutivo al crearse, con la misma garantía que el de las salidas (FR-026): asignado dentro de la transacción que la crea, sin duplicados bajo concurrencia y sin huecos por transacciones revertidas.
+- **FR-096**: Una orden DEBE recorrer los estados BORRADOR → ENVIADA → RECIBIDA, y poder ANULARSE con motivo desde BORRADOR o ENVIADA. Solo es editable en BORRADOR: una vez enviada, el proveedor tiene un compromiso en la mano y cambiarlo en silencio sería falsear lo que se pidió. Una orden NO mueve stock en ningún estado.
+- **FR-097**: Toda orden DEBE poder exportarse como documento completo en PDF y Excel —número, proveedor con sus datos de contacto, líneas, total y auditoría— porque ese documento ES lo que se le envía al proveedor (mismo alcance que FR-065 para ingresos y salidas).
+- **FR-098**: Al elegir el proveedor, el sistema DEBE sugerir los productos BAJO UMBRAL que ese proveedor ya ha suministrado en ingresos anteriores, con una cantidad sugerida. La sugerencia es una ayuda editable, nunca una imposición: el usuario puede cambiar las cantidades, quitar líneas y agregar productos que el proveedor no le haya vendido antes.
+- **FR-099**: Una orden ENVIADA DEBE poder convertirse en ingreso: el registro del ingreso parte precargado con el proveedor y las líneas de la orden, el ingreso queda VINCULADO a ella, y cuando ese ingreso se recibe (FR-017) la orden pasa a RECIBIDA sola. El vínculo es opcional en el otro sentido: un ingreso puede seguir registrándose sin orden previa.
+- **FR-100**: Crear y editar borradores lo DEBEN poder hacer los tres roles —quien ve faltar la mercancía es quien arma el pedido—, pero ENVIAR y ANULAR una orden DEBEN quedar restringidos: son las dos acciones que comprometen o liberan un gasto frente a un tercero.
+
 **Auditoría y trazabilidad (transversal)**
 
 - **FR-045**: Toda operación de creación, edición, cambio de estado o anulación DEBE registrar usuario y fecha/hora; los registros con relevancia de inventario DEBEN conservar además el documento asociado.
@@ -438,6 +468,7 @@ que recordar por separado.
 - **Producto**: artículo almacenable; SKU único, descripción, categoría (referencia OPCIONAL al catálogo de categorías, US15), ubicación en almacén, umbral de stock bajo, estado. Su stock se deriva de los movimientos.
 - **Categoría**: clasificación de productos administrada como catálogo (US15); nombre único ignorando mayúsculas y espacios, descripción opcional, estado activa/inactiva. Nunca se elimina si está en uso: se desactiva, para no despojar de su clasificación a los productos que la referencian.
 - **Proveedor**: empresa o persona a la que se compra la mercancía, administrada como catálogo (US15, FR-091); nombre único ignorando mayúsculas y espacios, datos de contacto opcionales (NIT, teléfono, email), estado activo/inactivo, y una marca de "del sistema" para el proveedor que usa la carga masiva (FR-093). Referenciado de forma OBLIGATORIA por cada ingreso.
+- **Orden de compra**: pedido formal de mercancía a un proveedor (US16, FR-094); número correlativo propio, proveedor obligatorio, fecha, líneas con producto/cantidad/precio estimado, valor total calculado, estado (borrador, enviada, recibida, anulada) y motivo de anulación. NO mueve inventario: es un compromiso de compra, y el stock solo se mueve cuando el ingreso correspondiente se recibe.
 - **Cliente**: empresa o persona a la que se destinan salidas; nombre, NIT único, contacto (teléfono, email), dirección, ciudad, estado, fecha de registro. Tiene uno o más proyectos.
 - **Proyecto**: trabajo específico de un cliente; nombre, descripción, fechas de inicio y cierre estimada, responsable, presupuesto estimado, estado (Activo/Completado/Suspendido). Destino obligatorio de las salidas.
 - **Ingreso (factura)**: documento de entrada de mercancía; número de factura único, proveedor (texto), fechas de factura y recepción, observaciones, estado (Pendiente/Recibido/Verificado), usuario que registra, valor total. Compuesto por líneas de detalle.
