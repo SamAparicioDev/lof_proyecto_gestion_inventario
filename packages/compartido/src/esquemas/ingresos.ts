@@ -16,7 +16,7 @@
  * Sigue el patrón de esquemas/autenticacion.ts (archivo ejemplar).
  */
 import { z } from 'zod';
-import { esquemaPaginacion, esquemaTextoFiltro } from './comunes';
+import { esquemaIdFiltro, esquemaPaginacion } from './comunes';
 
 /** `true` si `valor` tiene, como máximo, 2 cifras decimales (columnas `DECIMAL(12,2)` — FR-016). */
 function tieneMaximoDosDecimales(valor: number): boolean {
@@ -82,11 +82,18 @@ function construirEsquemaIngreso() {
         .min(1, 'El número de factura es obligatorio')
         .max(50, 'El número de factura no puede superar 50 caracteres'),
       fechaFactura: esquemaFecha('La fecha de la factura es obligatoria', 'La fecha de la factura no es válida'),
-      proveedor: z
-        .string({ required_error: 'El proveedor es obligatorio' })
-        .trim()
-        .min(1, 'El proveedor es obligatorio')
-        .max(150, 'El proveedor no puede superar 150 caracteres'),
+      /**
+       * US15 (FR-091): el proveedor dejó de escribirse y pasó a elegirse del catálogo. A
+       * diferencia de `categoriaId` en productos, NO admite `null`: el proveedor de un ingreso
+       * es obligatorio — una factura sin saber a quién se le compró no es trazable.
+       */
+      proveedorId: z
+        .number({
+          required_error: 'El proveedor es obligatorio',
+          invalid_type_error: 'El proveedor es obligatorio',
+        })
+        .int('El proveedor no es válido')
+        .positive('El proveedor no es válido'),
       fechaRecepcion: esquemaFecha(
         'La fecha de recepción es obligatoria',
         'La fecha de recepción no es válida',
@@ -106,21 +113,25 @@ export const esquemaActualizarIngreso = construirEsquemaIngreso();
 export type DatosActualizarIngreso = z.infer<typeof esquemaActualizarIngreso>;
 
 /**
- * Query de `GET /api/ingresos?buscar=&estado=&desde=&hasta=&proveedor=` — filtros de listado
+ * Query de `GET /api/ingresos?buscar=&estado=&desde=&hasta=&proveedorId=` — filtros de listado
  * (FR-018) más la paginación común a todos los listados (`esquemas/comunes.ts`). Las
  * fechas son opcionales aquí (a diferencia de la cabecera del documento): un filtro de
  * rango vacío simplemente no acota la búsqueda.
  *
- * `proveedor` (US13, FR-075) es subcadena insensible a mayúsculas, igual que `buscar`, pero
- * acotada a esa sola columna. No es redundante: `buscar` cruza `numero_factura` OR `proveedor`,
- * así que teclear "3M" trae también facturas cuyo NÚMERO contiene "3M". Los dos se combinan con
- * Y lógico, y como vive en `CriteriosIngresos` (backend) también acota la exportación del
- * listado sin trabajo adicional (FR-064/SC-007).
+ * `proveedorId` nació en US13 (FR-075) como subcadena sobre la columna de texto y en US15 pasó
+ * a ser una igualdad por id del CATÁLOGO: es lo que exige FR-091 al extender FR-088 (los filtros
+ * se alimentan del catálogo) y lo que hace el resultado reproducible — se elige de un selector,
+ * así que ya no hay nada que "escribir parecido".
+ *
+ * NO es redundante con `buscar`, que sigue cruzando `numero_factura` OR el NOMBRE del proveedor
+ * y por eso trae también las facturas cuyo NÚMERO contiene "3M". Los dos se combinan con Y
+ * lógico, y como vive en `CriteriosIngresos` (backend) también acota la exportación del listado
+ * sin trabajo adicional (FR-064/SC-007).
  */
 export const esquemaFiltroIngresos = z
   .object({
     buscar: z.string().trim().optional(),
-    proveedor: esquemaTextoFiltro(),
+    proveedorId: esquemaIdFiltro('El proveedor no es válido'),
     estado: z.enum(['PENDIENTE', 'RECIBIDO', 'VERIFICADO', 'ANULADO'], {
       errorMap: () => ({ message: 'El estado no es válido' }),
     }).optional(),

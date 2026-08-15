@@ -36,7 +36,7 @@ function aValoresFormulario(ingreso: IngresoConDetalles): DatosCrearIngreso {
   return {
     numeroFactura: ingreso.numeroFactura,
     fechaFactura: aFechaInput(ingreso.fechaFactura),
-    proveedor: ingreso.proveedor,
+    proveedorId: ingreso.proveedor.id,
     fechaRecepcion: aFechaInput(ingreso.fechaRecepcion),
     observaciones: ingreso.observaciones ?? '',
     lineas: ingreso.detalles.map((detalle) => ({
@@ -86,11 +86,16 @@ export default async function PaginaDetalleIngreso({ params }: { params: Promise
       </div>
 
       {esPendiente ? (
-        <IngresoForm productos={productos} ingresoId={ingreso.id} valoresIniciales={aValoresFormulario(ingreso)} />
+        <IngresoForm
+          productos={productos}
+          ingresoId={ingreso.id}
+          valoresIniciales={aValoresFormulario(ingreso)}
+          proveedorActual={ingreso.proveedor}
+        />
       ) : (
         <div className="card gap-4 p-5">
           <dl className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', margin: 0 }}>
-            <DatoSoloLectura etiqueta="Proveedor" valor={ingreso.proveedor} />
+            <DatoSoloLectura etiqueta="Proveedor" valor={ingreso.proveedor.nombre} />
             <DatoSoloLectura etiqueta="Fecha de la factura" valor={formatoFecha(ingreso.fechaFactura)} />
             <DatoSoloLectura etiqueta="Fecha de recepción" valor={formatoFecha(ingreso.fechaRecepcion)} />
             <DatoSoloLectura etiqueta="Valor total" valor={formatoMoneda(ingreso.valorTotal)} />

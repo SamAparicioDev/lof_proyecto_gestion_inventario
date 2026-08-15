@@ -27,7 +27,16 @@ export interface Ingreso {
   readonly id: number;
   readonly numeroFactura: string;
   readonly fechaFactura: Date;
-  readonly proveedor: string;
+  /**
+   * US15 (FR-091): el proveedor dejó de ser texto libre y pasó a ser una referencia al catálogo
+   * (`dominio/entidades/proveedor.ts`). Viaja RESUELTO —id y nombre—, igual que
+   * `Producto.categoria`, porque el nombre es lo que toda pantalla y todo documento exportado
+   * muestran, y resolverlo aguas arriba evita una consulta por fila.
+   *
+   * Nunca es `null`, a diferencia de la categoría de un producto: una factura sin saber a quién
+   * se le compró no es trazable, y por eso la FK es NOT NULL en la base de datos.
+   */
+  readonly proveedor: { readonly id: number; readonly nombre: string };
   readonly fechaRecepcion: Date;
   readonly observaciones: string | null;
   readonly estado: EstadoIngreso;

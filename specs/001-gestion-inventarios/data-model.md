@@ -185,6 +185,34 @@ Decisiones (todas verificadas en el caso de uso, no solo en la UI):
 
 Reglas: solo proyectos ACTIVO de clientes ACTIVO reciben nuevas salidas (FR-038, US2-AS4).
 
+### proveedores (US15)
+
+| Columna | Tipo | Constraints |
+|---|---|---|
+| `id` | BIGINT PK | |
+| `nombre` | VARCHAR(150) | NOT NULL; **UNIQUE sobre `lower(trim(nombre))`** vía índice funcional, igual que `categorias` (FR-091 → FR-085) |
+| `nit` | VARCHAR(20) | NULL |
+| `telefono` | VARCHAR(30) | NULL |
+| `email` | VARCHAR(150) | NULL |
+| `estado` | ENUM `ACTIVO/INACTIVO` | NOT NULL DEFAULT ACTIVO (baja lógica, nunca DELETE) |
+| `es_sistema` | BOOLEAN | NOT NULL DEFAULT false — marca el proveedor de la carga masiva (FR-093) |
+
+Reglas (FR-091…FR-093): las MISMAS de `categorias` (unicidad funcional sin normalizar tildes,
+baja lógica cuando está en uso, filtros alimentados del catálogo), más dos propias:
+
+- **El proveedor de un ingreso es OBLIGATORIO** (`ingresos.proveedor_id` NOT NULL), a
+  diferencia de `productos.categoria_id`: una factura sin saber a quién se le compró no es
+  trazable.
+- **`es_sistema` protege el proveedor de la carga masiva** ("Carga masiva de inventario",
+  FR-050): no se renombra ni se elimina, porque la importación lo resuelve POR NOMBRE. Sus
+  datos de contacto sí se pueden corregir. Misma protección que los roles del sistema (FR-059).
+
+**Migración desde el texto libre (FR-092)**: mismo procedimiento que FR-089 —crear, sembrar
+agrupando por `lower(trim(...))`, rellenar la FK, y solo entonces retirar la columna vieja—, con
+una diferencia: el `SET NOT NULL` va DESPUÉS del relleno y actúa como comprobación de que ningún
+ingreso quedó sin emparejar; si alguno lo hiciera, la migración aborta entera en vez de dejar
+ingresos huérfanos de proveedor.
+
 ### ingresos
 
 | Columna | Tipo | Constraints |
@@ -192,7 +220,7 @@ Reglas: solo proyectos ACTIVO de clientes ACTIVO reciben nuevas salidas (FR-038,
 | `id` | BIGINT PK | |
 | `numero_factura` | VARCHAR(50) | NOT NULL, **UNIQUE** (FR-015 — la unicidad concurrente la garantiza la BD) |
 | `fecha_factura` | DATE | NOT NULL |
-| `proveedor` | VARCHAR(150) | NOT NULL (texto libre, sin catálogo en v1) |
+| `proveedor_id` | BIGINT FK → proveedores | **NOT NULL** (US15, FR-091 — sustituye a la columna `proveedor VARCHAR(150)` de v1; `ON DELETE RESTRICT`) |
 | `fecha_recepcion` | DATE | NOT NULL |
 | `observaciones` | TEXT | NULL |
 | `estado` | ENUM `PENDIENTE/RECIBIDO/VERIFICADO/ANULADO` | NOT NULL DEFAULT PENDIENTE (FR-017/FR-019) |
@@ -310,6 +338,8 @@ usuarios 1───n salidas (usuario_autoriza)
 usuarios 1───n movimientos_inventario
 clientes 1───n proyectos
 proyectos 1───n salidas
+categorias 1───n productos          (opcional — FR-086)
+proveedores 1───n ingresos          (OBLIGATORIO — FR-091)
 ingresos 1───n detalles_ingresos n───1 productos
 salidas  1───n detalles_salidas  n───1 productos
 productos 1───n movimientos_inventario n───1 (ingresos|salidas) [documento_tipo+documento_id]
@@ -411,7 +441,8 @@ cruzado sería sobre-ingeniería para este caso de uso (Principio V, YAGNI).
 |---|---|---|
 | productos | UNIQUE(sku); btree(descripcion); btree(estado); btree(categoria_id); btree(ubicacion) | búsqueda FR-023; los dos últimos, filtro por categoría/ubicación de FR-075 (US13) — medido en rendimiento.md § (g), que además corrige la expectativa de que sirvieran al `DISTINCT` de FR-076. Desde US15 el índice es sobre la FK `categoria_id`, no sobre el texto |
 | categorias | UNIQUE funcional sobre `lower(trim(nombre))`; btree(estado) | unicidad insensible a mayúsculas/espacios (FR-085) y listado de las activas para los selectores (FR-088) |
-| ingresos | UNIQUE(numero_factura); btree(fecha_recepcion); btree(estado) | historial/filtros FR-018 |
+| proveedores | UNIQUE funcional sobre `lower(trim(nombre))`; btree(estado) | lo mismo que `categorias`, aplicado a proveedores (FR-091) |
+| ingresos | UNIQUE(numero_factura); btree(fecha_recepcion); btree(estado); btree(proveedor_id) | historial/filtros FR-018; el último, filtro por proveedor de FR-075, que desde US15 es una igualdad por FK y no un `LIKE` sobre texto |
 | salidas | UNIQUE(numero); btree(proyecto_id, estado); btree(fecha_salida); btree(estado); btree(usuario_autoriza_id) | filtros FR-033, comprometido R4; el último, filtro por autorizante de FR-075 (US13) |
 | detalles_salidas | btree(producto_id); UNIQUE(salida_id, producto_id) | agregado de comprometido R4 |
 | detalles_ingresos | btree(producto_id); UNIQUE(ingreso_id, producto_id) | historial por producto |

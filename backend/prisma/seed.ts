@@ -119,6 +119,12 @@ const PERMISOS_DEL_SISTEMA = [
   // usa el filtro por categoría—, así que lo tienen los tres roles; administrarlo, no.
   { clave: 'categorias.ver', modulo: 'categorias', descripcion: 'Consultar el catálogo de categorías para clasificar productos y filtrar.' },
   { clave: 'categorias.gestionar', modulo: 'categorias', descripcion: 'Administrar el catálogo de categorías: alta, edición y estado.' },
+
+  // US15 (FR-091): mismo reparto que categorías, y aquí VER pesa todavía más — el proveedor es
+  // OBLIGATORIO al registrar un ingreso, así que sin este permiso el Operario no podría hacer su
+  // trabajo diario. Administrar el catálogo (FR-093 incluido) sigue siendo lo restringido.
+  { clave: 'proveedores.ver', modulo: 'proveedores', descripcion: 'Consultar el catálogo de proveedores para registrar ingresos y filtrar.' },
+  { clave: 'proveedores.gestionar', modulo: 'proveedores', descripcion: 'Administrar el catálogo de proveedores: alta, edición y estado.' },
 ] as const;
 
 /**
@@ -131,6 +137,7 @@ const PERMISOS_OPERARIO = [
   'productos.ver',
   'productos.crear',
   'categorias.ver',
+  'proveedores.ver',
   'clientes.ver',
   'ingresos.ver',
   'ingresos.crear',
@@ -192,8 +199,15 @@ const PERMISOS_EXCLUSIVOS_ADMINISTRADOR = ['usuarios.gestionar', 'roles.gestiona
  * | reportes.exportar          | ✔ | ✔ | — | GET /api/reportes/**\/export (los 4)                                |
  * | usuarios.gestionar         | ✔ | — | — | TODO /api/usuarios (@Roles a nivel de clase)                        |
  * | roles.gestionar            | ✔ | — | — | /api/roles (CRUD) · GET /api/permisos — los crea T106               |
+ * | categorias.ver             | ✔ | ✔ | ✔ | GET /api/categorias (US15 — clasificar y filtrar es trabajo diario) |
+ * | categorias.gestionar       | ✔ | ✔ | — | POST/PUT/DELETE /api/categorias (US15)                              |
+ * | proveedores.ver            | ✔ | ✔ | ✔ | GET /api/proveedores (US15 — el proveedor es OBLIGATORIO al ingresar)|
+ * | proveedores.gestionar      | ✔ | ✔ | — | POST/PUT/DELETE /api/proveedores (US15)                             |
  *
- * TOTALES: Administrador 31 · Gerente 29 · Operario 14 (de 31 permisos del catálogo).
+ * TOTALES: Administrador 35 · Gerente 33 · Operario 16 (de 35 permisos del catálogo).
+ * (Eran 31/29/14 sobre 31 hasta US12; US15 agrega los cuatro de los catálogos, y ninguno
+ * recorta nada de lo que ya tenía un rol — SC-013 se conserva intacto, misma lectura que la
+ * nota de `inventario.ver_costos` de más abajo.)
  *
  * Nota sobre `roles.gestionar`: es el único permiso cuyo endpoint todavía no existe (llega en
  * T106). No es un permiso especulativo — el contrato ya lo exige para toda la sección "Roles y
@@ -407,6 +421,51 @@ const FECHA_SALIDA_COMPLETADA_NORTE = new Date('2026-07-20');
 const FECHA_SALIDA_PENDIENTE_NORTE = new Date('2026-07-25');
 
 // ============================================================================
+// Catálogo de proveedores (US15, FR-091…FR-093)
+// ============================================================================
+
+/**
+ * Proveedor del sistema (FR-093): el que la carga masiva usa para su ingreso sintético.
+ *
+ * La migración `20260815010000_proveedores_como_catalogo` ya lo crea en toda base que estuviera
+ * EN USO, pero en una base recién creada las migraciones corren antes que la semilla y todavía
+ * no hay ningún usuario al que apuntar en `usuario_creacion_id`. Ese caso lo cubre esta función:
+ * sin ella, la primera carga masiva de una instalación nueva fallaría diciendo que el proveedor
+ * no existe. Idempotente — si ya está, solo se asegura de que quede marcado como del sistema.
+ */
+const PROVEEDOR_DEL_SISTEMA = 'Carga masiva de inventario';
+
+/**
+ * Busca un proveedor por nombre NORMALIZADO y lo crea si no existe (US15, FR-091).
+ *
+ * Se busca con SQL crudo por el mismo motivo que en `sembrarDemoFormex` con las categorías: el
+ * índice único de la tabla es funcional (`lower(btrim(nombre))`) y Prisma no sabe consultar por
+ * una expresión indexada, así que un `findUnique` por nombre literal no encontraría "formex " y
+ * el `create` posterior chocaría contra el índice.
+ */
+async function asegurarProveedor(nombre: string, adminId: bigint, esSistema = false): Promise<bigint> {
+  const normalizado = nombre.trim().toLocaleLowerCase('es');
+  const existentes = await prisma.$queryRaw<Array<{ id: bigint }>>`
+    SELECT id FROM proveedores WHERE lower(btrim(nombre)) = ${normalizado} LIMIT 1
+  `;
+  if (existentes[0]) return existentes[0].id;
+
+  const creado = await prisma.proveedor.create({
+    data: { nombre, esSistema, usuarioCreacionId: adminId },
+    select: { id: true },
+  });
+  return creado.id;
+}
+
+async function sembrarProveedorDelSistema(adminId: bigint): Promise<void> {
+  const id = await asegurarProveedor(PROVEEDOR_DEL_SISTEMA, adminId, true);
+  // Si la fila venía de la migración (creada al convertir ingresos previos) puede existir sin la
+  // marca; se fija aquí para que el bloqueo de FR-093 aplique en cualquier camino de llegada.
+  await prisma.proveedor.update({ where: { id }, data: { esSistema: true } });
+  console.log(`Proveedor del sistema "${PROVEEDOR_DEL_SISTEMA}" listo (FR-093).`);
+}
+
+// ============================================================================
 // Escenario demo "Formex / Compresores" (US15) — catálogo de categorías en uso
 // ============================================================================
 
@@ -420,9 +479,10 @@ const FECHA_SALIDA_PENDIENTE_NORTE = new Date('2026-07-25');
  * atrás produciría productos cuyo stock no cuadra con sus movimientos — justo el invariante
  * que las pruebas de conciliación verifican.
  *
- * `proveedor` viaja todavía como texto porque el catálogo de proveedores es la segunda mitad
- * de US15 (T157-T163) y aún no está implementado. Cuando lo esté, su migración convertirá este
- * "Formex" en la fila del catálogo sin intervención (FR-092).
+ * Desde T157-T163 el proveedor es una fila del CATÁLOGO, no un texto: "Formex" se resuelve (o
+ * se crea) con `asegurarProveedor` y el ingreso apunta a su id (FR-091). En las bases que ya
+ * tenían este escenario sembrado, la migración `20260815010000_proveedores_como_catalogo`
+ * convirtió ese texto en la fila equivalente sin intervención (FR-092).
  *
  * Idempotente por SKU, mismo criterio que `sembrarDatosNegocioDemo`.
  */
@@ -467,6 +527,8 @@ async function sembrarDemoFormex(adminId: bigint): Promise<void> {
       })
     ).id;
 
+  const proveedorId = await asegurarProveedor(DEMO_FORMEX.proveedor, adminId);
+
   const productos = await Promise.all(
     DEMO_FORMEX.productos.map((producto) =>
       prisma.producto.create({
@@ -490,7 +552,7 @@ async function sembrarDemoFormex(adminId: bigint): Promise<void> {
     const ingreso = await tx.ingreso.create({
       data: {
         numeroFactura: DEMO_FORMEX.numeroFactura,
-        proveedor: DEMO_FORMEX.proveedor,
+        proveedorId,
         fechaFactura: FECHA_INGRESO_FORMEX,
         fechaRecepcion: FECHA_INGRESO_FORMEX,
         estado: 'RECIBIDO',
@@ -578,6 +640,13 @@ async function sembrarDatosNegocioDemo(adminId: bigint): Promise<void> {
     return;
   }
 
+  // Los proveedores se resuelven ANTES de abrir la transacción: `asegurarProveedor` consulta
+  // por el índice funcional del nombre y crea la fila si falta, y meterlo dentro obligaría a
+  // duplicarlo con el cliente transaccional sin ganar nada — el catálogo no participa de la
+  // atomicidad del escenario (US15, FR-091).
+  const proveedorCemento = await asegurarProveedor('Ferretería Central Demo S.A.S.', adminId);
+  const proveedorVarilla = await asegurarProveedor('Aceros y Perfiles Demo Ltda.', adminId);
+
   await prisma.$transaction(
     async (tx) => {
       // --- Productos (stock ya en su valor FINAL: ver totales en el TSDoc de cabecera) ---
@@ -634,7 +703,7 @@ async function sembrarDatosNegocioDemo(adminId: bigint): Promise<void> {
         data: {
           numeroFactura: 'FC-DEMO-CEM-001',
           fechaFactura: FECHA_INGRESOS,
-          proveedor: 'Ferretería Central Demo S.A.S.',
+          proveedorId: proveedorCemento,
           fechaRecepcion: FECHA_INGRESOS,
           estado: 'RECIBIDO',
           valorTotal: DEMO_JUMBO.cemento.cantidadIngreso * DEMO_JUMBO.cemento.precioIngreso,
@@ -669,7 +738,7 @@ async function sembrarDatosNegocioDemo(adminId: bigint): Promise<void> {
         data: {
           numeroFactura: 'FC-DEMO-VAR-001',
           fechaFactura: FECHA_INGRESOS,
-          proveedor: 'Aceros y Perfiles Demo Ltda.',
+          proveedorId: proveedorVarilla,
           fechaRecepcion: FECHA_INGRESOS,
           estado: 'RECIBIDO',
           valorTotal: DEMO_JUMBO.varilla.cantidadIngreso * DEMO_JUMBO.varilla.precioIngreso,
@@ -903,6 +972,10 @@ async function main(): Promise<void> {
   await sembrarRolesYPermisos();
 
   const admin = await upsertUsuarioSemilla(leerVariablesAdmin());
+
+  // US15 (FR-093): no es un dato de demostración — sin él la carga masiva no puede registrar
+  // stock inicial, así que va SIEMPRE, igual que los roles.
+  await sembrarProveedorDelSistema(admin.id);
 
   const esDemo = process.argv.includes('--demo');
   if (esDemo) {

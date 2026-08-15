@@ -30,6 +30,7 @@ import { NOMBRE_COOKIE_SESION } from '../../src/infraestructura/seguridad/cookie
 import {
   cerrarAppDePrueba,
   crearAppDePrueba,
+  crearProveedorDePrueba,
   crearUsuarioDePrueba,
   truncarTablas,
   type AppDePrueba,
@@ -70,6 +71,9 @@ interface CambioCostoBody {
 
 describe('Costo editable con historial — US12 (T129)', () => {
   let contexto: AppDePrueba;
+  /** US15 (FR-091): el proveedor de un ingreso es una FK obligatoria — cada prueba necesita
+   *  una fila del catálogo, creada tras truncar (el TRUNCATE también vacía `proveedores`). */
+  let proveedorId: number;
 
   beforeAll(async () => {
     contexto = await crearAppDePrueba();
@@ -81,6 +85,7 @@ describe('Costo editable con historial — US12 (T129)', () => {
 
   beforeEach(async () => {
     await truncarTablas(contexto.prisma);
+    proveedorId = await crearProveedorDePrueba(contexto.prisma, 'Proveedor de prueba');
   });
 
   const servidor = (): ReturnType<AppDePrueba['app']['getHttpServer']> => contexto.app.getHttpServer();
@@ -312,7 +317,7 @@ describe('Costo editable con historial — US12 (T129)', () => {
           .send({
             numeroFactura: 'FC-COSTO-001',
             fechaFactura: '2026-08-01',
-            proveedor: 'Proveedor de prueba',
+            proveedorId,
             fechaRecepcion: '2026-08-02',
             lineas: [{ productoId: Number(producto.id), cantidad: 10, precioUnitario: 32000 }],
           });
@@ -351,7 +356,7 @@ describe('Costo editable con historial — US12 (T129)', () => {
         .send({
           numeroFactura: 'FC-COSTO-002',
           fechaFactura: '2026-08-01',
-          proveedor: 'Proveedor de prueba',
+          proveedorId,
           fechaRecepcion: '2026-08-02',
           lineas: [{ productoId: Number(producto.id), cantidad: 5, precioUnitario: 15000 }],
         });

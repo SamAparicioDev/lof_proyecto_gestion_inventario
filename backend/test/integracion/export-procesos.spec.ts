@@ -35,6 +35,7 @@ import {
   crearAppDePrueba,
   crearClienteDePrueba,
   crearProductoDePrueba,
+  crearProveedorDePrueba,
   crearProyectoDePrueba,
   crearSalidaDePrueba,
   crearUsuarioDePrueba,
@@ -193,19 +194,21 @@ describe('US11 — logo del cliente y exportación de procesos (T123)', () => {
       const gerente = await crearUsuarioDePrueba(contexto, { rol: 'GERENTE' });
       const cookie = await iniciarSesion(servidor(), gerente.login, gerente.password);
       const producto = await crearProductoDePrueba(contexto.prisma);
+      const proveedorFiltrado = await crearProveedorDePrueba(contexto.prisma, 'Proveedor EXPORTAR');
+      const proveedorAjeno = await crearProveedorDePrueba(contexto.prisma, 'Proveedor Ajeno');
 
       // Las que SÍ cumplen el filtro `buscar=EXPORTAR`, más un señuelo que NO lo cumple: así la
       // prueba distingue "trae todo" de "trae todas las filas de la tabla ignorando el filtro".
       for (let indice = 0; indice < FILAS_MAS_QUE_UNA_PAGINA; indice += 1) {
         await crearIngresoDePrueba(contexto.prisma, {
           numeroFactura: `FAC-EXPORTAR-${String(indice).padStart(3, '0')}`,
-          proveedor: 'Proveedor EXPORTAR',
+          proveedorId: proveedorFiltrado,
           productoId: producto.id,
         });
       }
       await crearIngresoDePrueba(contexto.prisma, {
         numeroFactura: 'FAC-OTRA-999',
-        proveedor: 'Proveedor Ajeno',
+        proveedorId: proveedorAjeno,
         productoId: producto.id,
       });
 
@@ -251,7 +254,7 @@ describe('US11 — logo del cliente y exportación de procesos (T123)', () => {
       esperados.forEach((ingreso, indice) => {
         expect(valoresFila(hoja, 2 + indice, 7)).toEqual([
           ingreso.numeroFactura,
-          ingreso.proveedor,
+          ingreso.proveedor.nombre,
           formatoFechaSoloDia(ingreso.fechaFactura),
           formatoFechaSoloDia(ingreso.fechaRecepcion),
           'Pendiente',
@@ -469,7 +472,7 @@ describe('US11 — logo del cliente y exportación de procesos (T123)', () => {
       .send({
         numeroFactura: 'FAC-DOC-0001',
         fechaFactura: '2026-03-01',
-        proveedor: 'Ferretería El Tornillo',
+        proveedorId: await crearProveedorDePrueba(contexto.prisma, 'Ferretería El Tornillo'),
         fechaRecepcion: '2026-03-05',
         observaciones: 'Entrega parcial',
         lineas: [
@@ -532,7 +535,7 @@ describe('US11 — logo del cliente y exportación de procesos (T123)', () => {
         .send({
           numeroFactura,
           fechaFactura: '2026-03-01',
-          proveedor: 'Proveedor con nombre pegado desde Word',
+          proveedorId: await crearProveedorDePrueba(contexto.prisma, 'Proveedor con nombre pegado desde Word'),
           fechaRecepcion: '2026-03-05',
           lineas: [{ productoId: producto.id, cantidad: 2, precioUnitario: 10_000 }],
         });
@@ -568,7 +571,7 @@ describe('US11 — logo del cliente y exportación de procesos (T123)', () => {
     const proyecto = await crearProyectoDePrueba(contexto.prisma, cliente.id);
     const ingreso = await crearIngresoDePrueba(contexto.prisma, {
       numeroFactura: 'FAC-PDF-0001',
-      proveedor: 'Proveedor PDF',
+      proveedorId: await crearProveedorDePrueba(contexto.prisma, 'Proveedor PDF'),
       productoId: producto.id,
     });
     const salida = await crearSalidaDePrueba(contexto.prisma, {
@@ -634,7 +637,8 @@ describe('US11 — logo del cliente y exportación de procesos (T123)', () => {
 
 interface IngresoListado {
   numeroFactura: string;
-  proveedor: string;
+  /** US15 (FR-091): el listado devuelve el proveedor RESUELTO, no su nombre suelto. */
+  proveedor: { id: number; nombre: string };
   fechaFactura: string;
   fechaRecepcion: string;
   valorTotal: number;
@@ -689,7 +693,7 @@ async function pedirCliente(
  */
 async function crearIngresoDePrueba(
   prisma: PrismaService,
-  opciones: { numeroFactura: string; proveedor: string; productoId: number },
+  opciones: { numeroFactura: string; proveedorId: number; productoId: number },
 ): Promise<{ id: number; numeroFactura: string }> {
   const usuario = await prisma.usuario.findFirst({ orderBy: { id: 'asc' }, select: { id: true } });
   if (!usuario) throw new Error('crearIngresoDePrueba necesita al menos un usuario para la auditoría.');
@@ -698,7 +702,7 @@ async function crearIngresoDePrueba(
     data: {
       numeroFactura: opciones.numeroFactura,
       fechaFactura: new Date('2026-02-01'),
-      proveedor: opciones.proveedor,
+      proveedorId: BigInt(opciones.proveedorId),
       fechaRecepcion: new Date('2026-02-03'),
       valorTotal: 10_000,
       usuarioRegistraId: usuario.id,

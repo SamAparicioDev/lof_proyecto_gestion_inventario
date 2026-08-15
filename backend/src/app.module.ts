@@ -45,6 +45,7 @@ import { PanelModule } from './interfaces/http/panel/panel.module';
 import { ProductosModule } from './interfaces/http/productos/productos.module';
 import { ReportesModule } from './interfaces/http/reportes/reportes.module';
 import { CategoriasModule } from './interfaces/http/categorias/categorias.module';
+import { ProveedoresModule } from './interfaces/http/proveedores/proveedores.module';
 import { RolesModule } from './interfaces/http/roles/roles.module';
 import { ControladorSalud } from './interfaces/http/salud/controlador-salud';
 import { SalidasModule } from './interfaces/http/salidas/salidas.module';
@@ -73,7 +74,9 @@ import { UsuariosModule } from './interfaces/http/usuarios/usuarios.module';
     UsuariosModule,
     // US9: administración de roles y de su matriz de permisos + catálogo de permisos (T106).
     RolesModule,
+    // US15: catálogos parametrizables — categorías (T151) y proveedores (T160).
     CategoriasModule,
+    ProveedoresModule,
     // US10: panel de control de la ruta de inicio — compone las cifras que ya existen (T115).
     PanelModule,
   ],

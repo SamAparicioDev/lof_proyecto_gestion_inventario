@@ -18,6 +18,7 @@ import {
   crearAppDePrueba,
   crearClienteDePrueba,
   crearProductoDePrueba,
+  crearProveedorDePrueba,
   crearProyectoDePrueba,
   crearUsuarioDePrueba,
   truncarTablas,
@@ -66,6 +67,9 @@ interface MovimientoHistorialBody {
 
 describe('Inventario — /api/inventario (T064)', () => {
   let contexto: AppDePrueba;
+  /** US15 (FR-091): el proveedor de un ingreso es una FK obligatoria — cada prueba necesita
+   *  una fila del catálogo, creada tras truncar (el TRUNCATE también vacía `proveedores`). */
+  let proveedorId: number;
 
   beforeAll(async () => {
     contexto = await crearAppDePrueba();
@@ -77,6 +81,7 @@ describe('Inventario — /api/inventario (T064)', () => {
 
   beforeEach(async () => {
     await truncarTablas(contexto.prisma);
+    proveedorId = await crearProveedorDePrueba(contexto.prisma, 'Proveedor de Prueba de Inventario');
   });
 
   const servidor = (): ReturnType<AppDePrueba['app']['getHttpServer']> => contexto.app.getHttpServer();
@@ -89,7 +94,7 @@ describe('Inventario — /api/inventario (T064)', () => {
     return {
       numeroFactura,
       fechaFactura: '2026-01-05',
-      proveedor: 'Proveedor de Prueba de Inventario',
+      proveedorId,
       fechaRecepcion: '2026-01-05',
       lineas,
     };

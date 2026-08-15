@@ -94,6 +94,10 @@ import {
   type RepositorioIngresos,
 } from '../../../dominio/puertos/repositorio-ingresos';
 import { REPOSITORIO_PRODUCTOS, type RepositorioProductos } from '../../../dominio/puertos/repositorio-productos';
+import {
+  REPOSITORIO_PROVEEDORES,
+  type RepositorioProveedores,
+} from '../../../dominio/puertos/repositorio-proveedores';
 import { EXPORTADOR_EXCEL, EXPORTADOR_PDF } from '../../../infraestructura/exportacion/exportacion.module';
 import { PipeValidacionZod } from '../comunes/pipe-validacion-zod';
 import { RequierePermiso } from '../comunes/requiere-permiso.decorator';
@@ -113,12 +117,16 @@ export class ControladorIngresos {
     /** Solo para resolver `SKU — descripción` de las líneas del documento exportado (US11) —
      *  mismo dato que la pantalla de detalle muestra con `GET /api/productos`. */
     @Inject(REPOSITORIO_PRODUCTOS) private readonly repositorioProductos: RepositorioProductos,
+    /** Solo para escribir el NOMBRE del proveedor en la línea de filtros del listado exportado
+     *  (US15): el filtro viaja como id desde FR-091, y un encabezado que dijera "Proveedor: 7"
+     *  no le serviría a quien abre el archivo. Mismo motivo que `repositorioProductos`. */
+    @Inject(REPOSITORIO_PROVEEDORES) private readonly repositorioProveedores: RepositorioProveedores,
     @Inject(EXPORTADOR_EXCEL) private readonly exportadorExcel: ExportadorReporte,
     @Inject(EXPORTADOR_PDF) private readonly exportadorPdf: ExportadorReporte,
   ) {}
 
   /** `GET /api/ingresos` — página de cabeceras con filtros de búsqueda/estado/fechas y, desde
-   *  US13, de proveedor (FR-018/FR-075). */
+   *  US13, de proveedor (FR-018/FR-075), que US15 convirtió en una selección del catálogo. */
   @Get()
   @RequierePermiso('ingresos.ver')
   async listar(
@@ -126,7 +134,7 @@ export class ControladorIngresos {
   ): Promise<Paginado<Ingreso>> {
     const pagina = await this.repositorioIngresos.listar({
       buscar: filtros.buscar,
-      proveedor: filtros.proveedor,
+      proveedorId: filtros.proveedorId,
       estado: filtros.estado,
       desde: filtros.desde ? new Date(filtros.desde) : undefined,
       hasta: filtros.hasta ? new Date(filtros.hasta) : undefined,
@@ -153,12 +161,15 @@ export class ControladorIngresos {
   ): Promise<StreamableFile> {
     const ingresos = await this.repositorioIngresos.listarTodos({
       buscar: filtros.buscar,
-      proveedor: filtros.proveedor,
+      proveedorId: filtros.proveedorId,
       estado: filtros.estado,
       desde: filtros.desde ? new Date(filtros.desde) : undefined,
       hasta: filtros.hasta ? new Date(filtros.hasta) : undefined,
     });
-    const documento = mapearListadoIngresosADocumento(ingresos, filtros);
+    const proveedorFiltrado = filtros.proveedorId
+      ? await this.repositorioProveedores.buscarPorId(filtros.proveedorId)
+      : null;
+    const documento = mapearListadoIngresosADocumento(ingresos, filtros, proveedorFiltrado?.nombre);
     return this.exportar(documento, filtros.formato, `ingresos-${fechaHoyIso()}`, respuesta);
   }
 

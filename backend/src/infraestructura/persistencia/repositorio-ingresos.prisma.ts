@@ -60,6 +60,17 @@ interface FilaProductoBloqueado {
   ultimo_costo: Prisma.Decimal;
 }
 
+/**
+ * El proveedor viaja RESUELTO en la entidad de dominio desde US15 (FR-091), así que toda lectura
+ * de ingresos lo incluye. Es un `include` fijo —no opcional según quién llame— a propósito:
+ * `Ingreso.proveedor` no admite `undefined`, y una consulta que se olvidara de pedirlo no
+ * compilaría, que es exactamente la garantía que se busca.
+ */
+const INCLUIR_PROVEEDOR = { proveedor: { select: { id: true, nombre: true } } } as const;
+
+/** Registro de `ingresos` con el proveedor ya resuelto por `INCLUIR_PROVEEDOR`. */
+type IngresoPrismaConProveedor = IngresoPrisma & { proveedor: { id: bigint; nombre: string } };
+
 @Injectable()
 export class RepositorioIngresosPrisma implements RepositorioIngresos {
   constructor(
@@ -70,7 +81,7 @@ export class RepositorioIngresosPrisma implements RepositorioIngresos {
   async buscarPorId(id: number): Promise<IngresoConDetalles | null> {
     const registro = await this.prisma.ingreso.findUnique({
       where: { id: BigInt(id) },
-      include: { detalles: true },
+      include: { detalles: true, ...INCLUIR_PROVEEDOR },
     });
     return registro ? aIngresoConDetallesDominio(registro) : null;
   }
@@ -80,6 +91,7 @@ export class RepositorioIngresosPrisma implements RepositorioIngresos {
     const [registros, total] = await this.prisma.$transaction([
       this.prisma.ingreso.findMany({
         where,
+        include: INCLUIR_PROVEEDOR,
         orderBy: ORDEN_LISTADO_INGRESOS,
         skip: (filtros.pagina - 1) * filtros.porPagina,
         take: filtros.porPagina,
@@ -98,6 +110,7 @@ export class RepositorioIngresosPrisma implements RepositorioIngresos {
   async listarTodos(criterios: CriteriosIngresos): Promise<Ingreso[]> {
     const registros = await this.prisma.ingreso.findMany({
       where: construirWhereListarIngresos(criterios),
+      include: INCLUIR_PROVEEDOR,
       orderBy: ORDEN_LISTADO_INGRESOS,
     });
     return registros.map(aIngresoDominio);
@@ -117,7 +130,7 @@ export class RepositorioIngresosPrisma implements RepositorioIngresos {
         data: {
           numeroFactura: datos.numeroFactura,
           fechaFactura: datos.fechaFactura,
-          proveedor: datos.proveedor,
+          proveedorId: BigInt(datos.proveedorId),
           fechaRecepcion: datos.fechaRecepcion,
           observaciones: datos.observaciones,
           valorTotal,
@@ -125,6 +138,7 @@ export class RepositorioIngresosPrisma implements RepositorioIngresos {
           usuarioCreacionId: BigInt(datos.usuarioId),
           detalles: { create: detallesCrear },
         },
+        include: INCLUIR_PROVEEDOR,
       });
       return aIngresoDominio(registro);
     } catch (error) {
@@ -161,7 +175,7 @@ export class RepositorioIngresosPrisma implements RepositorioIngresos {
           data: {
             numeroFactura: datos.numeroFactura,
             fechaFactura: datos.fechaFactura,
-            proveedor: datos.proveedor,
+            proveedorId: BigInt(datos.proveedorId),
             fechaRecepcion: datos.fechaRecepcion,
             observaciones: datos.observaciones,
             valorTotal,
@@ -399,14 +413,15 @@ function construirWhereListarIngresos(filtros: CriteriosIngresos): Prisma.Ingres
     condiciones.push({
       OR: [
         { numeroFactura: { contains: termino, mode: 'insensitive' } },
-        { proveedor: { contains: termino, mode: 'insensitive' } },
+        { proveedor: { nombre: { contains: termino, mode: 'insensitive' } } },
       ],
     });
   }
-  // US13 (FR-075): filtro acotado a la columna `proveedor`, además del `buscar` de arriba —
-  // que cruza número de factura OR proveedor y por eso no permite preguntar solo por uno.
-  const proveedor = filtros.proveedor?.trim();
-  if (proveedor) condiciones.push({ proveedor: { contains: proveedor, mode: 'insensitive' } });
+  // US13 (FR-075), reescrito en US15 (FR-091): el filtro nació como subcadena sobre la columna
+  // de texto y ahora es una igualdad por id del catálogo — se elige de un selector, así que ya no
+  // hay nada que "escribir parecido". Sigue sin ser redundante con el `buscar` de arriba, que
+  // cruza número de factura OR NOMBRE del proveedor y por eso no permite preguntar solo por uno.
+  if (filtros.proveedorId) condiciones.push({ proveedorId: BigInt(filtros.proveedorId) });
   if (filtros.estado) condiciones.push({ estado: mapearEstadoIngresoAPrisma(filtros.estado) });
   if (filtros.desde) condiciones.push({ fechaRecepcion: { gte: filtros.desde } });
   if (filtros.hasta) condiciones.push({ fechaRecepcion: { lte: filtros.hasta } });
@@ -414,12 +429,12 @@ function construirWhereListarIngresos(filtros: CriteriosIngresos): Prisma.Ingres
 }
 
 /** Traduce un registro Prisma de `ingresos` (sin líneas) a la entidad de dominio. */
-function aIngresoDominio(registro: IngresoPrisma): Ingreso {
+function aIngresoDominio(registro: IngresoPrismaConProveedor): Ingreso {
   return {
     id: Number(registro.id),
     numeroFactura: registro.numeroFactura,
     fechaFactura: registro.fechaFactura,
-    proveedor: registro.proveedor,
+    proveedor: { id: Number(registro.proveedor.id), nombre: registro.proveedor.nombre },
     fechaRecepcion: registro.fechaRecepcion,
     observaciones: registro.observaciones,
     estado: mapearEstadoIngresoDeDominio(registro.estado),
@@ -442,7 +457,7 @@ function aDetalleIngresoDominio(registro: DetalleIngresoPrisma): DetalleIngreso 
 }
 
 function aIngresoConDetallesDominio(
-  registro: IngresoPrisma & { detalles: DetalleIngresoPrisma[] },
+  registro: IngresoPrismaConProveedor & { detalles: DetalleIngresoPrisma[] },
 ): IngresoConDetalles {
   return { ...aIngresoDominio(registro), detalles: registro.detalles.map(aDetalleIngresoDominio) };
 }

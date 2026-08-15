@@ -82,6 +82,14 @@ enum EstadoCategoria {
   @@map("estado_categoria")
 }
 
+/** US15 — en masculino, a diferencia de `EstadoCategoria`, por el mismo motivo: el sustantivo. */
+enum EstadoProveedor {
+  ACTIVO
+  INACTIVO
+
+  @@map("estado_proveedor")
+}
+
 /** Estado de un cliente (catálogo comercial — FR-034). */
 enum EstadoCliente {
   ACTIVO
@@ -255,6 +263,8 @@ model Usuario {
   productosModificados  Producto[]             @relation("ProductoModificadoPor")
   categoriasCreadas     Categoria[]            @relation("CategoriaCreadaPor")
   categoriasModificadas Categoria[]            @relation("CategoriaModificadaPor")
+  proveedoresCreados     Proveedor[]           @relation("ProveedorCreadoPor")
+  proveedoresModificados Proveedor[]           @relation("ProveedorModificadoPor")
   clientesCreados       Cliente[]              @relation("ClienteCreadoPor")
   clientesModificados   Cliente[]              @relation("ClienteModificadoPor")
   proyectosCreados      Proyecto[]             @relation("ProyectoCreadoPor")
@@ -351,6 +361,41 @@ model Categoria {
 
   @@index([estado])
   @@map("categorias")
+}
+
+/**
+ * Proveedor — catálogo administrable (US15, FR-091…FR-093).
+ *
+ * Gemelo de `Categoria` (misma unicidad funcional `lower(btrim(nombre))` declarada a mano en el
+ * SQL de la migración, porque Prisma no sabe expresar un índice sobre una expresión), con dos
+ * diferencias que la historia impone:
+ *
+ *  - `Ingreso.proveedorId` es NOT NULL: el proveedor de una factura es obligatorio.
+ *  - `esSistema` marca el proveedor que usa la carga masiva ("Carga masiva de inventario",
+ *    FR-050): la importación lo resuelve POR NOMBRE, así que renombrarlo o borrarlo rompería un
+ *    proceso automático. El bloqueo vive en el caso de uso; esta columna es el dato con el que
+ *    se decide, igual que `esSistema` en `Rol` (FR-059).
+ */
+model Proveedor {
+  id        BigInt          @id @default(autoincrement())
+  nombre    String          @db.VarChar(150)
+  nit       String?         @db.VarChar(20)
+  telefono  String?         @db.VarChar(30)
+  email     String?         @db.VarChar(150)
+  estado    EstadoProveedor @default(ACTIVO)
+  esSistema Boolean         @default(false) @map("es_sistema")
+
+  fechaCreacion         DateTime  @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
+  usuarioCreacionId     BigInt    @map("usuario_creacion_id")
+  usuarioCreacion       Usuario   @relation("ProveedorCreadoPor", fields: [usuarioCreacionId], references: [id])
+  fechaModificacion     DateTime? @map("fecha_modificacion") @db.Timestamptz(6)
+  usuarioModificacionId BigInt?   @map("usuario_modificacion_id")
+  usuarioModificacion   Usuario?  @relation("ProveedorModificadoPor", fields: [usuarioModificacionId], references: [id])
+
+  ingresos Ingreso[]
+
+  @@index([estado])
+  @@map("proveedores")
 }
 
 /**
@@ -474,7 +519,10 @@ model Ingreso {
   id                BigInt        @id @default(autoincrement())
   numeroFactura     String        @unique @map("numero_factura") @db.VarChar(50)
   fechaFactura      DateTime      @map("fecha_factura") @db.Date
-  proveedor         String        @db.VarChar(150)
+  /** US15 (FR-091): FK OBLIGATORIA al catálogo — sustituye a la columna `proveedor VARCHAR(150)`
+   *  de texto libre. Sin `?`: una factura sin saber a quién se le compró no es trazable. */
+  proveedorId       BigInt        @map("proveedor_id")
+  proveedor         Proveedor     @relation(fields: [proveedorId], references: [id])
   fechaRecepcion    DateTime      @map("fecha_recepcion") @db.Date
   observaciones     String?       @db.Text
   estado            EstadoIngreso @default(PENDIENTE)
@@ -494,6 +542,7 @@ model Ingreso {
 
   @@index([fechaRecepcion])
   @@index([estado])
+  @@index([proveedorId])
   @@map("ingresos")
 }
 

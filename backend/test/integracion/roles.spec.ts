@@ -30,6 +30,7 @@ import {
   cerrarAppDePrueba,
   crearAppDePrueba,
   crearProductoDePrueba,
+  crearProveedorDePrueba,
   crearRolDePrueba,
   crearUsuarioDePrueba,
   truncarTablas,
@@ -125,6 +126,10 @@ describe('Roles y permisos — /api/roles y /api/permisos (T109)', () => {
         const usuario = await crearUsuarioDePrueba(contexto, { rolId: bodeguero.id });
         const cookie = await iniciarSesion(servidor(), usuario.login, usuario.password);
         const producto = await crearProductoDePrueba(contexto.prisma, { stockActual: 0 });
+        // US15 (FR-091): el proveedor de un ingreso es una FK obligatoria. Se crea aquí, con el
+        // usuario de la prueba como autor, para no insertar un usuario técnico que falsearía el
+        // conteo de usuarios por rol que esta misma suite verifica más abajo.
+        const proveedorId = await crearProveedorDePrueba(contexto.prisma, 'Proveedor de Prueba de Roles', usuario.id);
 
         // Lo CONCEDIDO funciona de verdad (no basta con no dar 403: la operación se ejecuta).
         const respuestaInventario = await request(servidor()).get('/api/inventario').set('Cookie', cookie);
@@ -139,7 +144,7 @@ describe('Roles y permisos — /api/roles y /api/permisos (T109)', () => {
           .send({
             numeroFactura: `FAC-ROLES-${Date.now()}`,
             fechaFactura: '2026-01-05',
-            proveedor: 'Proveedor de Prueba de Roles',
+            proveedorId,
             fechaRecepcion: '2026-01-05',
             lineas: [{ productoId: producto.id, cantidad: 5, precioUnitario: 1000 }],
           });

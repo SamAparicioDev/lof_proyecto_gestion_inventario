@@ -54,11 +54,19 @@ FROM "ingresos" i
 WHERE btrim(i."proveedor") <> ''
 GROUP BY lower(btrim(i."proveedor"));
 
--- El proveedor de la carga masiva debe existir SIEMPRE, haya o no ingresos previos (FR-093).
--- Si ya entró en el paso anterior (porque alguna importación lo usó), solo se marca.
+-- El proveedor de la carga masiva debe existir en toda base YA EN USO (FR-093). Si ya entró en
+-- el paso anterior (porque alguna importación lo usó), solo se marca más abajo.
+--
+-- El `EXISTS (SELECT 1 FROM usuarios)` no es defensivo por costumbre: en una base RECIÉN CREADA
+-- las migraciones corren ANTES de la semilla (`prisma migrate deploy` al arrancar el backend,
+-- ver backend/Dockerfile), así que no hay ningún usuario al que apuntar y este INSERT violaría
+-- `usuario_creacion_id NOT NULL` — la migración fallaría y la aplicación no levantaría. En ese
+-- caso no hay nada que preservar: la fila la crea la semilla, que es quien crea al administrador
+-- (`sembrarProveedorDelSistema`, backend/prisma/seed.ts).
 INSERT INTO "proveedores" ("nombre", "es_sistema", "usuario_creacion_id")
 SELECT 'Carga masiva de inventario', true, (SELECT MIN(u."id") FROM "usuarios" u)
-WHERE NOT EXISTS (
+WHERE EXISTS (SELECT 1 FROM "usuarios")
+  AND NOT EXISTS (
     SELECT 1 FROM "proveedores" p WHERE lower(btrim(p."nombre")) = 'carga masiva de inventario'
 );
 

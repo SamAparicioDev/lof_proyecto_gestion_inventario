@@ -222,7 +222,11 @@ export async function generarCatalogoProductos(productos: readonly FilaCatalogoI
     hoja.addRow([
       producto.sku,
       producto.descripcion,
-      producto.categoria,
+      // El NOMBRE, no el objeto: desde US15 `Producto.categoria` es `{ id, nombre } | null`, y
+      // escribirlo tal cual dejaba `{"id":1,"nombre":"Construcción"}` en la celda — un archivo
+      // que además fallaba fila a fila al volver a subirse, porque la importación resuelve la
+      // categoría por nombre (FR-090). Lo detectó T156.
+      producto.categoria?.nombre ?? null,
       producto.ubicacion,
       producto.umbralStockBajo,
       null, // Cantidad inicial — VACÍA SIEMPRE: evita duplicar el inventario al re-subir.

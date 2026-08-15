@@ -29,6 +29,7 @@ import {
   crearAppDePrueba,
   crearClienteDePrueba,
   crearProductoDePrueba,
+  crearProveedorDePrueba,
   crearProyectoDePrueba,
   crearUsuarioDePrueba,
   truncarTablas,
@@ -90,6 +91,9 @@ interface ReporteMovimientosBody {
 
 describe('Reportes de inventario y movimientos — /api/reportes (T083, US7, FR-041/FR-042)', () => {
   let contexto: AppDePrueba;
+  /** US15 (FR-091): el proveedor de un ingreso es una FK obligatoria — cada prueba necesita
+   *  una fila del catálogo, creada tras truncar (el TRUNCATE también vacía `proveedores`). */
+  let proveedorId: number;
 
   beforeAll(async () => {
     contexto = await crearAppDePrueba();
@@ -101,6 +105,7 @@ describe('Reportes de inventario y movimientos — /api/reportes (T083, US7, FR-
 
   beforeEach(async () => {
     await truncarTablas(contexto.prisma);
+    proveedorId = await crearProveedorDePrueba(contexto.prisma, 'Proveedor de Prueba de Reportes');
   });
 
   const servidor = (): ReturnType<AppDePrueba['app']['getHttpServer']> => contexto.app.getHttpServer();
@@ -113,7 +118,7 @@ describe('Reportes de inventario y movimientos — /api/reportes (T083, US7, FR-
     return {
       numeroFactura,
       fechaFactura: '2026-01-05',
-      proveedor: 'Proveedor de Prueba de Reportes',
+      proveedorId,
       fechaRecepcion: '2026-01-05',
       lineas,
     };

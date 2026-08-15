@@ -30,6 +30,8 @@ import type {
 import { Duplicado, ErrorValidacionDominio } from '../../src/dominio/comunes/errores';
 import type { Categoria } from '../../src/dominio/entidades/categoria';
 import type { DatosCategoria, RepositorioCategorias } from '../../src/dominio/puertos/repositorio-categorias';
+import type { Proveedor } from '../../src/dominio/entidades/proveedor';
+import type { RepositorioProveedores } from '../../src/dominio/puertos/repositorio-proveedores';
 import type { EstadoProducto, Producto } from '../../src/dominio/entidades/producto';
 import type {
   ContextoCambioCosto,
@@ -117,6 +119,59 @@ class RepositorioCategoriasFalso implements RepositorioCategorias {
     throw new Error('no usado en estas pruebas');
   }
   async contarProductos(): Promise<number> {
+    throw new Error('no usado en estas pruebas');
+  }
+  async eliminar(): Promise<void> {
+    throw new Error('no usado en estas pruebas');
+  }
+}
+
+/**
+ * `RepositorioProveedores` falso: solo tiene que resolver el proveedor del sistema por nombre
+ * (US15, FR-093), que es lo único que la importación le pide. Nace con esa fila ya sembrada
+ * porque en el sistema real la crean la migración y la semilla, no la importación.
+ */
+class RepositorioProveedoresFalso implements RepositorioProveedores {
+  private readonly porNombreNormalizado = new Map<string, Proveedor>();
+
+  constructor(conProveedorDelSistema = true) {
+    if (conProveedorDelSistema) {
+      this.registrar({
+        id: 900,
+        nombre: 'Carga masiva de inventario',
+        nit: null,
+        telefono: null,
+        email: null,
+        estado: 'ACTIVO',
+        esSistema: true,
+      });
+    }
+  }
+
+  registrar(proveedor: Proveedor): void {
+    this.porNombreNormalizado.set(proveedor.nombre.trim().toLocaleLowerCase('es'), proveedor);
+  }
+
+  async buscarPorNombreNormalizado(nombreNormalizado: string): Promise<Proveedor | null> {
+    return this.porNombreNormalizado.get(nombreNormalizado) ?? null;
+  }
+
+  async listar(): Promise<never[]> {
+    throw new Error('no usado en estas pruebas');
+  }
+  async buscarPorId(): Promise<Proveedor | null> {
+    throw new Error('no usado en estas pruebas');
+  }
+  async crear(): Promise<number> {
+    throw new Error('no usado en estas pruebas');
+  }
+  async actualizar(): Promise<void> {
+    throw new Error('no usado en estas pruebas');
+  }
+  async cambiarEstado(): Promise<void> {
+    throw new Error('no usado en estas pruebas');
+  }
+  async contarIngresos(): Promise<number> {
     throw new Error('no usado en estas pruebas');
   }
   async eliminar(): Promise<void> {
@@ -224,7 +279,7 @@ class RepositorioIngresosFalso implements RepositorioIngresos {
       id,
       numeroFactura: datos.numeroFactura,
       fechaFactura: datos.fechaFactura,
-      proveedor: datos.proveedor,
+      proveedor: { id: datos.proveedorId, nombre: 'Carga masiva de inventario' },
       fechaRecepcion: datos.fechaRecepcion,
       observaciones: datos.observaciones,
       estado: 'PENDIENTE',
@@ -307,7 +362,13 @@ describe('ImportarProductosCasoUso — construcción de ResumenImportacion (T098
         filaValida(4, filaDatos({ sku: 'EXIST-1' })), // actualiza, sin stock
       ],
     });
-    const casoUso = new ImportarProductosCasoUso(repositorioProductos, repositorioIngresos, lector, repositorioCategorias);
+    const casoUso = new ImportarProductosCasoUso(
+      repositorioProductos,
+      repositorioIngresos,
+      lector,
+      repositorioCategorias,
+      new RepositorioProveedoresFalso(),
+    );
 
     const resumen = await casoUso.ejecutar({ archivo: Buffer.from(''), usuarioId: USUARIO_ID });
 
@@ -337,7 +398,13 @@ describe('ImportarProductosCasoUso — construcción de ResumenImportacion (T098
         filaValida(4, filaDatos({ sku: 'SIN-COSTO' })), // columna vacía → no cuenta
       ],
     });
-    const casoUso = new ImportarProductosCasoUso(repositorioProductos, repositorioIngresos, lector, repositorioCategorias);
+    const casoUso = new ImportarProductosCasoUso(
+      repositorioProductos,
+      repositorioIngresos,
+      lector,
+      repositorioCategorias,
+      new RepositorioProveedoresFalso(),
+    );
 
     const resumen = await casoUso.ejecutar({ archivo: Buffer.from(''), usuarioId: USUARIO_ID });
 
@@ -363,7 +430,13 @@ describe('ImportarProductosCasoUso — construcción de ResumenImportacion (T098
         filaValida(3, filaDatos({ sku: 'OK-1', cantidadInicial: 3, valorUnitario: 50 })), // éxito
       ],
     });
-    const casoUso = new ImportarProductosCasoUso(repositorioProductos, repositorioIngresos, lector, repositorioCategorias);
+    const casoUso = new ImportarProductosCasoUso(
+      repositorioProductos,
+      repositorioIngresos,
+      lector,
+      repositorioCategorias,
+      new RepositorioProveedoresFalso(),
+    );
 
     const resumen = await casoUso.ejecutar({ archivo: Buffer.from(''), usuarioId: USUARIO_ID });
 
@@ -384,7 +457,13 @@ describe('ImportarProductosCasoUso — construcción de ResumenImportacion (T098
       filaValida(indice + 2, filaDatos({ sku: `SKU-${indice}` })),
     );
     const lector = new LectorImportacionProductosFalso({ erroresIniciales: [], filasValidas });
-    const casoUso = new ImportarProductosCasoUso(repositorioProductos, repositorioIngresos, lector, repositorioCategorias);
+    const casoUso = new ImportarProductosCasoUso(
+      repositorioProductos,
+      repositorioIngresos,
+      lector,
+      repositorioCategorias,
+      new RepositorioProveedoresFalso(),
+    );
 
     await expect(casoUso.ejecutar({ archivo: Buffer.from(''), usuarioId: USUARIO_ID })).rejects.toThrow(
       ErrorValidacionDominio,
@@ -411,13 +490,19 @@ describe('ImportarProductosCasoUso — agrupación del Ingreso sintético (T098,
         filaValida(5, filaDatos({ sku: 'EXIST-STOCK', cantidadInicial: 15, valorUnitario: 1000 })), // actualiza + stock
       ],
     });
-    const casoUso = new ImportarProductosCasoUso(repositorioProductos, repositorioIngresos, lector, repositorioCategorias);
+    const casoUso = new ImportarProductosCasoUso(
+      repositorioProductos,
+      repositorioIngresos,
+      lector,
+      repositorioCategorias,
+      new RepositorioProveedoresFalso(),
+    );
 
     const resumen = await casoUso.ejecutar({ archivo: Buffer.from(''), usuarioId: USUARIO_ID });
 
     expect(resumen.conStockInicial).toBe(2);
     expect(repositorioIngresos.llamadaCrear).not.toBeNull();
-    expect(repositorioIngresos.llamadaCrear?.proveedor).toBe('Carga masiva de inventario');
+    expect(repositorioIngresos.llamadaCrear?.proveedorId).toBe(900); // el del sistema, resuelto por nombre (FR-093)
     expect(repositorioIngresos.llamadaCrear?.numeroFactura).toMatch(/^IMPORTACION-/);
     expect(repositorioIngresos.llamadaCrear?.usuarioId).toBe(USUARIO_ID);
     expect(repositorioIngresos.llamadaCrear?.lineas).toHaveLength(2);
@@ -440,7 +525,13 @@ describe('ImportarProductosCasoUso — agrupación del Ingreso sintético (T098,
       erroresIniciales: [],
       filasValidas: [filaValida(2, filaDatos({ sku: 'SOLO-CATALOGO-1' })), filaValida(3, filaDatos({ sku: 'SOLO-CATALOGO-2' }))],
     });
-    const casoUso = new ImportarProductosCasoUso(repositorioProductos, repositorioIngresos, lector, repositorioCategorias);
+    const casoUso = new ImportarProductosCasoUso(
+      repositorioProductos,
+      repositorioIngresos,
+      lector,
+      repositorioCategorias,
+      new RepositorioProveedoresFalso(),
+    );
 
     const resumen = await casoUso.ejecutar({ archivo: Buffer.from(''), usuarioId: USUARIO_ID });
 

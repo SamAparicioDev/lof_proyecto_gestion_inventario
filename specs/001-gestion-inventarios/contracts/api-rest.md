@@ -309,6 +309,35 @@ Reglas del contrato:
 - **`DELETE` es la excepción a "nunca se borra"**: una categoría recién creada por error y sin
   usar sí puede eliminarse. En cuanto la usa un producto, `409` y la vía es desactivarla.
 
+## Proveedores (`/api/proveedores`) (US15, FR-091…FR-093)
+
+Mismo contrato que categorías —FR-091 extiende FR-084…FR-088 íntegras— con las diferencias que
+la propia historia marca y que se listan bajo la tabla.
+
+| Método y ruta | Permiso | Body/Query (Zod) | Respuesta OK | Errores |
+|---|---|---|---|---|
+| `GET /api/proveedores` | `proveedores.ver` | `esquemaListarProveedores` {buscar?, estado?} | `200` `Proveedor[]` {id, nombre, nit, telefono, email, estado, esSistema, cantidadIngresos} ordenados por nombre | — |
+| `POST /api/proveedores` | `proveedores.gestionar` | `esquemaCrearProveedor` {nombre, nit?, telefono?, email?} | `201` {id} | `400` nombre duplicado (campo `nombre`) |
+| `PUT /api/proveedores/:id` | `proveedores.gestionar` | `esquemaCrearProveedor` | `204` | `404`; `400` duplicado; `409` renombrar el proveedor del sistema (FR-093) |
+| `PUT /api/proveedores/:id/estado` | `proveedores.gestionar` | {estado: `ACTIVO\|INACTIVO`} | `204` | `404` |
+| `DELETE /api/proveedores/:id` | `proveedores.gestionar` | — | `204` SOLO si no tiene ingresos | `409` con el número de ingresos que lo usan; `409` si es el proveedor del sistema (FR-093) |
+
+Reglas del contrato:
+
+- **`proveedores.ver` lo tienen los tres roles semilla**: sin él no se puede registrar un
+  ingreso —el proveedor es OBLIGATORIO (FR-091)— ni usar el filtro del listado.
+  `proveedores.gestionar` es lo restringido, igual que en categorías.
+- **El duplicado se decide ignorando mayúsculas y espacios, NO tildes** (FR-091 remite a
+  FR-085): "Ferreteria" y "Ferretería" son dos proveedores distintos. Se responde `400` con
+  `campos: { nombre: … }`.
+- **El proveedor del sistema** ("Carga masiva de inventario", FR-093) admite que se corrijan
+  sus datos de contacto, pero NO que se le cambie el nombre ni que se elimine: la importación
+  lo resuelve POR NOMBRE. Se responde `409`, no `403`: no es una cuestión de permisos sino del
+  estado de ese registro. Se distingue en el listado con `esSistema: true` para que la pantalla
+  pueda deshabilitar los controles en vez de dejar que el usuario descubra el error al guardar.
+- **Un proveedor INACTIVO no se ofrece** para registrar ingresos nuevos, pero los ingresos que
+  ya lo referencian lo conservan — mismo criterio que FR-086 para categorías.
+
 ## Carga masiva de inventario (`/api/productos/importar*`) — solo A,G (US8, FR-048…FR-051)
 
 | Método y ruta | Roles | Body/Query | Respuesta OK | Errores |
@@ -431,20 +460,28 @@ cálculo adicional.
 
 | Método y ruta | Roles | Body (Zod) | Respuesta OK | Errores |
 |---|---|---|---|---|
-| `GET /api/ingresos?buscar=&estado=&desde=&hasta=&proveedor=` | A,G,O | `esquemaFiltroIngresos` {buscar?, estado?, desde?, hasta?, **proveedor?** (US13), pagina, porPagina} | página de cabeceras con totales | — |
+| `GET /api/ingresos?buscar=&estado=&desde=&hasta=&proveedorId=` | A,G,O | `esquemaFiltroIngresos` {buscar?, estado?, desde?, hasta?, **proveedorId?** (US13/US15), pagina, porPagina} | página de cabeceras con totales | — |
 | `GET /api/ingresos/:id` | A,G,O | — | ingreso con líneas | `404` |
-| `POST /api/ingresos` | A,G,O | `esquemaCrearIngreso` {numeroFactura, fechaFactura, proveedor, fechaRecepcion, observaciones?, lineas[≥1]{productoId, cantidad>0, precioUnitario>0}} | `201` {id} en PENDIENTE; totales calculados (FR-014) | `400` factura duplicada (FR-015)/validación (FR-016) |
+| `POST /api/ingresos` | A,G,O | `esquemaCrearIngreso` {numeroFactura, fechaFactura, **proveedorId**, fechaRecepcion, observaciones?, lineas[≥1]{productoId, cantidad>0, precioUnitario>0}} | `201` {id} en PENDIENTE; totales calculados (FR-014) | `400` factura duplicada (FR-015)/validación (FR-016)/proveedor inexistente o inactivo |
 | `PUT /api/ingresos/:id` | A,G,O | mismo esquema | `204` (solo PENDIENTE — US1-AS5) | `409` estado no editable |
 | `POST /api/ingresos/:id/recibir` | A,G,O | — | `204`; transacción atómica suma stock + movimientos ENTRADA (FR-017/FR-021) | `409` estado inválido |
 | `POST /api/ingresos/:id/verificar` | A,G | — | `204` (RECIBIDO→VERIFICADO, inmutable) | `409` |
 | `POST /api/ingresos/:id/anular` | A,G | {motivo} (obligatorio) | `204`; RECIBIDO genera reversa AJUSTE_SALIDA (FR-019) | `409` disponible insuficiente para revertir / VERIFICADO no anulable |
 
-**`proveedor` (US13, FR-075)**: subcadena insensible a mayúsculas, igual que `buscar`, pero
-acotada a esa sola columna. No es redundante con `buscar`: hoy `buscar` cruza
-`numero_factura` OR `proveedor`, así que teclear "3M" trae también facturas cuyo NÚMERO
-contiene "3M". Los dos se pueden combinar (`buscar=F-001&proveedor=3M`) y se aplican con Y
-lógico. Como todo filtro del listado, viaja también al export (`GET /api/ingresos/export`),
-por construcción: vive en `CriteriosIngresos`, que `FiltrosListarIngresos` extiende.
+**El proveedor es un objeto, no un texto (US15, FR-091)**: tanto el listado como el detalle
+devuelven `proveedor: { id, nombre }` —lo que la pantalla necesita mostrar sin una segunda
+petición—, y al crear o editar se envía `proveedorId`. Es OBLIGATORIO, a diferencia de la
+categoría de un producto: una factura sin saber a quién se le compró no es trazable. Se acepta
+un proveedor INACTIVO solo si el ingreso ya lo tenía; asignar uno inactivo se rechaza.
+
+**`proveedorId` (US13/FR-075, reescrito en US15/FR-091)**: el filtro del listado nació en US13
+como subcadena sobre la columna de texto; desde US15 se elige del CATÁLOGO y es una coincidencia
+EXACTA por id, que es lo que hace el resultado reproducible (FR-088 aplicado a proveedores).
+`buscar` NO cambia: sigue cruzando `numero_factura` OR el NOMBRE del proveedor, así que teclear
+"3M" trae también las facturas cuyo número contiene "3M" — por eso los dos filtros siguen sin
+ser redundantes y se combinan con Y lógico. Como todo filtro del listado, viaja también al
+export (`GET /api/ingresos/export`) por construcción: vive en `CriteriosIngresos`, que
+`FiltrosListarIngresos` extiende.
 
 ## Clientes y proyectos (`/api/clientes`, `/api/proyectos`) (FR-034…FR-038)
 

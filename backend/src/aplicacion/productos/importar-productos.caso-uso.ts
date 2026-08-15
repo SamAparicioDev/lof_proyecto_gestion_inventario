@@ -16,7 +16,7 @@
  *    una fila que falle en este paso (ej. una violación de unicidad de carrera) se captura y
  *    se reporta como error de ESA fila, sin detener las demás (FR-051).
  * 4. Agrupa las filas que tuvieron éxito en el paso 3 y traían `cantidadInicial > 0` en UN
- *    ÚNICO `Ingreso` sintético (`proveedor = 'Carga masiva de inventario'`, `numeroFactura`
+ *    ÚNICO `Ingreso` sintético (proveedor "Carga masiva de inventario", `numeroFactura`
  *    autogenerado único) y lo recibe con `RepositorioIngresos.crear` + `.recibir` — el MISMO
  *    flujo atómico (`FOR UPDATE`, movimientos `ENTRADA`) que un ingreso manual (FR-050,
  *    research R15, data-model.md § Carga masiva de inventario). A diferencia del paso 3, un
@@ -52,6 +52,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { CasoDeUso } from '../comunes/caso-de-uso';
 import { normalizarNombreCategoria } from '../../dominio/entidades/categoria';
+import { normalizarNombreProveedor } from '../../dominio/entidades/proveedor';
 import {
   REPOSITORIO_CATEGORIAS,
   type RepositorioCategorias,
@@ -60,12 +61,21 @@ import { ErrorDominio, ErrorValidacionDominio } from '../../dominio/comunes/erro
 import { REPOSITORIO_INGRESOS, type LineaNuevoIngreso, type RepositorioIngresos } from '../../dominio/puertos/repositorio-ingresos';
 import { REPOSITORIO_PRODUCTOS, type RepositorioProductos } from '../../dominio/puertos/repositorio-productos';
 import {
+  REPOSITORIO_PROVEEDORES,
+  type RepositorioProveedores,
+} from '../../dominio/puertos/repositorio-proveedores';
+import {
   LECTOR_IMPORTACION_PRODUCTOS,
   type FilaValidaImportacionProducto,
   type LectorImportacionProductos,
 } from './puertos/lector-importacion-productos';
 
-/** Proveedor sintético del `Ingreso` que agrupa el stock inicial de una carga masiva (research R15). */
+/**
+ * Proveedor sintético del `Ingreso` que agrupa el stock inicial de una carga masiva
+ * (research R15). Desde US15 (FR-093) ya no se ESCRIBE en el ingreso: es una fila del catálogo
+ * marcada `esSistema`, y este nombre es la clave con la que se la localiza — por eso esa fila
+ * no se puede renombrar ni eliminar (`gestionar-proveedores.caso-uso.ts`).
+ */
 const PROVEEDOR_CARGA_MASIVA = 'Carga masiva de inventario';
 
 /** Máximo de filas de datos por archivo (spec.md § Assumptions) — validado DESPUÉS de leer el
@@ -110,6 +120,7 @@ export class ImportarProductosCasoUso implements CasoDeUso<ImportarProductosEntr
     @Inject(REPOSITORIO_INGRESOS) private readonly repositorioIngresos: RepositorioIngresos,
     @Inject(LECTOR_IMPORTACION_PRODUCTOS) private readonly lectorImportacion: LectorImportacionProductos,
     @Inject(REPOSITORIO_CATEGORIAS) private readonly repositorioCategorias: RepositorioCategorias,
+    @Inject(REPOSITORIO_PROVEEDORES) private readonly repositorioProveedores: RepositorioProveedores,
   ) {}
 
   async ejecutar(entrada: ImportarProductosEntrada): Promise<ResumenImportacion> {
@@ -270,13 +281,35 @@ export class ImportarProductosCasoUso implements CasoDeUso<ImportarProductosEntr
     const ingreso = await this.repositorioIngresos.crear({
       numeroFactura: numeroFacturaSintetico(),
       fechaFactura: ahora,
-      proveedor: PROVEEDOR_CARGA_MASIVA,
+      proveedorId: await this.resolverProveedorDelSistema(),
       fechaRecepcion: ahora,
       observaciones: 'Ingreso generado automáticamente por carga masiva de inventario (US8).',
       lineas,
       usuarioId,
     });
     await this.repositorioIngresos.recibir(ingreso.id, usuarioId);
+  }
+
+  /**
+   * Localiza el proveedor del sistema POR NOMBRE (US15, FR-093) — antes de US15 el nombre se
+   * escribía directamente en el ingreso y no hacía falta resolver nada.
+   *
+   * Si no aparece se corta la carga con un error de negocio, no con un fallo técnico de clave
+   * foránea: la fila la crean la migración y la semilla, así que su ausencia significa que la
+   * base de datos está a medio preparar, y eso hay que decirlo con esas palabras. No se crea
+   * aquí sobre la marcha: la importación no es dueña del catálogo, y un alta silenciosa
+   * escondería precisamente ese problema de instalación.
+   */
+  private async resolverProveedorDelSistema(): Promise<number> {
+    const proveedor = await this.repositorioProveedores.buscarPorNombreNormalizado(
+      normalizarNombreProveedor(PROVEEDOR_CARGA_MASIVA),
+    );
+    if (!proveedor) {
+      throw new ErrorValidacionDominio(
+        `No existe el proveedor "${PROVEEDOR_CARGA_MASIVA}", que la carga masiva necesita para registrar el stock inicial. Ejecuta la semilla del sistema y vuelve a intentarlo.`,
+      );
+    }
+    return proveedor.id;
   }
 }
 

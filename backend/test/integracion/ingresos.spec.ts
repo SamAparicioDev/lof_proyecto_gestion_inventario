@@ -15,6 +15,7 @@ import {
   cerrarAppDePrueba,
   crearAppDePrueba,
   crearProductoDePrueba,
+  crearProveedorDePrueba,
   crearUsuarioDePrueba,
   truncarTablas,
   type AppDePrueba,
@@ -29,6 +30,9 @@ interface LineaCuerpoIngreso {
 
 describe('Ingresos — /api/ingresos (T037)', () => {
   let contexto: AppDePrueba;
+  /** US15 (FR-091): el proveedor es una FK obligatoria, así que cada prueba necesita una fila
+   *  del catálogo. Se crea tras truncar, porque el TRUNCATE también vacía `proveedores`. */
+  let proveedorId: number;
 
   beforeAll(async () => {
     contexto = await crearAppDePrueba();
@@ -40,6 +44,7 @@ describe('Ingresos — /api/ingresos (T037)', () => {
 
   beforeEach(async () => {
     await truncarTablas(contexto.prisma);
+    proveedorId = await crearProveedorDePrueba(contexto.prisma, 'Proveedor de Prueba');
   });
 
   const servidor = (): ReturnType<AppDePrueba['app']['getHttpServer']> => contexto.app.getHttpServer();
@@ -50,7 +55,7 @@ describe('Ingresos — /api/ingresos (T037)', () => {
     return {
       numeroFactura,
       fechaFactura: '2026-01-10',
-      proveedor: 'Proveedor de Prueba',
+      proveedorId,
       fechaRecepcion: '2026-01-10',
       lineas,
     };

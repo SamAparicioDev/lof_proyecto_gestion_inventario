@@ -25,6 +25,11 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { CasoDeUso } from '../comunes/caso-de-uso';
 import { REPOSITORIO_INGRESOS, type RepositorioIngresos } from '../../dominio/puertos/repositorio-ingresos';
+import {
+  REPOSITORIO_PROVEEDORES,
+  type RepositorioProveedores,
+} from '../../dominio/puertos/repositorio-proveedores';
+import { verificarProveedorAsignable } from './verificar-proveedor-asignable';
 
 /** Línea de factura ya validada en forma (producto, cantidad, precio de compra unitario). */
 export interface LineaCrearIngresoEntrada {
@@ -38,7 +43,8 @@ export interface LineaCrearIngresoEntrada {
 export interface CrearIngresoEntrada {
   readonly numeroFactura: string;
   readonly fechaFactura: string;
-  readonly proveedor: string;
+  /** Referencia al catálogo de proveedores (US15, FR-091) — obligatoria. */
+  readonly proveedorId: number;
   readonly fechaRecepcion: string;
   readonly observaciones: string | null;
   readonly lineas: readonly LineaCrearIngresoEntrada[];
@@ -52,13 +58,21 @@ export interface CrearIngresoSalida {
 
 @Injectable()
 export class CrearIngresoCasoUso implements CasoDeUso<CrearIngresoEntrada, CrearIngresoSalida> {
-  constructor(@Inject(REPOSITORIO_INGRESOS) private readonly repositorioIngresos: RepositorioIngresos) {}
+  constructor(
+    @Inject(REPOSITORIO_INGRESOS) private readonly repositorioIngresos: RepositorioIngresos,
+    @Inject(REPOSITORIO_PROVEEDORES) private readonly repositorioProveedores: RepositorioProveedores,
+  ) {}
 
   async ejecutar(entrada: CrearIngresoEntrada): Promise<CrearIngresoSalida> {
+    // US15 (FR-091): el proveedor se comprueba ANTES de escribir. La FK de la BD ya impediría
+    // uno inexistente, pero con un error técnico; y el estado INACTIVO no lo cubre ninguna
+    // restricción de base de datos — un proveedor retirado no debe aparecer en facturas nuevas.
+    await verificarProveedorAsignable(this.repositorioProveedores, entrada.proveedorId);
+
     const ingreso = await this.repositorioIngresos.crear({
       numeroFactura: entrada.numeroFactura,
       fechaFactura: new Date(entrada.fechaFactura),
-      proveedor: entrada.proveedor,
+      proveedorId: entrada.proveedorId,
       fechaRecepcion: new Date(entrada.fechaRecepcion),
       observaciones: entrada.observaciones,
       lineas: entrada.lineas.map((linea) => ({ ...linea })),

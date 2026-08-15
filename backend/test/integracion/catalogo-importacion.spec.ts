@@ -113,6 +113,9 @@ describe('Catálogo exportable en formato de plantilla — GET /api/productos/ca
 
   beforeEach(async () => {
     await truncarTablas(contexto.prisma);
+    // El TRUNCATE se lleva las categorías y reinicia sus ids: sin vaciar la caché, la segunda
+    // prueba sembraría productos apuntando a un id que ya no existe y violaría la FK.
+    categoriasSembradas.clear();
   });
 
   const servidor = (): ReturnType<AppDePrueba['app']['getHttpServer']> => contexto.app.getHttpServer();
@@ -256,6 +259,9 @@ describe('Catálogo exportable en formato de plantilla — GET /api/productos/ca
       const admin = await crearUsuarioDePrueba(contexto, { rol: 'ADMINISTRADOR' });
       const cookie = await iniciarSesion(servidor(), admin.login, admin.password);
       await sembrarCatalogo(admin.id);
+      // US15 (FR-090): quien edita el archivo elige una categoría QUE EXISTE — desde T153 la
+      // columna se resuelve por nombre contra el catálogo y una inexistente invalida esa fila.
+      await idCategoria('Ferretería', admin.id);
       const stockAntes = await stockPorSku();
 
       const descarga = await pedirBinario(servidor(), '/api/productos/catalogo-importacion').set('Cookie', cookie);

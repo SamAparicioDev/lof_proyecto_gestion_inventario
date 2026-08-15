@@ -9,9 +9,11 @@
  * renderizar con los nuevos `searchParams` — más simple que un Client Component con estado
  * propio para lo que es un filtro de listado (Principio V).
  *
- * FILTRO DE US13 (T137, FR-075): "Proveedor", acotado a esa columna. No duplica a "Buscar", que
- * cruza número de factura OR proveedor y por eso no permite preguntar solo por uno: teclear "3M"
- * ahí trae también las facturas cuyo NÚMERO contiene "3M". Los dos se combinan. Bajo la barra,
+ * FILTRO DE US13 (T137, FR-075): "Proveedor". No duplica a "Buscar", que cruza número de factura
+ * OR nombre del proveedor y por eso no permite preguntar solo por uno: teclear "3M" ahí trae
+ * también las facturas cuyo NÚMERO contiene "3M". Los dos se combinan. US15 (FR-091) lo convirtió
+ * de campo de texto en un desplegable del CATÁLOGO, que además hace el resultado reproducible: se
+ * envía `proveedorId`, no un nombre parecido. Bajo la barra,
  * `ResumenFiltros` muestra lo aplicado y ofrece "Limpiar filtros" (FR-078), y el estado vacío
  * distingue "no hay coincidencias" de "todavía no hay ingresos" (FR-079). Como el enlace de
  * exportar (US11) se arma con los MISMOS parámetros, el archivo hereda el filtro nuevo solo.
@@ -27,7 +29,8 @@
 import Link from 'next/link';
 import { Plus } from '@phosphor-icons/react/dist/ssr';
 import type { EstadoIngreso, Ingreso, Paginado } from '@trazo/compartido';
-import { apiServidor } from '@/lib/api/servidor';
+import { apiServidor, apiServidorOpcional } from '@/lib/api/servidor';
+import type { ProveedorListado } from '@/lib/api/proveedores';
 import { formatoFecha, formatoFechaFiltro, formatoMoneda } from '@/lib/formato';
 import { EstadoIngresoTag } from '@/componentes/ingresos/estado-ingreso-tag';
 import { BarraFiltros, CampoFiltro } from '@/componentes/comunes/barra-filtros';
@@ -47,7 +50,7 @@ const ESTADOS: { valor: EstadoIngreso; etiqueta: string }[] = [
 
 interface ParametrosBusqueda {
   buscar?: string;
-  proveedor?: string;
+  proveedorId?: string;
   estado?: string;
   desde?: string;
   hasta?: string;
@@ -58,7 +61,7 @@ interface ParametrosBusqueda {
 function construirQuery(parametros: ParametrosBusqueda, paginaDestino?: number): string {
   const query = new URLSearchParams();
   if (parametros.buscar) query.set('buscar', parametros.buscar);
-  if (parametros.proveedor) query.set('proveedor', parametros.proveedor);
+  if (parametros.proveedorId) query.set('proveedorId', parametros.proveedorId);
   if (parametros.estado) query.set('estado', parametros.estado);
   if (parametros.desde) query.set('desde', parametros.desde);
   if (parametros.hasta) query.set('hasta', parametros.hasta);
@@ -73,7 +76,7 @@ function construirQuery(parametros: ParametrosBusqueda, paginaDestino?: number):
 function construirQueryExport(parametros: ParametrosBusqueda): string {
   const query = new URLSearchParams();
   if (parametros.buscar) query.set('buscar', parametros.buscar);
-  if (parametros.proveedor) query.set('proveedor', parametros.proveedor);
+  if (parametros.proveedorId) query.set('proveedorId', parametros.proveedorId);
   if (parametros.estado) query.set('estado', parametros.estado);
   if (parametros.desde) query.set('desde', parametros.desde);
   if (parametros.hasta) query.set('hasta', parametros.hasta);
@@ -89,10 +92,18 @@ export default async function PaginaIngresos({
   const pagina = await apiServidor<Paginado<Ingreso>>(`/api/ingresos?${construirQuery(parametros)}`);
   const totalPaginas = Math.max(1, Math.ceil(pagina.total / pagina.porPagina));
 
+  // US15 (FR-091): el filtro por proveedor se alimenta del CATÁLOGO. Se piden todos —también los
+  // inactivos— porque filtrar por un proveedor ya retirado sigue siendo una consulta legítima
+  // sobre el historial. Va con `apiServidorOpcional` porque `proveedores.ver` es un permiso
+  // distinto de `ingresos.ver`: un rol propio que pueda consultar ingresos pero no el catálogo
+  // debe ver el listado sin el desplegable, no la pantalla de error genérica de Next.
+  const proveedores = await apiServidorOpcional<ProveedorListado[]>('/api/proveedores', []);
+  const proveedorFiltrado = proveedores.find((proveedor) => String(proveedor.id) === parametros.proveedorId);
+
   // Mismo orden que los campos de la barra, para que el resumen se lea igual que se llenó (FR-078).
   const filtros = filtrosActivos([
     { etiqueta: 'Buscar', valor: parametros.buscar },
-    { etiqueta: 'Proveedor', valor: parametros.proveedor },
+    { etiqueta: 'Proveedor', valor: proveedorFiltrado?.nombre },
     { etiqueta: 'Estado', valor: ESTADOS.find((estado) => estado.valor === parametros.estado)?.etiqueta },
     { etiqueta: 'Desde', valor: formatoFechaFiltro(parametros.desde) },
     { etiqueta: 'Hasta', valor: formatoFechaFiltro(parametros.hasta) },
@@ -132,14 +143,16 @@ export default async function PaginaIngresos({
           />
         </CampoFiltro>
         <CampoFiltro>
-          <label htmlFor="proveedor">Proveedor</label>
-          <input
-            id="proveedor"
-            name="proveedor"
-            className="input"
-            placeholder="Nombre del proveedor"
-            defaultValue={parametros.proveedor}
-          />
+          <label htmlFor="proveedorId">Proveedor</label>
+          <select id="proveedorId" name="proveedorId" className="input" defaultValue={parametros.proveedorId ?? ''}>
+            <option value="">Todos</option>
+            {proveedores.map((proveedor) => (
+              <option key={proveedor.id} value={proveedor.id}>
+                {proveedor.nombre}
+                {proveedor.estado === 'INACTIVO' ? ' (inactivo)' : ''}
+              </option>
+            ))}
+          </select>
         </CampoFiltro>
         <CampoFiltro>
           <label htmlFor="estado">Estado</label>
@@ -192,7 +205,7 @@ export default async function PaginaIngresos({
                     <td>
                       <Link href={`/ingresos/${ingreso.id}`}>{ingreso.numeroFactura}</Link>
                     </td>
-                    <td>{ingreso.proveedor}</td>
+                    <td>{ingreso.proveedor.nombre}</td>
                     <td>{formatoFecha(ingreso.fechaFactura)}</td>
                     <td>{formatoFecha(ingreso.fechaRecepcion)}</td>
                     <td>

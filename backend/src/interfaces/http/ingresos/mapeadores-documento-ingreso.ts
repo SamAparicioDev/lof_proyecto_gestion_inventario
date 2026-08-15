@@ -72,7 +72,13 @@ const COLUMNAS_LISTADO_INGRESOS: ColumnaDocumentoReporte[] = [
  * (`RepositorioIngresos.listarTodos`): son TODAS las filas que cumplen el filtro, no la página
  * que el usuario tuviera abierta.
  */
-export function mapearListadoIngresosADocumento(ingresos: readonly Ingreso[], filtros: FiltroIngresos): DocumentoReporte {
+export function mapearListadoIngresosADocumento(
+  ingresos: readonly Ingreso[],
+  filtros: FiltroIngresos,
+  /** Nombre del proveedor filtrado, ya resuelto por el controlador (US15): desde FR-091 el
+   *  filtro viaja como id, y "Proveedor: 7" no le diría nada a quien abre el archivo. */
+  nombreProveedorFiltrado?: string,
+): DocumentoReporte {
   return {
     titulo: 'Ingresos de mercancía',
     generadoEn: new Date(),
@@ -80,7 +86,7 @@ export function mapearListadoIngresosADocumento(ingresos: readonly Ingreso[], fi
       Buscar: textoFiltroOpcional(filtros.buscar),
       // US13: el encabezado enumera TODOS los filtros del listado, también los nuevos — un
       // archivo que omitiera uno diría "esto es todo lo que hay" sobre un conjunto recortado.
-      Proveedor: textoFiltroOpcional(filtros.proveedor),
+      Proveedor: textoFiltroOpcional(nombreProveedorFiltrado),
       Estado: filtros.estado ? ETIQUETA_ESTADO_INGRESO[filtros.estado] : 'Sin filtro',
       Desde: textoFechaFiltro(filtros.desde),
       Hasta: textoFechaFiltro(filtros.hasta),
@@ -88,7 +94,7 @@ export function mapearListadoIngresosADocumento(ingresos: readonly Ingreso[], fi
     columnas: COLUMNAS_LISTADO_INGRESOS,
     filas: ingresos.map((ingreso) => ({
       numeroFactura: ingreso.numeroFactura,
-      proveedor: ingreso.proveedor,
+      proveedor: ingreso.proveedor.nombre,
       fechaFactura: formatoFechaSoloDia(ingreso.fechaFactura),
       fechaRecepcion: formatoFechaSoloDia(ingreso.fechaRecepcion),
       estado: ETIQUETA_ESTADO_INGRESO[ingreso.estado],
@@ -120,7 +126,7 @@ export function mapearIngresoADocumento(
 ): DocumentoReporte {
   const encabezado: DatoEncabezadoDocumento[] = [
     { etiqueta: 'Factura', valor: ingreso.numeroFactura },
-    { etiqueta: 'Proveedor', valor: ingreso.proveedor },
+    { etiqueta: 'Proveedor', valor: ingreso.proveedor.nombre },
     { etiqueta: 'Fecha de la factura', valor: formatoFechaSoloDia(ingreso.fechaFactura) },
     { etiqueta: 'Fecha de recepción', valor: formatoFechaSoloDia(ingreso.fechaRecepcion) },
     { etiqueta: 'Estado', valor: ETIQUETA_ESTADO_INGRESO[ingreso.estado] },

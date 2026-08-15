@@ -33,6 +33,7 @@ import {
   crearAppDePrueba,
   crearClienteDePrueba,
   crearProductoDePrueba,
+  crearProveedorDePrueba,
   crearProyectoDePrueba,
   crearRolDePrueba,
   crearUsuarioDePrueba,
@@ -87,6 +88,9 @@ const MOVIMIENTOS_RECIENTES = 10;
 
 describe('Panel de control — GET /api/panel (T117, US10, FR-060…FR-063)', () => {
   let contexto: AppDePrueba;
+  /** US15 (FR-091): el proveedor de un ingreso es una FK obligatoria — cada prueba necesita
+   *  una fila del catálogo, creada tras truncar (el TRUNCATE también vacía `proveedores`). */
+  let proveedorId: number;
 
   beforeAll(async () => {
     contexto = await crearAppDePrueba();
@@ -98,6 +102,7 @@ describe('Panel de control — GET /api/panel (T117, US10, FR-060…FR-063)', ()
 
   beforeEach(async () => {
     await truncarTablas(contexto.prisma);
+    proveedorId = await crearProveedorDePrueba(contexto.prisma, 'Proveedor de Prueba del Panel');
   });
 
   const servidor = (): ReturnType<AppDePrueba['app']['getHttpServer']> => contexto.app.getHttpServer();
@@ -110,7 +115,7 @@ describe('Panel de control — GET /api/panel (T117, US10, FR-060…FR-063)', ()
     return {
       numeroFactura,
       fechaFactura: '2026-01-05',
-      proveedor: 'Proveedor de Prueba del Panel',
+      proveedorId,
       fechaRecepcion: '2026-01-05',
       lineas,
     };

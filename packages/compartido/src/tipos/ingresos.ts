@@ -17,7 +17,10 @@ export interface Ingreso {
   id: number;
   numeroFactura: string;
   fechaFactura: string;
-  proveedor: string;
+  /** US15 (FR-091): el proveedor vive en un catálogo. Viaja resuelto —id y nombre— porque es
+   *  lo que la pantalla necesita mostrar sin una segunda petición, igual que `Producto.categoria`.
+   *  Nunca es `null`: el proveedor de un ingreso es obligatorio. */
+  proveedor: { id: number; nombre: string };
   fechaRecepcion: string;
   observaciones: string | null;
   estado: EstadoIngreso;

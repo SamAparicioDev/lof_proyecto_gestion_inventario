@@ -18,14 +18,20 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { CasoDeUso } from '../comunes/caso-de-uso';
 import { EstadoInvalido, NoEncontrado } from '../../dominio/comunes/errores';
 import { REPOSITORIO_INGRESOS, type RepositorioIngresos } from '../../dominio/puertos/repositorio-ingresos';
+import {
+  REPOSITORIO_PROVEEDORES,
+  type RepositorioProveedores,
+} from '../../dominio/puertos/repositorio-proveedores';
 import type { LineaCrearIngresoEntrada } from './crear-ingreso.caso-uso';
+import { verificarProveedorAsignable } from './verificar-proveedor-asignable';
 
 /** Entrada: datos validados por `esquemaActualizarIngreso` + auditoría (FR-045). */
 export interface ActualizarIngresoEntrada {
   readonly ingresoId: number;
   readonly numeroFactura: string;
   readonly fechaFactura: string;
-  readonly proveedor: string;
+  /** Referencia al catálogo de proveedores (US15, FR-091) — obligatoria. */
+  readonly proveedorId: number;
   readonly fechaRecepcion: string;
   readonly observaciones: string | null;
   readonly lineas: readonly LineaCrearIngresoEntrada[];
@@ -35,7 +41,10 @@ export interface ActualizarIngresoEntrada {
 
 @Injectable()
 export class ActualizarIngresoCasoUso implements CasoDeUso<ActualizarIngresoEntrada, void> {
-  constructor(@Inject(REPOSITORIO_INGRESOS) private readonly repositorioIngresos: RepositorioIngresos) {}
+  constructor(
+    @Inject(REPOSITORIO_INGRESOS) private readonly repositorioIngresos: RepositorioIngresos,
+    @Inject(REPOSITORIO_PROVEEDORES) private readonly repositorioProveedores: RepositorioProveedores,
+  ) {}
 
   async ejecutar(entrada: ActualizarIngresoEntrada): Promise<void> {
     const ingreso = await this.repositorioIngresos.buscarPorId(entrada.ingresoId);
@@ -46,12 +55,19 @@ export class ActualizarIngresoCasoUso implements CasoDeUso<ActualizarIngresoEntr
       throw new EstadoInvalido('Solo un ingreso PENDIENTE puede editarse');
     }
 
+    // Solo si CAMBIA: un ingreso que ya apuntaba a un proveedor luego desactivado lo conserva
+    // (US15, FR-091 — ver el TSDoc de `verificarProveedorAsignable`). Exigirlo siempre dejaría
+    // facturas pendientes imposibles de guardar por un cambio de catálogo ajeno a ellas.
+    if (entrada.proveedorId !== ingreso.proveedor.id) {
+      await verificarProveedorAsignable(this.repositorioProveedores, entrada.proveedorId);
+    }
+
     await this.repositorioIngresos.actualizar(
       entrada.ingresoId,
       {
         numeroFactura: entrada.numeroFactura,
         fechaFactura: new Date(entrada.fechaFactura),
-        proveedor: entrada.proveedor,
+        proveedorId: entrada.proveedorId,
         fechaRecepcion: new Date(entrada.fechaRecepcion),
         observaciones: entrada.observaciones,
         lineas: entrada.lineas.map((linea) => ({ ...linea })),

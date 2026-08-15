@@ -45,6 +45,7 @@ import { actualizarIngreso, crearIngreso } from '@/lib/api/ingresos';
 import { ErrorApi } from '@/lib/api/cliente';
 import { formatoMoneda } from '@/lib/formato';
 import { DialogoProductoNuevo } from '@/componentes/inventario/dialogo-producto-nuevo';
+import { SelectorProveedor } from '@/componentes/proveedores/selector-proveedor';
 
 const MENSAJE_ERROR_RED = 'No fue posible comunicarse con el servidor. Intenta de nuevo.';
 
@@ -53,7 +54,7 @@ const PATRON_ERROR_LINEA = /^lineas\.(\d+)\.(productoId|cantidad|precioUnitario)
 const CAMPOS_CABECERA = new Set<keyof DatosCrearIngreso>([
   'numeroFactura',
   'fechaFactura',
-  'proveedor',
+  'proveedorId',
   'fechaRecepcion',
   'observaciones',
 ]);
@@ -65,7 +66,9 @@ function crearLineaVacia(): LineaIngreso {
 const VALORES_INICIALES_VACIOS: DatosCrearIngreso = {
   numeroFactura: '',
   fechaFactura: '',
-  proveedor: '',
+  // 0 = "sin elegir": el esquema exige un entero positivo, así que un ingreso sin proveedor no
+  // pasa la validación (US15, FR-091 — el proveedor es obligatorio).
+  proveedorId: 0,
   fechaRecepcion: '',
   observaciones: '',
   lineas: [crearLineaVacia()],
@@ -78,9 +81,11 @@ interface IngresoFormProps {
   ingresoId?: number;
   /** Precarga de edición — mismo shape que `esquemaCrearIngreso` (fechas como texto `YYYY-MM-DD`). */
   valoresIniciales?: DatosCrearIngreso;
+  /** Proveedor que el ingreso ya tiene (US15): el selector lo conserva aunque esté inactivo. */
+  proveedorActual?: { id: number; nombre: string } | null;
 }
 
-export function IngresoForm({ productos, ingresoId, valoresIniciales }: IngresoFormProps) {
+export function IngresoForm({ productos, ingresoId, valoresIniciales, proveedorActual }: IngresoFormProps) {
   const router = useRouter();
   const [productosDisponibles, setProductosDisponibles] = useState(productos);
   const [lineaParaAltaRapida, setLineaParaAltaRapida] = useState<number | null>(null);
@@ -175,7 +180,30 @@ export function IngresoForm({ productos, ingresoId, valoresIniciales }: IngresoF
         <div className="card gap-4 p-5">
           <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
             <CampoTexto id="numeroFactura" label="Número de factura" error={errors.numeroFactura?.message} registro={register('numeroFactura')} />
-            <CampoTexto id="proveedor" label="Proveedor" error={errors.proveedor?.message} registro={register('proveedor')} />
+            {/* US15 (FR-091): el proveedor se elige del catálogo. Va con `Controller` y no con
+                `register` porque `SelectorProveedor` es controlado — entrega un número, no el
+                evento de un `<input>` nativo (mismo criterio que `CampoFecha`). */}
+            <div className="field">
+              <label htmlFor="proveedorId">Proveedor</label>
+              <Controller
+                name="proveedorId"
+                control={control}
+                render={({ field }) => (
+                  <SelectorProveedor
+                    id="proveedorId"
+                    value={typeof field.value === 'number' ? field.value : undefined}
+                    onChange={field.onChange}
+                    proveedorActual={proveedorActual}
+                    ariaInvalid={!!errors.proveedorId}
+                  />
+                )}
+              />
+              {errors.proveedorId && (
+                <p role="alert" style={{ fontSize: 12, color: 'var(--color-accent-300)', marginTop: 5 }}>
+                  {errors.proveedorId.message}
+                </p>
+              )}
+            </div>
             <CampoFecha id="fechaFactura" label="Fecha de la factura" error={errors.fechaFactura?.message} control={control} name="fechaFactura" />
             <CampoFecha id="fechaRecepcion" label="Fecha de recepción" error={errors.fechaRecepcion?.message} control={control} name="fechaRecepcion" />
           </div>

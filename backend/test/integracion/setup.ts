@@ -129,6 +129,9 @@ const TABLAS_DE_NEGOCIO = [
   'salidas',
   'detalles_ingresos',
   'ingresos',
+  // US15: después de `ingresos` por la FK `ingresos.proveedor_id` (RESTRICT), mismo criterio
+  // que `categorias` respecto de `productos`.
+  'proveedores',
   'proyectos',
   'clientes',
   'productos',
@@ -406,6 +409,64 @@ export async function crearCategoriaDePrueba(
     select: { id: true },
   });
   return Number(categoria.id);
+}
+
+/**
+ * Crea un proveedor del catálogo (US15, FR-091) y devuelve su id. Todo ingreso lo necesita: la
+ * FK `ingresos.proveedor_id` es NOT NULL, así que ninguna suite puede registrar una factura sin
+ * pasar antes por aquí.
+ *
+ * El nombre se guarda TAL CUAL —sin sufijo único, al revés que el SKU de
+ * `crearProductoDePrueba`— por el mismo criterio que `crearCategoriaDePrueba`: hay pruebas que
+ * comprueban el nombre en un documento exportado, y un sufijo aleatorio las obligaría a asertar
+ * por coincidencia parcial. A cambio, dos llamadas con el MISMO nombre dentro de una prueba
+ * chocan contra el índice funcional `lower(btrim(nombre))`: cada suite pasa nombres distintos.
+ */
+export async function crearProveedorDePrueba(
+  prisma: PrismaService,
+  nombre = 'Proveedor de Prueba',
+  usuarioCreacionId?: number,
+): Promise<number> {
+  const creadorId = usuarioCreacionId ?? (await usuarioParaAuditoria(prisma));
+  const proveedor = await prisma.proveedor.create({
+    data: { nombre, usuarioCreacionId: BigInt(creadorId) },
+    select: { id: true },
+  });
+  return Number(proveedor.id);
+}
+
+/**
+ * Usuario al que apuntar la auditoría de un catálogo cuando la prueba no indica ninguno:
+ * REUTILIZA el más antiguo que exista y solo crea uno técnico si la tabla está vacía.
+ *
+ * Es el mismo criterio que usa la migración de proveedores (`MIN(usuarios.id)`), pero aquí el
+ * motivo es otro: hay suites que cuentan usuarios (`usuarios.spec.ts`) o los usuarios por rol
+ * (`roles.spec.ts`), y una factory que creara una fila de más en cada llamada haría fallar esas
+ * pruebas por una razón que no tiene nada que ver con lo que verifican.
+ */
+async function usuarioParaAuditoria(prisma: PrismaService): Promise<number> {
+  const existente = await prisma.usuario.findFirst({ orderBy: { id: 'asc' }, select: { id: true } });
+  return existente ? Number(existente.id) : crearUsuarioTecnicoDePrueba(prisma);
+}
+
+/**
+ * Nombre EXACTO del proveedor del sistema (US15, FR-093) — el mismo que
+ * `ImportarProductosCasoUso` busca para su ingreso sintético.
+ */
+export const NOMBRE_PROVEEDOR_DEL_SISTEMA = 'Carga masiva de inventario';
+
+/**
+ * Crea la fila del proveedor del sistema (FR-093). En producción la ponen la migración y la
+ * semilla; aquí hace falta explícitamente porque `truncarTablas` vacía `proveedores` antes de
+ * cada prueba, y sin ella la carga masiva no tendría a quién apuntar su ingreso sintético.
+ */
+export async function crearProveedorDelSistemaDePrueba(prisma: PrismaService): Promise<number> {
+  const creadorId = await usuarioParaAuditoria(prisma);
+  const proveedor = await prisma.proveedor.create({
+    data: { nombre: NOMBRE_PROVEEDOR_DEL_SISTEMA, esSistema: true, usuarioCreacionId: BigInt(creadorId) },
+    select: { id: true },
+  });
+  return Number(proveedor.id);
 }
 
 export async function crearProductoDePrueba(

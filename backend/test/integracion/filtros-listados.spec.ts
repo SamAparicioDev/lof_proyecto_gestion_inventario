@@ -23,6 +23,7 @@ import {
   crearAppDePrueba,
   crearClienteDePrueba,
   crearProductoDePrueba,
+  crearProveedorDePrueba,
   crearCategoriaDePrueba,
   crearProyectoDePrueba,
   crearSalidaDePrueba,
@@ -215,23 +216,29 @@ describe('Filtros de listado — US13 (T138)', () => {
   // ==========================================================================
 
   /**
-   * El valor del filtro nuevo está justamente en lo que `buscar` NO puede hacer: `buscar` cruza
-   * número de factura OR proveedor, así que "3M" trae también la factura `3M-200` de otro
+   * El valor del filtro está justamente en lo que `buscar` NO puede hacer: `buscar` cruza número
+   * de factura OR NOMBRE del proveedor, así que "3M" trae también la factura `3M-200` de otro
    * proveedor. La prueba usa ese solapamiento a propósito.
+   *
+   * US15 (FR-091) cambió el CÓMO, no el qué: el filtro dejó de ser una subcadena sobre una
+   * columna de texto y pasó a ser el id del catálogo, que además hace el resultado reproducible.
    */
   it('filtra ingresos por proveedor sin arrastrar los que solo coinciden por número de factura', async () => {
     const producto = await crearProductoDePrueba(contexto.prisma, { stockActual: 0 });
     const usuario = await crearUsuarioDePrueba(contexto, { rol: 'GERENTE' });
     const cookie = await iniciarSesion(servidor(), usuario.login, usuario.password);
 
+    const tresEme = await crearProveedorDePrueba(contexto.prisma, '3M Colombia');
+    const andina = await crearProveedorDePrueba(contexto.prisma, 'Distribuidora Andina');
+
     const delProveedor = await crearIngreso(cookie, {
       numeroFactura: 'FAC-US13-0001',
-      proveedor: '3M Colombia',
+      proveedorId: tresEme,
       productoId: producto.id,
     });
     const conNumeroParecido = await crearIngreso(cookie, {
       numeroFactura: '3M-200',
-      proveedor: 'Distribuidora Andina',
+      proveedorId: andina,
       productoId: producto.id,
     });
 
@@ -246,7 +253,7 @@ describe('Filtros de listado — US13 (T138)', () => {
 
     const porProveedor = await request(servidor())
       .get('/api/ingresos')
-      .query({ proveedor: '3m', porPagina: 100 }) // minúsculas: la búsqueda es insensible
+      .query({ proveedorId: tresEme, porPagina: 100 })
       .set('Cookie', cookie);
     expect(porProveedor.status).toBe(200);
     const cuerpo = porProveedor.body as PaginaBody<{ id: number }>;
@@ -419,7 +426,7 @@ describe('Filtros de listado — US13 (T138)', () => {
   /** Cuerpo mínimo válido de `POST /api/ingresos`, con proveedor y número parametrizables. */
   async function crearIngreso(
     cookie: string,
-    datos: { numeroFactura: string; proveedor: string; productoId: number },
+    datos: { numeroFactura: string; proveedorId: number; productoId: number },
   ): Promise<number> {
     const respuesta = await request(servidor())
       .post('/api/ingresos')
@@ -427,7 +434,7 @@ describe('Filtros de listado — US13 (T138)', () => {
       .send({
         numeroFactura: datos.numeroFactura,
         fechaFactura: '2026-02-01',
-        proveedor: datos.proveedor,
+        proveedorId: datos.proveedorId,
         fechaRecepcion: '2026-02-02',
         lineas: [{ productoId: datos.productoId, cantidad: 3, precioUnitario: 1000 }],
       });

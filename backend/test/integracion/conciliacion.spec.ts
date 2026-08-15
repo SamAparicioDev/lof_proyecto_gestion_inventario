@@ -19,6 +19,7 @@ import {
   crearAppDePrueba,
   crearClienteDePrueba,
   crearProductoDePrueba,
+  crearProveedorDePrueba,
   crearProyectoDePrueba,
   crearUsuarioDePrueba,
   truncarTablas,
@@ -36,6 +37,9 @@ const SIGNO_POR_TIPO: Record<string, 1 | -1> = {
 
 describe('Conciliación de inventario (T058)', () => {
   let contexto: AppDePrueba;
+  /** US15 (FR-091): el proveedor de un ingreso es una FK obligatoria — cada prueba necesita
+   *  una fila del catálogo, creada tras truncar (el TRUNCATE también vacía `proveedores`). */
+  let proveedorId: number;
 
   beforeAll(async () => {
     contexto = await crearAppDePrueba();
@@ -47,6 +51,7 @@ describe('Conciliación de inventario (T058)', () => {
 
   beforeEach(async () => {
     await truncarTablas(contexto.prisma);
+    proveedorId = await crearProveedorDePrueba(contexto.prisma, 'Proveedor de Conciliación');
   });
 
   const servidor = (): ReturnType<AppDePrueba['app']['getHttpServer']> => contexto.app.getHttpServer();
@@ -70,7 +75,7 @@ describe('Conciliación de inventario (T058)', () => {
         .send({
           numeroFactura: 'FAC-CONCILIACION-0001',
           fechaFactura: '2026-01-05',
-          proveedor: 'Proveedor de Conciliación',
+          proveedorId,
           fechaRecepcion: '2026-01-05',
           lineas: [{ productoId: producto.id, cantidad: 50, precioUnitario: 1000 }],
         });

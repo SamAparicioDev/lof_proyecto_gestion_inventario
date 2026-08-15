@@ -23,8 +23,11 @@ import { NOMBRE_COOKIE_SESION } from '../../src/infraestructura/seguridad/cookie
 import {
   cerrarAppDePrueba,
   crearAppDePrueba,
+  crearCategoriaDePrueba,
   crearProductoDePrueba,
+  crearProveedorDelSistemaDePrueba,
   crearUsuarioDePrueba,
+  NOMBRE_PROVEEDOR_DEL_SISTEMA,
   truncarTablas,
   type AppDePrueba,
 } from './setup';
@@ -65,6 +68,9 @@ describe('Carga masiva de inventario — /api/productos/{plantilla-importacion,i
 
   beforeEach(async () => {
     await truncarTablas(contexto.prisma);
+    // US15 (FR-093): el ingreso sintético de la carga masiva apunta al proveedor del sistema,
+    // que el TRUNCATE se lleva por delante. En producción lo ponen la migración y la semilla.
+    await crearProveedorDelSistemaDePrueba(contexto.prisma);
   });
 
   const servidor = (): ReturnType<AppDePrueba['app']['getHttpServer']> => contexto.app.getHttpServer();
@@ -75,6 +81,9 @@ describe('Carga masiva de inventario — /api/productos/{plantilla-importacion,i
     async () => {
       const admin = await crearUsuarioDePrueba(contexto, { rol: 'ADMINISTRADOR' });
       const cookie = await iniciarSesion(servidor(), admin.login, admin.password);
+      // US15 (FR-090): la columna "Categoría" se resuelve por NOMBRE contra el catálogo, así que
+      // la categoría tiene que existir antes de subir el archivo o la fila se rechaza.
+      await crearCategoriaDePrueba(contexto.prisma, 'Ferretería', admin.id);
 
       const buffer = await construirBufferImportacion([
         {
@@ -107,7 +116,7 @@ describe('Carga masiva de inventario — /api/productos/{plantilla-importacion,i
       expect(producto.stockActual.toNumber()).toBe(20); // stock_actual resultante correcto
 
       const ingreso = await contexto.prisma.ingreso.findFirstOrThrow({
-        where: { proveedor: 'Carga masiva de inventario' },
+        where: { proveedor: { nombre: NOMBRE_PROVEEDOR_DEL_SISTEMA } },
       });
       expect(ingreso.numeroFactura).toMatch(/^IMPORTACION-/);
       expect(ingreso.estado).toBe('RECIBIDO'); // pasó por crear() + recibir(), igual que US1
@@ -137,6 +146,7 @@ describe('Carga masiva de inventario — /api/productos/{plantilla-importacion,i
         stockActual: 10,
         umbralStockBajo: 2,
       });
+      await crearCategoriaDePrueba(contexto.prisma, 'Eléctrico', gerente.id); // FR-090: debe existir
 
       const buffer = await construirBufferImportacion([
         {
@@ -179,7 +189,7 @@ describe('Carga masiva de inventario — /api/productos/{plantilla-importacion,i
       expect(productoActualizado.stockActual.toNumber()).toBe(10); // sin cambios: la fila no traía cantidadInicial
 
       const totalIngresosSinteticos = await contexto.prisma.ingreso.count({
-        where: { proveedor: 'Carga masiva de inventario' },
+        where: { proveedor: { nombre: NOMBRE_PROVEEDOR_DEL_SISTEMA } },
       });
       expect(totalIngresosSinteticos).toBe(0); // ninguna fila con stock inicial ⇒ no se arma Ingreso
     },

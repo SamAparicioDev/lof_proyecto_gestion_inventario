@@ -40,11 +40,12 @@ export interface CriteriosIngresos {
   readonly desde?: Date;
   readonly hasta?: Date;
   /**
-   * Subcadena del proveedor (US13, FR-075), insensible a mayúsculas. NO es redundante con
-   * `buscar`: ese cruza `numero_factura` OR `proveedor`, así que "3M" trae también facturas
-   * cuyo NÚMERO contiene "3M". Se combinan con Y lógico.
+   * Proveedor EXACTO del catálogo (US13/FR-075, reescrito en US15/FR-091: el filtro nació como
+   * subcadena sobre la columna de texto y ahora se elige de un selector). NO es redundante con
+   * `buscar`, que sigue cruzando `numero_factura` OR el NOMBRE del proveedor y por eso trae
+   * también facturas cuyo NÚMERO contiene "3M". Se combinan con Y lógico.
    */
-  readonly proveedor?: string;
+  readonly proveedorId?: number;
 }
 
 /** Filtros del listado de ingresos (FR-018) — paginación siempre obligatoria. */
@@ -63,7 +64,8 @@ export interface PaginaIngresos {
 export interface DatosNuevoIngreso {
   readonly numeroFactura: string;
   readonly fechaFactura: Date;
-  readonly proveedor: string;
+  /** Referencia al catálogo (US15, FR-091) — obligatoria: no hay ingreso sin proveedor. */
+  readonly proveedorId: number;
   readonly fechaRecepcion: Date;
   readonly observaciones: string | null;
   readonly lineas: LineaNuevoIngreso[];
@@ -75,7 +77,7 @@ export interface DatosNuevoIngreso {
 export interface DatosActualizarIngreso {
   readonly numeroFactura: string;
   readonly fechaFactura: Date;
-  readonly proveedor: string;
+  readonly proveedorId: number;
   readonly fechaRecepcion: Date;
   readonly observaciones: string | null;
   readonly lineas: LineaNuevoIngreso[];

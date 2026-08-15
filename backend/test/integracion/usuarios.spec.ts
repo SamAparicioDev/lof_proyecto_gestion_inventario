@@ -18,6 +18,7 @@ import {
   cerrarAppDePrueba,
   crearAppDePrueba,
   crearProductoDePrueba,
+  crearProveedorDePrueba,
   crearUsuarioDePrueba,
   obtenerRolDelSistemaId,
   truncarTablas,
@@ -26,6 +27,10 @@ import {
 
 describe('Usuarios — /api/usuarios (T078)', () => {
   let contexto: AppDePrueba;
+  /** El proveedor se crea DENTRO de la prueba que lo necesita, no en el `beforeEach`: la factory
+   *  inserta un usuario técnico para la auditoría cuando la tabla está vacía, y esta suite cuenta
+   *  usuarios — un `beforeEach` falsearía ese conteo por una razón ajena a lo que verifica. */
+  let proveedorId: number | null = null;
   /** Id del rol Operario: desde US9/T104 el cuerpo de alta/edición envía `rolId`, no el nombre
    *  del rol. Se resuelve una vez — los roles del sistema los siembra la migración y
    *  `truncarTablas()` no los borra. */
@@ -42,6 +47,7 @@ describe('Usuarios — /api/usuarios (T078)', () => {
 
   beforeEach(async () => {
     await truncarTablas(contexto.prisma);
+    proveedorId = null;
   });
 
   const servidor = (): ReturnType<AppDePrueba['app']['getHttpServer']> => contexto.app.getHttpServer();
@@ -59,15 +65,23 @@ describe('Usuarios — /api/usuarios (T078)', () => {
     };
   }
 
+  /** Crea el proveedor la primera vez que una prueba lo pide, atribuyéndolo a un usuario que ya
+   *  existe (ver la nota de `proveedorId`). */
+  async function idProveedor(usuarioCreacionId: number): Promise<number> {
+    proveedorId ??= await crearProveedorDePrueba(contexto.prisma, 'Proveedor de Prueba de Usuarios', usuarioCreacionId);
+    return proveedorId;
+  }
+
   /** Cuerpo mínimo válido de `POST /api/ingresos` (esquemaCrearIngreso) — mismo patrón que `inventario.spec.ts`. */
-  function cuerpoIngreso(
+  async function cuerpoIngreso(
     numeroFactura: string,
     lineas: { productoId: number; cantidad: number; precioUnitario: number }[],
-  ): Record<string, unknown> {
+    usuarioCreacionId: number,
+  ): Promise<Record<string, unknown>> {
     return {
       numeroFactura,
       fechaFactura: '2026-01-05',
-      proveedor: 'Proveedor de Prueba de Usuarios',
+      proveedorId: await idProveedor(usuarioCreacionId),
       fechaRecepcion: '2026-01-05',
       lineas,
     };
@@ -158,7 +172,13 @@ describe('Usuarios — /api/usuarios (T078)', () => {
       const respuestaCrearIngreso = await request(servidor())
         .post('/api/ingresos')
         .set('Cookie', cookieOperario)
-        .send(cuerpoIngreso(`FAC-USUARIOS-${Date.now()}`, [{ productoId: producto.id, cantidad: 10, precioUnitario: 500 }]));
+        .send(
+          await cuerpoIngreso(
+            `FAC-USUARIOS-${Date.now()}`,
+            [{ productoId: producto.id, cantidad: 10, precioUnitario: 500 }],
+            admin.id,
+          ),
+        );
       expect(respuestaCrearIngreso.status).toBe(201);
       const ingresoId: number = respuestaCrearIngreso.body.id;
 

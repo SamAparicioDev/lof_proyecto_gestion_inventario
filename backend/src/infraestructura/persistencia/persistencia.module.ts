@@ -47,6 +47,7 @@ import { REPOSITORIO_PERMISOS } from '../../dominio/puertos/repositorio-permisos
 import { REPOSITORIO_PRODUCTOS } from '../../dominio/puertos/repositorio-productos';
 import { REPOSITORIO_PROYECTOS } from '../../dominio/puertos/repositorio-proyectos';
 import { REPOSITORIO_CATEGORIAS } from '../../dominio/puertos/repositorio-categorias';
+import { REPOSITORIO_PROVEEDORES } from '../../dominio/puertos/repositorio-proveedores';
 import { REPOSITORIO_ROLES } from '../../dominio/puertos/repositorio-roles';
 import { REPOSITORIO_SALIDAS } from '../../dominio/puertos/repositorio-salidas';
 import { ContadoresPrisma } from './contadores.prisma';
@@ -59,6 +60,7 @@ import { RepositorioPermisosPrisma } from './repositorio-permisos.prisma';
 import { RepositorioProductosPrisma } from './repositorio-productos.prisma';
 import { RepositorioProyectosPrisma } from './repositorio-proyectos.prisma';
 import { RepositorioCategoriasPrisma } from './repositorio-categorias.prisma';
+import { RepositorioProveedoresPrisma } from './repositorio-proveedores.prisma';
 import { RepositorioRolesPrisma } from './repositorio-roles.prisma';
 import { RepositorioSalidasPrisma } from './repositorio-salidas.prisma';
 import { UnidadDeTrabajo } from './unidad-de-trabajo';
@@ -78,6 +80,7 @@ import { UnidadDeTrabajo } from './unidad-de-trabajo';
     { provide: REPOSITORIO_MOVIMIENTOS, useClass: RepositorioMovimientosPrisma },
     { provide: REPOSITORIO_ROLES, useClass: RepositorioRolesPrisma },
     { provide: REPOSITORIO_CATEGORIAS, useClass: RepositorioCategoriasPrisma },
+    { provide: REPOSITORIO_PROVEEDORES, useClass: RepositorioProveedoresPrisma },
     { provide: REPOSITORIO_PERMISOS, useClass: RepositorioPermisosPrisma },
     { provide: REPOSITORIO_HISTORIAL_COSTOS, useClass: RepositorioHistorialCostosPrisma },
   ],
@@ -93,6 +96,7 @@ import { UnidadDeTrabajo } from './unidad-de-trabajo';
     REPOSITORIO_MOVIMIENTOS,
     REPOSITORIO_ROLES,
     REPOSITORIO_CATEGORIAS,
+    REPOSITORIO_PROVEEDORES,
     REPOSITORIO_PERMISOS,
     REPOSITORIO_HISTORIAL_COSTOS,
   ],

@@ -34,6 +34,7 @@ import {
   crearAppDePrueba,
   crearClienteDePrueba,
   crearProductoDePrueba,
+  crearProveedorDePrueba,
   crearProyectoDePrueba,
   crearSalidaDePrueba,
   crearUsuarioDePrueba,
@@ -95,6 +96,9 @@ interface ReporteMovimientosBody {
 
 describe('Exportación de reportes — /api/reportes/*/export (T074)', () => {
   let contexto: AppDePrueba;
+  /** US15 (FR-091): el proveedor de un ingreso es una FK obligatoria — cada prueba necesita
+   *  una fila del catálogo, creada tras truncar (el TRUNCATE también vacía `proveedores`). */
+  let proveedorId: number;
 
   beforeAll(async () => {
     contexto = await crearAppDePrueba();
@@ -106,6 +110,7 @@ describe('Exportación de reportes — /api/reportes/*/export (T074)', () => {
 
   beforeEach(async () => {
     await truncarTablas(contexto.prisma);
+    proveedorId = await crearProveedorDePrueba(contexto.prisma, 'Proveedor Export Vacío');
   });
 
   const servidor = (): ReturnType<AppDePrueba['app']['getHttpServer']> => contexto.app.getHttpServer();
@@ -410,7 +415,7 @@ describe('Exportación de reportes — /api/reportes/*/export (T074)', () => {
         .send({
           numeroFactura: 'FAC-EXP-VACIO-0001',
           fechaFactura: '2026-01-05',
-          proveedor: 'Proveedor Export Vacío',
+          proveedorId,
           fechaRecepcion: '2026-01-05',
           lineas: [{ productoId: productoMovimiento.id, cantidad: 10, precioUnitario: 1_000 }],
         });
