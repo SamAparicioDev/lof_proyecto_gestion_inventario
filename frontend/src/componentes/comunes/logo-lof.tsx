@@ -6,17 +6,26 @@
  * cambiar la imagen es cambiar UN archivo (`assets/marca/logo-lof.png`) y no dos que acabarían
  * distintos. La ruta es relativa, como todo el HTTP del frontend: Next la proxya al backend.
  *
- * **Si el logotipo no está** (despliegue sin el archivo → `404`), el `<img>` falla y el
- * navegador mostraría su icono de imagen rota. Por eso el componente cambia a un respaldo de
- * TEXTO con el nombre: la pantalla de inicio de sesión y la barra lateral siguen teniendo
- * identidad, en vez de un cuadro vacío (FR-068, mismo criterio que los exportables).
+ * ## Cuando el logotipo no está, se ve "LOF" — nunca una imagen rota
  *
- * Es un Client Component solo por ese `onError`: es la única forma de enterarse de que la
+ * Si el despliegue no trae el archivo, el endpoint responde `404` y el navegador pintaría su
+ * icono de imagen rota. Detectarlo tiene una trampa que costó un ciclo: **`onError` no basta**.
+ * El `<img>` lo pinta el servidor y el navegador empieza a descargarlo de inmediato, así que
+ * cuando React hidrata y engancha el manejador el error YA ocurrió — el evento se perdió y el
+ * respaldo no aparecía nunca.
+ *
+ * Por eso hay DOS detecciones, y las dos hacen falta:
+ *
+ *  1. `useEffect` al montar: si la imagen ya terminó (`complete`) y no tiene píxeles
+ *     (`naturalWidth === 0`), es que falló antes de que hubiera nadie escuchando.
+ *  2. `onError`: para el fallo que ocurra DESPUÉS de hidratar (red lenta, caché caducada).
+ *
+ * Es un Client Component precisamente por eso: sin JavaScript no hay forma de saber que una
  * imagen no cargó.
  */
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface LogoLofProps {
   /** Alto en píxeles. El ancho se ajusta solo para no deformar el logotipo. */
@@ -27,6 +36,16 @@ interface LogoLofProps {
 
 export function LogoLof({ alto, tamanoTextoRespaldo }: LogoLofProps): React.JSX.Element {
   const [falloLaCarga, setFalloLaCarga] = useState(false);
+  const referencia = useRef<HTMLImageElement>(null);
+
+  useEffect(() => {
+    const imagen = referencia.current;
+    // `complete` es `true` tanto si cargó bien como si falló; lo que distingue el fallo es que
+    // no haya píxeles. Ver el TSDoc de cabecera para por qué esto no lo cubre `onError`.
+    if (imagen && imagen.complete && imagen.naturalWidth === 0) {
+      setFalloLaCarga(true);
+    }
+  }, []);
 
   if (falloLaCarga) {
     return (
@@ -50,6 +69,7 @@ export function LogoLof({ alto, tamanoTextoRespaldo }: LogoLofProps): React.JSX.
     // y pasarlo por el optimizador solo agregaría una capa que puede fallar sobre una imagen
     // que ya viene del tamaño correcto y cacheada un día.
     <img
+      ref={referencia}
       src="/api/marca/logo"
       alt="LOF Soluciones"
       style={{ height: alto, width: 'auto', display: 'block' }}

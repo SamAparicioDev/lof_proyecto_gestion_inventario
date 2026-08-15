@@ -26,11 +26,23 @@ export class ControladorMarca {
    * `GET /api/marca/logo` — los bytes del logotipo. `404` si el despliegue no lo trae, que es
    * el caso que la web resuelve mostrando el nombre en texto (FR-068).
    *
-   * Se cachea agresivamente: es un archivo que cambia con el despliegue, no con la operación.
+   * ## Por qué NO se cachea agresivamente
+   *
+   * La primera versión respondía `max-age=86400, immutable`, razonando que el logotipo cambia
+   * con el despliegue y no con la operación. Es cierto y aun así estaba mal: la URL es FIJA, así
+   * que `immutable` le promete al navegador que el contenido DE ESA URL no va a cambiar — y sí
+   * cambia, exactamente cuando se reemplaza el logo. El resultado es que quien haya abierto la
+   * aplicación sigue viendo el logotipo viejo durante un día entero, sin forma de arreglarlo
+   * salvo un refresco forzado. (Pasó de verdad: una imagen de prueba se quedó pegada en el
+   * navegador del dueño del proyecto después de haberla borrado del servidor.)
+   *
+   * `max-age` corto y sin `immutable`: el navegador la reutiliza mientras navega —que es donde
+   * importa, aparece en todas las pantallas— y un cambio de logotipo se propaga en minutos.
+   * Para una imagen de unos pocos KB servida por el mismo origen, es el equilibrio correcto.
    */
   @Get('logo')
   @Public()
-  @Header('Cache-Control', 'public, max-age=86400, immutable')
+  @Header('Cache-Control', 'public, max-age=300')
   @Header('X-Content-Type-Options', 'nosniff')
   @Header('Content-Disposition', 'inline')
   obtenerLogo(@Res({ passthrough: true }) respuesta: Response): StreamableFile {
