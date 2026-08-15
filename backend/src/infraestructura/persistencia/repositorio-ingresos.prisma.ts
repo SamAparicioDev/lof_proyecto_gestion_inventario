@@ -47,6 +47,7 @@ import type {
 } from '../../dominio/puertos/repositorio-ingresos';
 import { ServicioStock, type InfoProductoStock } from '../../dominio/servicios/servicio-stock';
 import { PrismaService } from './prisma.service';
+import { marcarOrdenRecibidaEnTransaccion } from './repositorio-ordenes-compra.prisma';
 import { registrarCambioDeCosto } from './registrar-cambio-costo';
 import { UnidadDeTrabajo, type PrismaTransactionClient } from './unidad-de-trabajo';
 
@@ -131,6 +132,7 @@ export class RepositorioIngresosPrisma implements RepositorioIngresos {
           numeroFactura: datos.numeroFactura,
           fechaFactura: datos.fechaFactura,
           proveedorId: BigInt(datos.proveedorId),
+          ordenCompraId: datos.ordenCompraId === null ? null : BigInt(datos.ordenCompraId),
           fechaRecepcion: datos.fechaRecepcion,
           observaciones: datos.observaciones,
           valorTotal,
@@ -268,6 +270,14 @@ export class RepositorioIngresosPrisma implements RepositorioIngresos {
         where: { id: BigInt(id) },
         data: { estado: 'RECIBIDO', usuarioModificacionId: BigInt(usuarioId), fechaModificacion: new Date() },
       });
+
+      // US16 (FR-099): si este ingreso surte una orden de compra, la orden se cierra AQUÍ —
+      // dentro de la misma transacción que acaba de mover el stock. Es lo que impide los dos
+      // estados incoherentes posibles: una orden marcada como recibida sin que la mercancía
+      // haya entrado, y mercancía entrada con la orden todavía "pendiente de llegar".
+      if (ingreso.ordenCompraId !== null) {
+        await marcarOrdenRecibidaEnTransaccion(tx, Number(ingreso.ordenCompraId), usuarioId);
+      }
     });
   }
 
@@ -441,6 +451,7 @@ function aIngresoDominio(registro: IngresoPrismaConProveedor): Ingreso {
     valorTotal: registro.valorTotal.toNumber(),
     usuarioRegistraId: Number(registro.usuarioRegistraId),
     motivoAnulacion: registro.motivoAnulacion,
+    ordenCompraId: registro.ordenCompraId === null ? null : Number(registro.ordenCompraId),
   };
 }
 

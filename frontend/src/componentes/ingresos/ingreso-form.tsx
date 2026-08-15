@@ -46,6 +46,7 @@ import { ErrorApi } from '@/lib/api/cliente';
 import { formatoMoneda } from '@/lib/formato';
 import { DialogoProductoNuevo } from '@/componentes/inventario/dialogo-producto-nuevo';
 import { SelectorProveedor } from '@/componentes/proveedores/selector-proveedor';
+import { formatoNumeroOrdenCompra } from '@trazo/compartido';
 
 const MENSAJE_ERROR_RED = 'No fue posible comunicarse con el servidor. Intenta de nuevo.';
 
@@ -83,9 +84,18 @@ interface IngresoFormProps {
   valoresIniciales?: DatosCrearIngreso;
   /** Proveedor que el ingreso ya tiene (US15): el selector lo conserva aunque esté inactivo. */
   proveedorActual?: { id: number; nombre: string } | null;
+  /** Orden de compra que este ingreso va a surtir (US16, FR-099). Solo se muestra: el dato que
+   *  viaja es `ordenCompraId` dentro de `valoresIniciales`. */
+  ordenVinculada?: { id: number; numero: number } | null;
 }
 
-export function IngresoForm({ productos, ingresoId, valoresIniciales, proveedorActual }: IngresoFormProps) {
+export function IngresoForm({
+  productos,
+  ingresoId,
+  valoresIniciales,
+  proveedorActual,
+  ordenVinculada,
+}: IngresoFormProps) {
   const router = useRouter();
   const [productosDisponibles, setProductosDisponibles] = useState(productos);
   const [lineaParaAltaRapida, setLineaParaAltaRapida] = useState<number | null>(null);
@@ -177,6 +187,19 @@ export function IngresoForm({ productos, ingresoId, valoresIniciales, proveedorA
   return (
     <>
       <form onSubmit={handleSubmit(alEnviar)} className="flex flex-col gap-5" noValidate>
+        {/* US16 (FR-099): el vínculo con la orden es invisible en el body, así que se enseña
+            aquí — quien registra debe poder confirmar que está surtiendo la orden correcta, y
+            saber que al recibir este ingreso la orden se cerrará sola. */}
+        {ordenVinculada && (
+          <div className="card p-4" style={{ borderColor: 'var(--color-accent)' }}>
+            <p style={{ margin: 0, fontSize: 13 }}>
+              Este ingreso surte la orden <strong>{formatoNumeroOrdenCompra(ordenVinculada.numero)}</strong>. Su
+              proveedor y sus líneas ya vienen cargados; completa la factura y, al recibirlo, la
+              orden quedará marcada como recibida.
+            </p>
+          </div>
+        )}
+
         <div className="card gap-4 p-5">
           <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
             <CampoTexto id="numeroFactura" label="Número de factura" error={errors.numeroFactura?.message} registro={register('numeroFactura')} />

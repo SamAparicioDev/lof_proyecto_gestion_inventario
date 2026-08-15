@@ -77,6 +77,14 @@ export const PERMISOS = {
   CATEGORIAS_GESTIONAR: 'categorias.gestionar',
   PROVEEDORES_VER: 'proveedores.ver',
   PROVEEDORES_GESTIONAR: 'proveedores.gestionar',
+
+  // US16 — órdenes de compra. Ver, crear y editar borradores lo tienen los tres roles; enviar y
+  // anular comprometen o liberan un gasto frente a un tercero y quedan restringidos (FR-100).
+  ORDENES_COMPRA_VER: 'ordenes_compra.ver',
+  ORDENES_COMPRA_CREAR: 'ordenes_compra.crear',
+  ORDENES_COMPRA_EDITAR: 'ordenes_compra.editar',
+  ORDENES_COMPRA_ENVIAR: 'ordenes_compra.enviar',
+  ORDENES_COMPRA_ANULAR: 'ordenes_compra.anular',
 } as const;
 
 /**

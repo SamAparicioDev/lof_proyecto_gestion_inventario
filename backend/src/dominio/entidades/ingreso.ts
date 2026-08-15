@@ -43,6 +43,9 @@ export interface Ingreso {
   readonly valorTotal: number;
   readonly usuarioRegistraId: number;
   readonly motivoAnulacion: string | null;
+  /** Orden de compra que este ingreso surte (US16, FR-099), o `null` si se registró sin orden
+   *  previa — que es como funcionó el sistema hasta esa historia y sigue siendo válido. */
+  readonly ordenCompraId: number | null;
 }
 
 export interface DetalleIngreso {

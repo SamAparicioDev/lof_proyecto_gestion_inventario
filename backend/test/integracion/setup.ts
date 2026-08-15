@@ -129,6 +129,9 @@ const TABLAS_DE_NEGOCIO = [
   'salidas',
   'detalles_ingresos',
   'ingresos',
+  // US16: después de `ingresos` por la FK `ingresos.orden_compra_id` (RESTRICT).
+  'detalles_ordenes_compra',
+  'ordenes_compra',
   // US15: después de `ingresos` por la FK `ingresos.proveedor_id` (RESTRICT), mismo criterio
   // que `categorias` respecto de `productos`.
   'proveedores',
@@ -173,7 +176,7 @@ export async function truncarTablas(prisma: PrismaService): Promise<void> {
   }
 
   await prisma.$executeRawUnsafe(`TRUNCATE TABLE ${TABLAS_DE_NEGOCIO.join(', ')} RESTART IDENTITY CASCADE;`);
-  await prisma.$executeRaw`UPDATE contadores SET valor = 0 WHERE clave = 'salida';`;
+  await prisma.$executeRaw`UPDATE contadores SET valor = 0 WHERE clave IN ('salida', 'orden_compra');`;
   await borrarRolesPropios(prisma);
 }
 

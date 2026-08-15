@@ -29,6 +29,11 @@ import {
   REPOSITORIO_PROVEEDORES,
   type RepositorioProveedores,
 } from '../../dominio/puertos/repositorio-proveedores';
+import {
+  REPOSITORIO_ORDENES_COMPRA,
+  type RepositorioOrdenesCompra,
+} from '../../dominio/puertos/repositorio-ordenes-compra';
+import { ErrorValidacionDominio } from '../../dominio/comunes/errores';
 import { verificarProveedorAsignable } from './verificar-proveedor-asignable';
 
 /** Línea de factura ya validada en forma (producto, cantidad, precio de compra unitario). */
@@ -45,6 +50,9 @@ export interface CrearIngresoEntrada {
   readonly fechaFactura: string;
   /** Referencia al catálogo de proveedores (US15, FR-091) — obligatoria. */
   readonly proveedorId: number;
+  /** Orden de compra que este ingreso surte (US16, FR-099). Opcional: registrar un ingreso sin
+   *  orden previa sigue siendo el camino normal. */
+  readonly ordenCompraId?: number;
   readonly fechaRecepcion: string;
   readonly observaciones: string | null;
   readonly lineas: readonly LineaCrearIngresoEntrada[];
@@ -61,6 +69,7 @@ export class CrearIngresoCasoUso implements CasoDeUso<CrearIngresoEntrada, Crear
   constructor(
     @Inject(REPOSITORIO_INGRESOS) private readonly repositorioIngresos: RepositorioIngresos,
     @Inject(REPOSITORIO_PROVEEDORES) private readonly repositorioProveedores: RepositorioProveedores,
+    @Inject(REPOSITORIO_ORDENES_COMPRA) private readonly repositorioOrdenes: RepositorioOrdenesCompra,
   ) {}
 
   async ejecutar(entrada: CrearIngresoEntrada): Promise<CrearIngresoSalida> {
@@ -68,16 +77,47 @@ export class CrearIngresoCasoUso implements CasoDeUso<CrearIngresoEntrada, Crear
     // uno inexistente, pero con un error técnico; y el estado INACTIVO no lo cubre ninguna
     // restricción de base de datos — un proveedor retirado no debe aparecer en facturas nuevas.
     await verificarProveedorAsignable(this.repositorioProveedores, entrada.proveedorId);
+    if (entrada.ordenCompraId !== undefined) {
+      await this.verificarOrdenSurtible(entrada.ordenCompraId, entrada.proveedorId);
+    }
 
     const ingreso = await this.repositorioIngresos.crear({
       numeroFactura: entrada.numeroFactura,
       fechaFactura: new Date(entrada.fechaFactura),
       proveedorId: entrada.proveedorId,
+      ordenCompraId: entrada.ordenCompraId ?? null,
       fechaRecepcion: new Date(entrada.fechaRecepcion),
       observaciones: entrada.observaciones,
       lineas: entrada.lineas.map((linea) => ({ ...linea })),
       usuarioId: entrada.usuarioId,
     });
     return { id: ingreso.id };
+  }
+
+  /**
+   * Una orden solo se puede surtir si está ENVIADA y es del MISMO proveedor (FR-099).
+   *
+   * Las dos condiciones dicen lo mismo desde ángulos distintos: un ingreso registra mercancía
+   * que llegó, y solo puede haber llegado lo que se pidió (ENVIADA) a quien se le pidió. Sin la
+   * comprobación de proveedor, el vínculo permitiría cerrar la orden de Formex con una factura
+   * de otro proveedor y el historial de compras dejaría de significar nada.
+   */
+  private async verificarOrdenSurtible(ordenCompraId: number, proveedorId: number): Promise<void> {
+    const orden = await this.repositorioOrdenes.buscarPorId(ordenCompraId);
+    if (!orden) {
+      throw new ErrorValidacionDominio('La orden de compra seleccionada no existe', {
+        ordenCompraId: 'La orden de compra seleccionada no existe',
+      });
+    }
+    if (orden.estado !== 'ENVIADA') {
+      throw new ErrorValidacionDominio('Solo una orden ENVIADA puede surtirse con un ingreso', {
+        ordenCompraId: 'Solo una orden enviada al proveedor puede surtirse con un ingreso.',
+      });
+    }
+    if (orden.proveedor.id !== proveedorId) {
+      throw new ErrorValidacionDominio('La orden de compra es de otro proveedor', {
+        ordenCompraId: `La orden es de "${orden.proveedor.nombre}": el ingreso debe registrarse a ese mismo proveedor.`,
+      });
+    }
   }
 }

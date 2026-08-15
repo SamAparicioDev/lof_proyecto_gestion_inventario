@@ -66,6 +66,9 @@ export interface DatosNuevoIngreso {
   readonly fechaFactura: Date;
   /** Referencia al catálogo (US15, FR-091) — obligatoria: no hay ingreso sin proveedor. */
   readonly proveedorId: number;
+  /** Orden de compra que este ingreso surte, si nació de una (US16, FR-099). `null` es la
+   *  situación normal de todo ingreso registrado sin orden previa. */
+  readonly ordenCompraId: number | null;
   readonly fechaRecepcion: Date;
   readonly observaciones: string | null;
   readonly lineas: LineaNuevoIngreso[];

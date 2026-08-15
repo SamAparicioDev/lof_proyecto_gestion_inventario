@@ -282,6 +282,8 @@ export class ImportarProductosCasoUso implements CasoDeUso<ImportarProductosEntr
       numeroFactura: numeroFacturaSintetico(),
       fechaFactura: ahora,
       proveedorId: await this.resolverProveedorDelSistema(),
+      // La carga masiva no nace de ninguna orden de compra (US16, FR-099): es stock inicial.
+      ordenCompraId: null,
       fechaRecepcion: ahora,
       observaciones: 'Ingreso generado automáticamente por carga masiva de inventario (US8).',
       lineas,

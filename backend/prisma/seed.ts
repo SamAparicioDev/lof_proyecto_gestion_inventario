@@ -125,6 +125,15 @@ const PERMISOS_DEL_SISTEMA = [
   // trabajo diario. Administrar el catálogo (FR-093 incluido) sigue siendo lo restringido.
   { clave: 'proveedores.ver', modulo: 'proveedores', descripcion: 'Consultar el catálogo de proveedores para registrar ingresos y filtrar.' },
   { clave: 'proveedores.gestionar', modulo: 'proveedores', descripcion: 'Administrar el catálogo de proveedores: alta, edición y estado.' },
+
+  // US16 (FR-100): consultar y ARMAR pedidos lo pueden los tres roles —quien ve faltar la
+  // mercancía es quien arma la orden—, pero enviar y anular comprometen o liberan un gasto
+  // frente a un tercero, así que quedan en Administrador y Gerente.
+  { clave: 'ordenes_compra.ver', modulo: 'ordenes_compra', descripcion: 'Consultar las órdenes de compra y su detalle.' },
+  { clave: 'ordenes_compra.crear', modulo: 'ordenes_compra', descripcion: 'Crear órdenes de compra en borrador.' },
+  { clave: 'ordenes_compra.editar', modulo: 'ordenes_compra', descripcion: 'Editar una orden de compra mientras sigue en borrador.' },
+  { clave: 'ordenes_compra.enviar', modulo: 'ordenes_compra', descripcion: 'Marcar una orden como enviada al proveedor: compromete el gasto.' },
+  { clave: 'ordenes_compra.anular', modulo: 'ordenes_compra', descripcion: 'Anular una orden de compra indicando el motivo.' },
 ] as const;
 
 /**
@@ -138,6 +147,9 @@ const PERMISOS_OPERARIO = [
   'productos.crear',
   'categorias.ver',
   'proveedores.ver',
+  'ordenes_compra.ver',
+  'ordenes_compra.crear',
+  'ordenes_compra.editar',
   'clientes.ver',
   'ingresos.ver',
   'ingresos.crear',
@@ -203,11 +215,16 @@ const PERMISOS_EXCLUSIVOS_ADMINISTRADOR = ['usuarios.gestionar', 'roles.gestiona
  * | categorias.gestionar       | ✔ | ✔ | — | POST/PUT/DELETE /api/categorias (US15)                              |
  * | proveedores.ver            | ✔ | ✔ | ✔ | GET /api/proveedores (US15 — el proveedor es OBLIGATORIO al ingresar)|
  * | proveedores.gestionar      | ✔ | ✔ | — | POST/PUT/DELETE /api/proveedores (US15)                             |
+ * | ordenes_compra.ver         | ✔ | ✔ | ✔ | GET /api/ordenes-compra · /:id · /export (US16)                     |
+ * | ordenes_compra.crear       | ✔ | ✔ | ✔ | POST /api/ordenes-compra · GET /sugerencias (US16)                  |
+ * | ordenes_compra.editar      | ✔ | ✔ | ✔ | PUT /api/ordenes-compra/:id (US16)                                  |
+ * | ordenes_compra.enviar      | ✔ | ✔ | — | POST /api/ordenes-compra/:id/enviar (US16)                          |
+ * | ordenes_compra.anular      | ✔ | ✔ | — | POST /api/ordenes-compra/:id/anular (US16)                          |
  *
- * TOTALES: Administrador 35 · Gerente 33 · Operario 16 (de 35 permisos del catálogo).
- * (Eran 31/29/14 sobre 31 hasta US12; US15 agrega los cuatro de los catálogos, y ninguno
- * recorta nada de lo que ya tenía un rol — SC-013 se conserva intacto, misma lectura que la
- * nota de `inventario.ver_costos` de más abajo.)
+ * TOTALES: Administrador 40 · Gerente 38 · Operario 19 (de 40 permisos del catálogo).
+ * (Eran 31/29/14 sobre 31 hasta US12; US15 agrega los cuatro de los catálogos y US16 los cinco
+ * de órdenes de compra. Ninguno recorta nada de lo que ya tenía un rol — SC-013 se conserva
+ * intacto, misma lectura que la nota de `inventario.ver_costos` de más abajo.)
  *
  * Nota sobre `roles.gestionar`: es el único permiso cuyo endpoint todavía no existe (llega en
  * T106). No es un permiso especulativo — el contrato ya lo exige para toda la sección "Roles y

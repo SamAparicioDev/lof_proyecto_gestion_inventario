@@ -90,6 +90,18 @@ enum EstadoProveedor {
   @@map("estado_proveedor")
 }
 
+/** Máquina de estados de una orden de compra (US16, FR-096). Una orden NUNCA mueve stock:
+ *  `RECIBIDA` significa que llegó el ingreso que la surte, no que el sistema haya sumado nada
+ *  por su cuenta. */
+enum EstadoOrdenCompra {
+  BORRADOR
+  ENVIADA
+  RECIBIDA
+  ANULADA
+
+  @@map("estado_orden_compra")
+}
+
 /** Estado de un cliente (catálogo comercial — FR-034). */
 enum EstadoCliente {
   ACTIVO
@@ -265,6 +277,8 @@ model Usuario {
   categoriasModificadas Categoria[]            @relation("CategoriaModificadaPor")
   proveedoresCreados     Proveedor[]           @relation("ProveedorCreadoPor")
   proveedoresModificados Proveedor[]           @relation("ProveedorModificadoPor")
+  ordenesCompraCreadas     OrdenCompra[]       @relation("OrdenCompraCreadaPor")
+  ordenesCompraModificadas OrdenCompra[]       @relation("OrdenCompraModificadaPor")
   clientesCreados       Cliente[]              @relation("ClienteCreadoPor")
   clientesModificados   Cliente[]              @relation("ClienteModificadoPor")
   proyectosCreados      Proyecto[]             @relation("ProyectoCreadoPor")
@@ -319,6 +333,7 @@ model Producto {
 
   detallesIngresos DetalleIngreso[]
   detallesSalidas  DetalleSalida[]
+  detallesOrdenesCompra DetalleOrdenCompra[]
   movimientos      MovimientoInventario[]
   historialCostos  HistorialCostoProducto[]
 
@@ -392,7 +407,8 @@ model Proveedor {
   usuarioModificacionId BigInt?   @map("usuario_modificacion_id")
   usuarioModificacion   Usuario?  @relation("ProveedorModificadoPor", fields: [usuarioModificacionId], references: [id])
 
-  ingresos Ingreso[]
+  ingresos       Ingreso[]
+  ordenesCompra  OrdenCompra[]
 
   @@index([estado])
   @@map("proveedores")
@@ -515,6 +531,63 @@ model Proyecto {
  * de `usuarioCreacionId` (auditoría genérica): en la práctica hoy coinciden, pero
  * data-model.md los define como campos separados con propósitos distintos.
  */
+/**
+ * Orden de compra — el pedido formal que se le envía a un proveedor (US16, FR-094…FR-100).
+ *
+ * Es el único documento del sistema que NO escribe en `movimientos_inventario`: pedir no es
+ * mover mercancía. El stock se mueve cuando el `Ingreso` vinculado se recibe (FR-017), y ese
+ * mismo momento es el que deja la orden en `RECIBIDA` (FR-099).
+ *
+ * `numero` es un correlativo de `contadores['orden_compra']`, pedido DENTRO de la transacción
+ * que crea la orden — igual que el de las salidas y por el mismo motivo (research R5): un
+ * `MAX()+1` se duplica bajo concurrencia y una secuencia deja huecos al revertir.
+ */
+model OrdenCompra {
+  id                   BigInt            @id @default(autoincrement())
+  numero               BigInt            @unique
+  proveedorId          BigInt            @map("proveedor_id")
+  proveedor            Proveedor         @relation(fields: [proveedorId], references: [id])
+  fechaOrden           DateTime          @map("fecha_orden") @db.Date
+  fechaEntregaEsperada DateTime?         @map("fecha_entrega_esperada") @db.Date
+  observaciones        String?           @db.Text
+  estado               EstadoOrdenCompra @default(BORRADOR)
+  valorTotal           Decimal           @default(0) @map("valor_total") @db.Decimal(14, 2)
+  motivoAnulacion      String?           @map("motivo_anulacion") @db.Text
+
+  fechaCreacion         DateTime  @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
+  usuarioCreacionId     BigInt    @map("usuario_creacion_id")
+  usuarioCreacion       Usuario   @relation("OrdenCompraCreadaPor", fields: [usuarioCreacionId], references: [id])
+  fechaModificacion     DateTime? @map("fecha_modificacion") @db.Timestamptz(6)
+  usuarioModificacionId BigInt?   @map("usuario_modificacion_id")
+  usuarioModificacion   Usuario?  @relation("OrdenCompraModificadaPor", fields: [usuarioModificacionId], references: [id])
+
+  detalles DetalleOrdenCompra[]
+  ingresos Ingreso[]
+
+  @@index([proveedorId, estado])
+  @@index([fechaOrden])
+  @@index([estado])
+  @@map("ordenes_compra")
+}
+
+/** Línea de una orden de compra. `ON DELETE CASCADE` solo se ejerce mientras la orden es
+ *  BORRADOR (editarla reescribe sus líneas); una orden ENVIADA ya no se toca. El precio es
+ *  ESTIMADO: el real lo fija la factura del proveedor. */
+model DetalleOrdenCompra {
+  id             BigInt      @id @default(autoincrement())
+  ordenCompraId  BigInt      @map("orden_compra_id")
+  ordenCompra    OrdenCompra @relation(fields: [ordenCompraId], references: [id], onDelete: Cascade)
+  productoId     BigInt      @map("producto_id")
+  producto       Producto    @relation(fields: [productoId], references: [id])
+  cantidad       Decimal     @db.Decimal(12, 2)
+  precioUnitario Decimal     @map("precio_unitario") @db.Decimal(14, 2)
+  valorTotal     Decimal     @map("valor_total") @db.Decimal(14, 2)
+
+  @@unique([ordenCompraId, productoId])
+  @@index([productoId])
+  @@map("detalles_ordenes_compra")
+}
+
 model Ingreso {
   id                BigInt        @id @default(autoincrement())
   numeroFactura     String        @unique @map("numero_factura") @db.VarChar(50)
@@ -530,6 +603,10 @@ model Ingreso {
   usuarioRegistraId BigInt        @map("usuario_registra_id")
   usuarioRegistra   Usuario       @relation("IngresoUsuarioRegistra", fields: [usuarioRegistraId], references: [id])
   motivoAnulacion   String?       @map("motivo_anulacion") @db.Text
+  /** US16 (FR-099): la orden de compra que este ingreso surte, si nació de una. NULL es la
+   *  situación normal de todo ingreso registrado sin orden previa. */
+  ordenCompraId     BigInt?       @map("orden_compra_id")
+  ordenCompra       OrdenCompra?  @relation(fields: [ordenCompraId], references: [id])
 
   fechaCreacion         DateTime  @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
   usuarioCreacionId     BigInt    @map("usuario_creacion_id")
@@ -543,6 +620,7 @@ model Ingreso {
   @@index([fechaRecepcion])
   @@index([estado])
   @@index([proveedorId])
+  @@index([ordenCompraId])
   @@map("ingresos")
 }
 

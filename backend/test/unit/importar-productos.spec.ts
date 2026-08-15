@@ -286,6 +286,7 @@ class RepositorioIngresosFalso implements RepositorioIngresos {
       valorTotal: datos.lineas.reduce((acumulado, linea) => acumulado + linea.cantidad * linea.precioUnitario, 0),
       usuarioRegistraId: datos.usuarioId,
       motivoAnulacion: null,
+      ordenCompraId: datos.ordenCompraId,
     };
   }
 

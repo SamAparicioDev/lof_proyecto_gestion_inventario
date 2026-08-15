@@ -426,19 +426,19 @@ Proveedores — MISMO patrón que categorías (FR-091), con dos diferencias que 
 
 **Depende de US15**: una orden se dirige a un proveedor del catálogo; sin él no tendría destinatario.
 
-- [ ] T164 [US16] Migración `*_ordenes_compra/migration.sql` + modelos `OrdenCompra`/`DetalleOrdenCompra` en `schema.prisma`, `ingresos.orden_compra_id` (NULL, FR-099), fila `contadores['orden_compra']` y los `CHECK` de `cantidad > 0` / `precio_unitario > 0` (Prisma no los genera)
-- [ ] T165 [P] [US16] Permisos en el seed: `ordenes_compra.ver`/`.crear`/`.editar` para los TRES roles y `.enviar`/`.anular` solo para Administrador y Gerente (FR-100)
-- [ ] T166 [P] [US16] Esquemas `packages/compartido/src/esquemas/ordenes-compra.ts` (crear/actualizar, filtro, motivo) + `tipos/ordenes-compra.ts` + `ordenCompraId` OPCIONAL en el esquema de ingreso
-- [ ] T167 [US16] Dominio: entidad `orden-compra.ts` con la máquina de estados (`transicionValidaOrdenCompra`) y el cálculo de totales como funciones PURAS, más el puerto `repositorio-ordenes-compra.ts`
-- [ ] T168 [US16] Adaptador `repositorio-ordenes-compra.prisma.ts`: el correlativo se pide DENTRO de la transacción que crea la orden (`CLAVE_CONTADOR_ORDEN_COMPRA`, mismo mecanismo que las salidas — FR-095); la edición se rechaza fuera de BORRADOR
-- [ ] T169 [US16] Sugerencias de compra (FR-098): consulta "productos ACTIVOS bajo umbral que ESE proveedor ya suministró", con `cantidadSugerida = umbral × 2 − disponible` y `precioSugerido = ultimo_costo`
-- [ ] T170 [US16] Casos de uso en `backend/src/aplicacion/ordenes-compra/`: listar, obtener, crear, actualizar, enviar, anular y sugerir. Ninguno toca stock (FR-096)
-- [ ] T171 [US16] `ControladorOrdenesCompra` (`/api/ordenes-compra`) con `@RequierePermiso` por método + mapeadores `orden → DocumentoReporte` para el PDF/Excel del documento y del listado (FR-097)
-- [ ] T172 [US16] Enlace con el ingreso (FR-099): `ordenCompraId` en `POST /api/ingresos` validando que la orden esté ENVIADA y sea del MISMO proveedor, y paso de la orden a RECIBIDA dentro de la MISMA transacción que `recibir` mueve el stock
-- [ ] T173 [US16] Frontend: `lib/api/ordenes-compra.ts`, listado `/ordenes-compra` con filtros (proveedor, estado, fechas), resumen de filtros, export y entrada en la navegación
-- [ ] T174 [US16] Frontend: formulario de alta/edición con el panel de **sugerencias por proveedor** (agregar una o todas), líneas dinámicas y total en vivo, reutilizando el patrón de `ingreso-form.tsx`
-- [ ] T175 [US16] Frontend: detalle `/ordenes-compra/[id]` con acciones según estado y permiso (Enviar, Anular con motivo, Exportar) y **"Registrar ingreso"**, que precarga `/ingresos/nuevo?ordenCompraId=N`
-- [ ] T176 [P] [US16] Pruebas de integración `backend/test/integracion/ordenes-compra.spec.ts`: correlativo único bajo concurrencia; una orden ENVIADA no se edita; anular exige motivo; las sugerencias traen solo lo bajo umbral de ESE proveedor; y **recibir el ingreso vinculado deja la orden en RECIBIDA sin tocar el stock dos veces**
+- [x] T164 [US16] Migración `*_ordenes_compra/migration.sql` + modelos `OrdenCompra`/`DetalleOrdenCompra` en `schema.prisma`, `ingresos.orden_compra_id` (NULL, FR-099), fila `contadores['orden_compra']` y los `CHECK` de `cantidad > 0` / `precio_unitario > 0` (Prisma no los genera)
+- [x] T165 [P] [US16] Permisos en el seed: `ordenes_compra.ver`/`.crear`/`.editar` para los TRES roles y `.enviar`/`.anular` solo para Administrador y Gerente (FR-100)
+- [x] T166 [P] [US16] Esquemas `packages/compartido/src/esquemas/ordenes-compra.ts` (crear/actualizar, filtro, motivo) + `tipos/ordenes-compra.ts` + `ordenCompraId` OPCIONAL en el esquema de ingreso
+- [x] T167 [US16] Dominio: entidad `orden-compra.ts` con la máquina de estados (`transicionValidaOrdenCompra`) y el cálculo de totales como funciones PURAS, más el puerto `repositorio-ordenes-compra.ts`
+- [x] T168 [US16] Adaptador `repositorio-ordenes-compra.prisma.ts`: el correlativo se pide DENTRO de la transacción que crea la orden (`CLAVE_CONTADOR_ORDEN_COMPRA`, mismo mecanismo que las salidas — FR-095); la edición se rechaza fuera de BORRADOR
+- [x] T169 [US16] Sugerencias de compra (FR-098): consulta "productos ACTIVOS bajo umbral que ESE proveedor ya suministró", con `cantidadSugerida = umbral × 2 − disponible` y `precioSugerido = ultimo_costo`
+- [x] T170 [US16] Casos de uso en `backend/src/aplicacion/ordenes-compra/`: listar, obtener, crear, actualizar, enviar, anular y sugerir. Ninguno toca stock (FR-096)
+- [x] T171 [US16] `ControladorOrdenesCompra` (`/api/ordenes-compra`) con `@RequierePermiso` por método + mapeadores `orden → DocumentoReporte` para el PDF/Excel del documento y del listado (FR-097)
+- [x] T172 [US16] Enlace con el ingreso (FR-099): `ordenCompraId` en `POST /api/ingresos` validando que la orden esté ENVIADA y sea del MISMO proveedor, y paso de la orden a RECIBIDA dentro de la MISMA transacción que `recibir` mueve el stock
+- [x] T173 [US16] Frontend: `lib/api/ordenes-compra.ts`, listado `/ordenes-compra` con filtros (proveedor, estado, fechas), resumen de filtros, export y entrada en la navegación
+- [x] T174 [US16] Frontend: formulario de alta/edición con el panel de **sugerencias por proveedor** (agregar una o todas), líneas dinámicas y total en vivo, reutilizando el patrón de `ingreso-form.tsx`
+- [x] T175 [US16] Frontend: detalle `/ordenes-compra/[id]` con acciones según estado y permiso (Enviar, Anular con motivo, Exportar) y **"Registrar ingreso"**, que precarga `/ingresos/nuevo?ordenCompraId=N`
+- [x] T176 [P] [US16] Pruebas de integración `backend/test/integracion/ordenes-compra.spec.ts`: correlativo único bajo concurrencia; una orden ENVIADA no se edita; anular exige motivo; las sugerencias traen solo lo bajo umbral de ESE proveedor; y **recibir el ingreso vinculado deja la orden en RECIBIDA sin tocar el stock dos veces**
 
 **Checkpoint**: Se puede pedir mercancía a un proveedor, enviarle el PDF y seguir qué falta por llegar
 

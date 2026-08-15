@@ -99,6 +99,17 @@ function construirEsquemaIngreso() {
         'La fecha de recepción no es válida',
       ),
       observaciones: z.string().trim().optional(),
+      /**
+       * US16 (FR-099): la orden de compra que este ingreso surte, si nació de una. Opcional a
+       * propósito — registrar un ingreso sin orden previa es como funcionó el sistema hasta
+       * esta historia y sigue siendo válido. El servidor comprueba que la orden esté ENVIADA y
+       * sea del MISMO proveedor: eso es una regla de negocio, no de forma, y no vive aquí.
+       */
+      ordenCompraId: z
+        .number({ invalid_type_error: 'La orden de compra no es válida' })
+        .int('La orden de compra no es válida')
+        .positive('La orden de compra no es válida')
+        .optional(),
       lineas: z.array(esquemaLineaIngreso).min(1, 'Agrega al menos un producto'),
     })
     .superRefine((datos, ctx) => sinProductosRepetidos(datos.lineas, ctx));

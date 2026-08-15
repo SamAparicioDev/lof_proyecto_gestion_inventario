@@ -28,6 +28,7 @@
  * |---|---|---|
  * | Panel | — (ninguno) | `GET /api/panel` no exige permiso: ver abajo |
  * | Inventario | `inventario.ver` | `GET /api/inventario` |
+ * | Órdenes de compra | `ordenes_compra.ver` | `GET /api/ordenes-compra` |
  * | Ingresos | `ingresos.ver` | `GET /api/ingresos` |
  * | Salidas | `salidas.ver` | `GET /api/salidas` |
  * | Clientes y proyectos | `clientes.ver` | `GET /api/clientes` |
@@ -57,6 +58,7 @@ import {
   ChartBar,
   Gauge,
   Package,
+  Receipt,
   ShieldCheck,
   SlidersHorizontal,
   UserGear,
@@ -76,6 +78,12 @@ export interface ElementoNavegacion {
 
 export const ELEMENTOS_NAVEGACION: ElementoNavegacion[] = [
   { href: '/', etiqueta: 'Panel', icono: Gauge },
+  {
+    href: '/ordenes-compra',
+    etiqueta: 'Órdenes de compra',
+    icono: Receipt,
+    permiso: PERMISOS.ORDENES_COMPRA_VER,
+  },
   { href: '/ingresos', etiqueta: 'Ingresos', icono: ArrowSquareIn, permiso: PERMISOS.INGRESOS_VER },
   { href: '/inventario', etiqueta: 'Inventario', icono: Package, permiso: PERMISOS.INVENTARIO_VER },
   { href: '/salidas', etiqueta: 'Salidas', icono: ArrowSquareOut, permiso: PERMISOS.SALIDAS_VER },
