@@ -406,6 +406,144 @@ const FECHA_SALIDA_CONFIRMADA_SUR = new Date('2026-07-18');
 const FECHA_SALIDA_COMPLETADA_NORTE = new Date('2026-07-20');
 const FECHA_SALIDA_PENDIENTE_NORTE = new Date('2026-07-25');
 
+// ============================================================================
+// Escenario demo "Formex / Compresores" (US15) — catálogo de categorías en uso
+// ============================================================================
+
+/**
+ * Segundo escenario demo, añadido con US15 para que el catálogo de categorías tenga datos
+ * reales con los que probarse: una categoría ("Compresores"), un proveedor ("Formex") y cinco
+ * productos clasificados con ella, que entran al inventario por un ingreso RECIBIDO real.
+ *
+ * Entran por un ingreso y no con `stockActual` a mano a propósito: el stock de este sistema
+ * solo se mueve con documentos (Principio I), así que sembrar existencias por la puerta de
+ * atrás produciría productos cuyo stock no cuadra con sus movimientos — justo el invariante
+ * que las pruebas de conciliación verifican.
+ *
+ * `proveedor` viaja todavía como texto porque el catálogo de proveedores es la segunda mitad
+ * de US15 (T157-T163) y aún no está implementado. Cuando lo esté, su migración convertirá este
+ * "Formex" en la fila del catálogo sin intervención (FR-092).
+ *
+ * Idempotente por SKU, mismo criterio que `sembrarDatosNegocioDemo`.
+ */
+const DEMO_FORMEX = {
+  categoria: 'Compresores',
+  proveedor: 'Formex',
+  numeroFactura: 'FC-FORMEX-0001',
+  productos: [
+    { sku: 'CMP-100', descripcion: 'Compresor de pistón 100 L 2 HP', umbral: 2, cantidad: 12, precio: 1_850_000 },
+    { sku: 'CMP-200', descripcion: 'Compresor de tornillo 7.5 HP', umbral: 1, cantidad: 4, precio: 12_400_000 },
+    { sku: 'CMP-300', descripcion: 'Compresor portátil 24 L 1 HP', umbral: 5, cantidad: 20, precio: 690_000 },
+    { sku: 'CMP-400', descripcion: 'Compresor de tornillo 15 HP con secador', umbral: 1, cantidad: 2, precio: 23_900_000 },
+    { sku: 'CMP-500', descripcion: 'Compresor odontológico libre de aceite 50 L', umbral: 2, cantidad: 6, precio: 3_150_000 },
+  ],
+} as const;
+
+const FECHA_INGRESO_FORMEX = new Date('2026-08-01');
+
+async function sembrarDemoFormex(adminId: bigint): Promise<void> {
+  const yaExiste = await prisma.producto.findUnique({ where: { sku: DEMO_FORMEX.productos[0].sku } });
+  if (yaExiste) {
+    console.log(`Datos demo "${DEMO_FORMEX.proveedor}/${DEMO_FORMEX.categoria}" ya existían — se omite el bloque.`);
+    return;
+  }
+
+  // La categoría se busca por nombre normalizado antes de crearla: el índice funcional
+  // `lower(btrim(nombre))` rechazaría un duplicado si alguien ya la dio de alta a mano.
+  const normalizado = DEMO_FORMEX.categoria.trim().toLocaleLowerCase('es');
+  const existentes = await prisma.$queryRaw<Array<{ id: bigint }>>`
+    SELECT id FROM categorias WHERE lower(btrim(nombre)) = ${normalizado} LIMIT 1
+  `;
+  const categoriaId =
+    existentes[0]?.id ??
+    (
+      await prisma.categoria.create({
+        data: {
+          nombre: DEMO_FORMEX.categoria,
+          descripcion: 'Equipos de aire comprimido',
+          usuarioCreacionId: adminId,
+        },
+        select: { id: true },
+      })
+    ).id;
+
+  const productos = await Promise.all(
+    DEMO_FORMEX.productos.map((producto) =>
+      prisma.producto.create({
+        data: {
+          sku: producto.sku,
+          descripcion: producto.descripcion,
+          categoriaId,
+          ubicacion: 'Bodega Central',
+          umbralStockBajo: producto.umbral,
+          usuarioCreacionId: adminId,
+        },
+        select: { id: true, sku: true },
+      }),
+    ),
+  );
+  const idPorSku = new Map(productos.map((producto) => [producto.sku, producto.id]));
+
+  const valorTotal = DEMO_FORMEX.productos.reduce((suma, p) => suma + p.cantidad * p.precio, 0);
+
+  await prisma.$transaction(async (tx) => {
+    const ingreso = await tx.ingreso.create({
+      data: {
+        numeroFactura: DEMO_FORMEX.numeroFactura,
+        proveedor: DEMO_FORMEX.proveedor,
+        fechaFactura: FECHA_INGRESO_FORMEX,
+        fechaRecepcion: FECHA_INGRESO_FORMEX,
+        estado: 'RECIBIDO',
+        valorTotal,
+        usuarioRegistraId: adminId,
+        usuarioCreacionId: adminId,
+        detalles: {
+          create: DEMO_FORMEX.productos.map((producto) => ({
+            productoId: idPorSku.get(producto.sku)!,
+            cantidad: producto.cantidad,
+            precioUnitario: producto.precio,
+            valorTotal: producto.cantidad * producto.precio,
+          })),
+        },
+      },
+      select: { id: true },
+    });
+
+    // Stock + movimiento + costo, en la MISMA transacción que el documento (Principio I).
+    for (const producto of DEMO_FORMEX.productos) {
+      const productoId = idPorSku.get(producto.sku)!;
+      await tx.producto.update({
+        where: { id: productoId },
+        data: {
+          stockActual: producto.cantidad,
+          ultimoCosto: producto.precio,
+          fechaUltimoMovimiento: FECHA_INGRESO_FORMEX,
+        },
+      });
+      await tx.movimientoInventario.create({
+        data: {
+          productoId,
+          tipo: 'ENTRADA',
+          cantidad: producto.cantidad,
+          // Los productos nacen en 0 en este mismo bloque, así que el stock resultante ES la
+          // cantidad recibida — el invariante `stock_actual = Σ movimientos` queda cuadrado.
+          stockResultante: producto.cantidad,
+          fechaHora: FECHA_INGRESO_FORMEX,
+          documentoTipo: 'INGRESO',
+          documentoId: ingreso.id,
+          usuarioId: adminId,
+        },
+      });
+    }
+  });
+
+  console.log(
+    `Demo "${DEMO_FORMEX.proveedor}": categoría "${DEMO_FORMEX.categoria}" + ` +
+      `${DEMO_FORMEX.productos.length} productos con stock por el ingreso ${DEMO_FORMEX.numeroFactura}.`,
+  );
+}
+
+
 /**
  * Siembra el escenario de negocio "Jumbo" (T067, US4): 2 productos, 2 ingresos RECIBIDOS,
  * 1 cliente con 2 proyectos y 5 salidas (2 CONFIRMADA, 1 COMPLETADA, 1 PENDIENTE, 1 ANULADA)
@@ -772,6 +910,7 @@ async function main(): Promise<void> {
       await upsertUsuarioSemilla(usuarioDemo);
     }
     await sembrarDatosNegocioDemo(admin.id);
+    await sembrarDemoFormex(admin.id);
   }
 }
 
