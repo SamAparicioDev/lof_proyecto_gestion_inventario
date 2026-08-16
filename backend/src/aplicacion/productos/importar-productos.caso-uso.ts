@@ -65,6 +65,15 @@ import {
   type RepositorioProveedores,
 } from '../../dominio/puertos/repositorio-proveedores';
 import {
+  REPOSITORIO_UNIDADES_MEDIDA,
+  type RepositorioUnidadesMedida,
+} from '../../dominio/puertos/repositorio-unidades-medida';
+import {
+  normalizarTextoUnidadMedida,
+  puedeMedirProductos,
+  type UnidadMedida,
+} from '../../dominio/entidades/unidad-medida';
+import {
   LECTOR_IMPORTACION_PRODUCTOS,
   type FilaValidaImportacionProducto,
   type LectorImportacionProductos,
@@ -121,6 +130,7 @@ export class ImportarProductosCasoUso implements CasoDeUso<ImportarProductosEntr
     @Inject(LECTOR_IMPORTACION_PRODUCTOS) private readonly lectorImportacion: LectorImportacionProductos,
     @Inject(REPOSITORIO_CATEGORIAS) private readonly repositorioCategorias: RepositorioCategorias,
     @Inject(REPOSITORIO_PROVEEDORES) private readonly repositorioProveedores: RepositorioProveedores,
+    @Inject(REPOSITORIO_UNIDADES_MEDIDA) private readonly repositorioUnidades: RepositorioUnidadesMedida,
   ) {}
 
   async ejecutar(entrada: ImportarProductosEntrada): Promise<ResumenImportacion> {
@@ -131,6 +141,7 @@ export class ImportarProductosCasoUso implements CasoDeUso<ImportarProductosEntr
     // archivo evita una consulta por fila sin cambiar el resultado (el catálogo no se modifica
     // durante la importación).
     const categoriasResueltas = new Map<string, number | null>();
+    const unidadesResueltas = new Map<string, UnidadMedida | null>();
     const errores: ErrorFilaImportacion[] = [...erroresIniciales];
     const filasConStockPendiente: FilaConStockPendiente[] = [];
     let creados = 0;
@@ -138,7 +149,7 @@ export class ImportarProductosCasoUso implements CasoDeUso<ImportarProductosEntr
     let costosActualizados = 0;
 
     for (const fila of filasValidas) {
-      const resultado = await this.procesarCatalogo(fila, entrada.usuarioId, categoriasResueltas);
+      const resultado = await this.procesarCatalogo(fila, entrada.usuarioId, categoriasResueltas, unidadesResueltas);
       if (!resultado.exito) {
         errores.push({ fila: fila.numeroFila, mensaje: resultado.mensaje });
         continue;
@@ -207,10 +218,38 @@ export class ImportarProductosCasoUso implements CasoDeUso<ImportarProductosEntr
     return categoria ? categoria.id : undefined;
   }
 
+  /**
+   * Unidad escrita en la fila, o `null` si el texto no corresponde a ninguna del catálogo.
+   * `undefined` significa "la celda venía vacía", que es un caso distinto y que quien llama
+   * resuelve de otra manera.
+   *
+   * Se resuelve por NOMBRE o por ABREVIATURA (FR-104) y se cachea por archivo: una hoja repite
+   * la misma unidad en decenas de filas y el catálogo no cambia durante la importación.
+   */
+  private async resolverUnidadMedida(
+    escrita: string | undefined,
+    cache: Map<string, UnidadMedida | null>,
+  ): Promise<UnidadMedida | null | undefined> {
+    if (!escrita) return undefined;
+
+    const clave = normalizarTextoUnidadMedida(escrita);
+    if (cache.has(clave)) {
+      return cache.get(clave) ?? null;
+    }
+
+    // El mismo texto se prueba contra los dos campos: "kg" entra por abreviatura y "Kilogramo"
+    // por nombre, y quien llena la hoja no tiene por qué saber cuál de los dos usa el sistema.
+    const coincidencia = await this.repositorioUnidades.buscarPorTexto(clave, clave);
+    const unidad = coincidencia?.unidad ?? null;
+    cache.set(clave, unidad);
+    return unidad;
+  }
+
   private async procesarCatalogo(
     fila: FilaValidaImportacionProducto,
     usuarioId: number,
     categoriasResueltas: Map<string, number | null>,
+    unidadesResueltas: Map<string, UnidadMedida | null>,
   ): Promise<
     { exito: true; creado: boolean; productoId: number; costoCambio: boolean } | { exito: false; mensaje: string }
   > {
@@ -227,22 +266,57 @@ export class ImportarProductosCasoUso implements CasoDeUso<ImportarProductosEntr
 
       const existente = await this.repositorioProductos.buscarPorSku(fila.datos.sku);
       const creado = !existente;
+
+      // US17 (FR-104): la unidad se escribe por NOMBRE o por ABREVIATURA, indistintamente —
+      // quien llena una hoja escribe "kg". Si viene escrita y no existe, la fila se rechaza
+      // nombrándola, igual que con una categoría desconocida.
+      const escrita = fila.datos.unidadMedida;
+      const unidadEscrita = await this.resolverUnidadMedida(escrita, unidadesResueltas);
+      if (escrita && !unidadEscrita) {
+        return { exito: false, mensaje: `La unidad de medida "${escrita}" no existe en el catálogo` };
+      }
+      // Escribirla ES asignarla, así que vale la misma regla que en el formulario: una unidad
+      // retirada del catálogo no se le pone a ningún producto (FR-102).
+      if (unidadEscrita && !puedeMedirProductos(unidadEscrita)) {
+        return { exito: false, mensaje: `La unidad de medida "${unidadEscrita.nombre}" está inactiva` };
+      }
+
+      // Las tres reglas de FR-102/FR-103/FR-104, que es donde crear y actualizar se separan:
+      //  - CREAR exige unidad. Un producto nuevo sin ella sería una cantidad ininterpretable, y
+      //    da igual que venga del formulario o del Excel.
+      //  - ACTUALIZAR con la celda vacía CONSERVA la que el producto ya tenía. Es la única
+      //    columna opcional que no se interpreta como "déjalo en blanco" (`ubicacion` sí lo
+      //    hace): permitirlo sería una vía para quitarle la unidad a un producto que ya la
+      //    tenía, justo lo que la regla de arriba prohíbe.
+      //  - Y si lo que ya tenía es NADA —un producto anterior a US17—, la fila se procesa igual
+      //    y lo deja sin unidad. Exigírsela aquí convertiría cualquier corrección masiva de
+      //    precios en una clasificación previa de todo el catálogo, y FR-103 dice justo lo
+      //    contrario: con los productos antiguos el sistema sigue operando con normalidad. La
+      //    ocasión de completarlos es su ficha, donde se decide de uno en uno y con criterio.
+      const unidadMedidaId = unidadEscrita ? unidadEscrita.id : (existente?.unidadMedida?.id ?? null);
+
       let productoId: number;
 
       if (existente) {
         await this.repositorioProductos.actualizar(existente.id, {
           descripcion: fila.datos.descripcion,
           categoriaId,
+          unidadMedidaId,
           ubicacion: fila.datos.ubicacion ?? null,
           umbralStockBajo: fila.datos.umbralStockBajo,
           usuarioModificacionId: usuarioId,
         });
         productoId = existente.id;
       } else {
+        if (unidadMedidaId === null) {
+          return { exito: false, mensaje: 'La unidad de medida es obligatoria para dar de alta un producto nuevo' };
+        }
+
         const producto = await this.repositorioProductos.crear({
           sku: fila.datos.sku,
           descripcion: fila.datos.descripcion,
           categoriaId,
+          unidadMedidaId,
           ubicacion: fila.datos.ubicacion ?? null,
           umbralStockBajo: fila.datos.umbralStockBajo,
           usuarioCreacionId: usuarioId,

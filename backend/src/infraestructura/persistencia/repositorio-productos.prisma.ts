@@ -31,11 +31,15 @@ import { Injectable } from '@nestjs/common';
 import { Prisma, type EstadoProducto as EstadoProductoPrisma } from '@prisma/client';
 
 /**
- * Toda lectura de producto arrastra su categoría (US15). No es un `include` de conveniencia:
- * la entidad de dominio `Producto` lleva `{ id, nombre }` porque cada pantalla que muestra un
- * producto muestra el nombre de su categoría, y resolverlo aparte sería una consulta por fila.
+ * Toda lectura de producto arrastra su categoría (US15) y su unidad de medida (US17). No es un
+ * `include` de conveniencia: la entidad de dominio los lleva resueltos porque cada pantalla que
+ * muestra un producto muestra el nombre de su categoría y la abreviatura de su unidad junto a
+ * la cantidad, y resolverlos aparte sería una consulta por fila.
  */
-const INCLUIR_CATEGORIA = { categoria: { select: { id: true, nombre: true } } } as const;
+const INCLUIR_CATEGORIA = {
+  categoria: { select: { id: true, nombre: true } },
+  unidadMedida: { select: { id: true, nombre: true, abreviatura: true } },
+} as const;
 
 type ProductoPrisma = Prisma.ProductoGetPayload<{ include: typeof INCLUIR_CATEGORIA }>;
 import { Duplicado, NoEncontrado } from '../../dominio/comunes/errores';
@@ -94,6 +98,7 @@ export class RepositorioProductosPrisma implements RepositorioProductos {
           sku: datos.sku,
           descripcion: datos.descripcion,
           categoriaId: datos.categoriaId === null ? null : BigInt(datos.categoriaId),
+          unidadMedidaId: BigInt(datos.unidadMedidaId),
           ubicacion: datos.ubicacion,
           umbralStockBajo: datos.umbralStockBajo,
           usuarioCreacionId: BigInt(datos.usuarioCreacionId),
@@ -113,6 +118,7 @@ export class RepositorioProductosPrisma implements RepositorioProductos {
         data: {
           descripcion: datos.descripcion,
           categoriaId: datos.categoriaId === null ? null : BigInt(datos.categoriaId),
+          unidadMedidaId: datos.unidadMedidaId === null ? null : BigInt(datos.unidadMedidaId),
           ubicacion: datos.ubicacion,
           umbralStockBajo: datos.umbralStockBajo,
           usuarioModificacionId: BigInt(datos.usuarioModificacionId),
@@ -292,6 +298,13 @@ function aProductoDominio(registro: ProductoPrisma): Producto {
     descripcion: registro.descripcion,
     categoria: registro.categoria
       ? { id: Number(registro.categoria.id), nombre: registro.categoria.nombre }
+      : null,
+    unidadMedida: registro.unidadMedida
+      ? {
+          id: Number(registro.unidadMedida.id),
+          nombre: registro.unidadMedida.nombre,
+          abreviatura: registro.unidadMedida.abreviatura,
+        }
       : null,
     ubicacion: registro.ubicacion,
     umbralStockBajo: registro.umbralStockBajo.toNumber(),

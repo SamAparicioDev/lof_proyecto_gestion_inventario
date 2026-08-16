@@ -26,6 +26,7 @@ import {
   crearCategoriaDePrueba,
   crearProductoDePrueba,
   crearProveedorDelSistemaDePrueba,
+  crearUnidadMedidaDePrueba,
   crearUsuarioDePrueba,
   NOMBRE_PROVEEDOR_DEL_SISTEMA,
   truncarTablas,
@@ -53,6 +54,9 @@ interface FilaExcelImportacion {
   umbralStockBajo?: number | null;
   cantidadInicial?: number | null;
   valorUnitario?: number | null;
+  /** US17 (FR-104): columna 8, la última — se añadió AL FINAL para no correr de sitio las que
+   *  los usuarios ya tienen en sus archivos. Se escribe por nombre o por abreviatura. */
+  unidadMedida?: string | null;
 }
 
 describe('Carga masiva de inventario — /api/productos/{plantilla-importacion,importar} (T097)', () => {
@@ -71,6 +75,10 @@ describe('Carga masiva de inventario — /api/productos/{plantilla-importacion,i
     // US15 (FR-093): el ingreso sintético de la carga masiva apunta al proveedor del sistema,
     // que el TRUNCATE se lleva por delante. En producción lo ponen la migración y la semilla.
     await crearProveedorDelSistemaDePrueba(contexto.prisma);
+    // US17 (FR-102): dar de alta un producto exige unidad por cualquier vía, también por Excel.
+    // El TRUNCATE se lleva también las que siembra la migración, así que cada prueba parte de
+    // esta, escrita en las filas por su abreviatura ("und") como haría quien llena la hoja.
+    await crearUnidadMedidaDePrueba(contexto.prisma, 'Unidad', 'und');
   });
 
   const servidor = (): ReturnType<AppDePrueba['app']['getHttpServer']> => contexto.app.getHttpServer();
@@ -94,6 +102,7 @@ describe('Carga masiva de inventario — /api/productos/{plantilla-importacion,i
           umbralStockBajo: 5,
           cantidadInicial: 20,
           valorUnitario: 1500,
+          unidadMedida: 'und',
         },
       ]);
 
@@ -206,6 +215,7 @@ describe('Carga masiva de inventario — /api/productos/{plantilla-importacion,i
         // fila 2 (válida, con stock inicial)
         {
           sku: 'IMPORT-PARCIAL-VALIDA-001',
+          unidadMedida: 'und',
           descripcion: 'Fila válida con stock',
           cantidadInicial: 7,
           valorUnitario: 900,
@@ -213,7 +223,7 @@ describe('Carga masiva de inventario — /api/productos/{plantilla-importacion,i
         // fila 3 (inválida a propósito: sin SKU)
         { sku: null, descripcion: 'Fila sin SKU, debe fallar' },
         // fila 4 (válida, sin stock inicial)
-        { sku: 'IMPORT-PARCIAL-VALIDA-002', descripcion: 'Fila válida sin stock' },
+        { sku: 'IMPORT-PARCIAL-VALIDA-002', descripcion: 'Fila válida sin stock', unidadMedida: 'und' },
       ]);
 
       const respuesta = await adjuntarArchivo(
@@ -246,11 +256,11 @@ describe('Carga masiva de inventario — /api/productos/{plantilla-importacion,i
 
       const buffer = await construirBufferImportacion([
         // fila 2: primera ocurrencia del SKU repetido — esta es la que se procesa.
-        { sku: 'IMPORT-REPETIDO-001', descripcion: 'Primera ocurrencia (válida)' },
+        { sku: 'IMPORT-REPETIDO-001', descripcion: 'Primera ocurrencia (válida)', unidadMedida: 'und' },
         // fila 3: mismo SKU, con datos distintos — debe reportarse como inválida, sin aplicarse.
-        { sku: 'IMPORT-REPETIDO-001', descripcion: 'Segunda ocurrencia (debe rechazarse)' },
+        { sku: 'IMPORT-REPETIDO-001', descripcion: 'Segunda ocurrencia (debe rechazarse)', unidadMedida: 'und' },
         // fila 4: SKU distinto — el resto del archivo sigue procesándose con normalidad.
-        { sku: 'IMPORT-REPETIDO-002', descripcion: 'Fila distinta, no afectada por la repetición' },
+        { sku: 'IMPORT-REPETIDO-002', descripcion: 'Fila distinta, no afectada por la repetición', unidadMedida: 'und' },
       ]);
 
       const respuesta = await adjuntarArchivo(
@@ -277,6 +287,139 @@ describe('Carga masiva de inventario — /api/productos/{plantilla-importacion,i
       expect(productoRepetido.descripcion).toBe('Primera ocurrencia (válida)'); // no la segunda ocurrencia
     },
   );
+
+  /**
+   * US17 (T186, FR-102…FR-104) — la columna "Unidad de medida" en la carga masiva.
+   *
+   * Las cuatro reglas se prueban en UN archivo, no en cuatro: lo que hay que demostrar es
+   * precisamente que conviven en la misma corrida sin estorbarse, que es la regla de proceso
+   * parcial de FR-051. Un archivo por caso lo daría por hecho.
+   */
+  it(
+    'unidad por abreviatura o por nombre; fila nueva sin unidad o con una desconocida rechazada ' +
+      'sin bloquear las demás (FR-102/FR-104)',
+    async () => {
+      const admin = await crearUsuarioDePrueba(contexto, { rol: 'ADMINISTRADOR' });
+      const cookie = await iniciarSesion(servidor(), admin.login, admin.password);
+      await crearUnidadMedidaDePrueba(contexto.prisma, 'Kilogramo', 'kg');
+
+      const buffer = await construirBufferImportacion([
+        // Fila 2: la unidad escrita por ABREVIATURA, que es como la escribe quien llena un Excel.
+        { sku: 'IMPORT-UM-ABREV', descripcion: 'Cemento gris', unidadMedida: 'KG ' },
+        // Fila 3: la MISMA unidad escrita por NOMBRE — quien llena la hoja no tiene por qué
+        // saber cuál de los dos campos usa el sistema.
+        { sku: 'IMPORT-UM-NOMBRE', descripcion: 'Arena de río', unidadMedida: '  kilogramo' },
+        // Fila 4: producto NUEVO sin unidad → error de ESA fila.
+        { sku: 'IMPORT-UM-FALTA', descripcion: 'Producto sin unidad' },
+        // Fila 5: unidad que no existe en el catálogo → error de ESA fila, nombrándola.
+        { sku: 'IMPORT-UM-DESCONOCIDA', descripcion: 'Producto con unidad inventada', unidadMedida: 'quintal' },
+        // Fila 6: y una fila corriente detrás de los dos errores, para que quede demostrado que
+        // el archivo sigue procesándose.
+        { sku: 'IMPORT-UM-OK', descripcion: 'Producto normal', unidadMedida: 'und' },
+      ]);
+
+      const respuesta = await adjuntarArchivo(
+        request(servidor()).post('/api/productos/importar').set('Cookie', cookie),
+        buffer,
+      );
+
+      expect(respuesta.status).toBe(200);
+      const resumen = respuesta.body as ResumenImportacionBody;
+      expect(resumen.creados).toBe(3);
+      expect(resumen.errores).toEqual([
+        { fila: 4, mensaje: 'La unidad de medida es obligatoria para dar de alta un producto nuevo' },
+        { fila: 5, mensaje: 'La unidad de medida "quintal" no existe en el catálogo' },
+      ]);
+
+      // Las dos formas de escribirla resolvieron a la MISMA unidad.
+      const porAbreviatura = await contexto.prisma.producto.findUniqueOrThrow({
+        where: { sku: 'IMPORT-UM-ABREV' },
+        include: { unidadMedida: true },
+      });
+      const porNombre = await contexto.prisma.producto.findUniqueOrThrow({
+        where: { sku: 'IMPORT-UM-NOMBRE' },
+        include: { unidadMedida: true },
+      });
+      expect(porAbreviatura.unidadMedida?.abreviatura).toBe('kg');
+      expect(Number(porNombre.unidadMedidaId)).toBe(Number(porAbreviatura.unidadMedidaId));
+
+      // Y las filas rechazadas no dejaron rastro: el error es de catálogo, no de stock.
+      const rechazados = await contexto.prisma.producto.count({
+        where: { sku: { in: ['IMPORT-UM-FALTA', 'IMPORT-UM-DESCONOCIDA'] } },
+      });
+      expect(rechazados).toBe(0);
+    },
+  );
+
+  /**
+   * FR-104: la celda vacía es la ÚNICA columna opcional que no significa "déjalo en blanco".
+   * Y su reverso, FR-103: si el producto todavía no tiene unidad —uno de los anteriores a la
+   * historia— la fila se procesa igual y lo deja sin ella. Exigirla aquí convertiría una
+   * corrección masiva de precios en una clasificación previa de todo el catálogo.
+   */
+  it('una celda VACÍA que actualiza conserva la unidad del producto, y no la exige si aún no tiene (FR-103/FR-104)', async () => {
+    const admin = await crearUsuarioDePrueba(contexto, { rol: 'ADMINISTRADOR' });
+    const cookie = await iniciarSesion(servidor(), admin.login, admin.password);
+
+    const unidadId = await crearUnidadMedidaDePrueba(contexto.prisma, 'Metro', 'm');
+    const conUnidad = await crearProductoDePrueba(contexto.prisma, {
+      sku: 'IMPORT-UM-CONSERVA',
+      descripcion: 'Cable eléctrico',
+      unidadMedidaId: unidadId,
+    });
+    // Producto ANTERIOR a US17: la factory lo siembra con la columna nula, igual que quedaron
+    // los del catálogo real de Samuel tras la migración.
+    const antiguo = await crearProductoDePrueba(contexto.prisma, {
+      sku: 'IMPORT-UM-ANTIGUO',
+      descripcion: 'Producto de antes',
+    });
+
+    const buffer = await construirBufferImportacion([
+      { sku: 'IMPORT-UM-CONSERVA', descripcion: 'Cable eléctrico calibre 12', valorUnitario: 3500 },
+      { sku: 'IMPORT-UM-ANTIGUO', descripcion: 'Producto de antes', valorUnitario: 900 },
+    ]);
+
+    const respuesta = await adjuntarArchivo(
+      request(servidor()).post('/api/productos/importar').set('Cookie', cookie),
+      buffer,
+    );
+
+    expect(respuesta.status).toBe(200);
+    const resumen = respuesta.body as ResumenImportacionBody;
+    expect(resumen).toMatchObject({ creados: 0, actualizados: 2, costosActualizados: 2, errores: [] });
+
+    const conservado = await contexto.prisma.producto.findUniqueOrThrow({ where: { id: BigInt(conUnidad.id) } });
+    expect(Number(conservado.unidadMedidaId)).toBe(unidadId); // la celda vacía NO se la quitó
+    expect(conservado.descripcion).toBe('Cable eléctrico calibre 12'); // el resto sí se actualizó
+
+    const sigueSinUnidad = await contexto.prisma.producto.findUniqueOrThrow({ where: { id: BigInt(antiguo.id) } });
+    expect(sigueSinUnidad.unidadMedidaId).toBeNull();
+    expect(sigueSinUnidad.ultimoCosto.toNumber()).toBe(900); // la corrección de precio sí se aplicó
+  });
+
+  it('rechaza la fila que escribe una unidad INACTIVA: escribirla es asignarla (FR-102)', async () => {
+    const admin = await crearUsuarioDePrueba(contexto, { rol: 'ADMINISTRADOR' });
+    const cookie = await iniciarSesion(servidor(), admin.login, admin.password);
+    const retirada = await crearUnidadMedidaDePrueba(contexto.prisma, 'Vara', 'vr');
+    await request(servidor())
+      .put(`/api/unidades-medida/${retirada}/estado`)
+      .set('Cookie', cookie)
+      .send({ estado: 'INACTIVA' });
+
+    const buffer = await construirBufferImportacion([
+      { sku: 'IMPORT-UM-RETIRADA', descripcion: 'Producto con unidad retirada', unidadMedida: 'vr' },
+    ]);
+
+    const respuesta = await adjuntarArchivo(
+      request(servidor()).post('/api/productos/importar').set('Cookie', cookie),
+      buffer,
+    );
+
+    expect(respuesta.status).toBe(200);
+    const resumen = respuesta.body as ResumenImportacionBody;
+    expect(resumen.creados).toBe(0);
+    expect(resumen.errores).toEqual([{ fila: 2, mensaje: 'La unidad de medida "Vara" está inactiva' }]);
+  });
 
   it(
     'archivo sin filas de datos (solo encabezados) se rechaza con 400 SIN tocar ningún producto ' +
@@ -362,13 +505,22 @@ describe('Carga masiva de inventario — /api/productos/{plantilla-importacion,i
 /**
  * Construye un `.xlsx` en memoria con la hoja "Productos" (mismo nombre y layout posicional
  * que `leerFilasImportacionProductos` — SKU, Descripción, Categoría, Ubicación, Umbral stock
- * bajo, Cantidad inicial, Valor unitario) para las pruebas de esta suite. Cada `fila` puede
+ * bajo, Cantidad inicial, Valor unitario, Unidad de medida) para las pruebas de esta suite. Cada `fila` puede
  * omitir cualquier campo a propósito, para construir filas inválidas.
  */
 async function construirBufferImportacion(filas: FilaExcelImportacion[]): Promise<Buffer> {
   const libro = new ExcelJS.Workbook();
   const hoja = libro.addWorksheet('Productos');
-  hoja.addRow(['SKU', 'Descripción', 'Categoría', 'Ubicación', 'Umbral stock bajo', 'Cantidad inicial', 'Valor unitario']);
+  hoja.addRow([
+    'SKU',
+    'Descripción',
+    'Categoría',
+    'Ubicación',
+    'Umbral stock bajo',
+    'Cantidad inicial',
+    'Valor unitario',
+    'Unidad de medida',
+  ]);
 
   for (const fila of filas) {
     hoja.addRow([
@@ -379,6 +531,7 @@ async function construirBufferImportacion(filas: FilaExcelImportacion[]): Promis
       fila.umbralStockBajo ?? null,
       fila.cantidadInicial ?? null,
       fila.valorUnitario ?? null,
+      fila.unidadMedida ?? null,
     ]);
   }
 

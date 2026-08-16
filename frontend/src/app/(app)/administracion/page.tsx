@@ -20,6 +20,9 @@ export default async function PaginaAdministracion() {
   if (tienePermiso(perfil?.permisos, PERMISOS.PROVEEDORES_GESTIONAR)) {
     redirect('/administracion/proveedores');
   }
+  if (tienePermiso(perfil?.permisos, PERMISOS.UNIDADES_MEDIDA_GESTIONAR)) {
+    redirect('/administracion/unidades-medida');
+  }
 
   return (
     <div role="alert" className="card p-5">

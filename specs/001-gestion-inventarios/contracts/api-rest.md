@@ -334,6 +334,55 @@ Reglas del contrato:
 - **Un proveedor INACTIVO no se ofrece** para registrar ingresos nuevos, pero los ingresos que
   ya lo referencian lo conservan — mismo criterio que FR-086 para categorías.
 
+## Unidades de medida (`/api/unidades-medida`) (US17, FR-101…FR-105)
+
+Mismo contrato que categorías y proveedores. La diferencia está en el campo del producto, no en
+el catálogo: aquí hay dos textos únicos en vez de uno.
+
+| Método y ruta | Permiso | Body/Query (Zod) | Respuesta OK | Errores |
+|---|---|---|---|---|
+| `GET /api/unidades-medida` | `unidades_medida.ver` | `esquemaListarUnidadesMedida` {buscar?, estado?} | `200` `UnidadMedida[]` {id, nombre, abreviatura, estado, cantidadProductos} ordenadas por nombre | — |
+| `POST /api/unidades-medida` | `unidades_medida.gestionar` | `esquemaCrearUnidadMedida` {nombre, abreviatura} | `201` {id} | `400` nombre o abreviatura duplicados (campo `nombre` / `abreviatura`) |
+| `PUT /api/unidades-medida/:id` | `unidades_medida.gestionar` | `esquemaCrearUnidadMedida` | `204` | `404`; `400` duplicado |
+| `PUT /api/unidades-medida/:id/estado` | `unidades_medida.gestionar` | {estado: `ACTIVA\|INACTIVA`} | `204` | `404` |
+| `DELETE /api/unidades-medida/:id` | `unidades_medida.gestionar` | — | `204` SOLO si no tiene productos | `409` con el número de productos que la usan |
+
+Reglas del contrato:
+
+- **`unidades_medida.ver` lo tienen los tres roles**: sin él no se puede dar de alta un producto,
+  que es trabajo diario (los tres roles tienen `productos.crear`). `.gestionar` es lo restringido.
+- **Dos duplicados posibles, dos campos distintos**: el error señala `nombre` o `abreviatura`
+  según cuál choque, nunca un `409` genérico — son campos de un formulario.
+
+**El producto pasa a exigir `unidadMedidaId`** (FR-102/FR-103):
+
+| Endpoint | Qué cambia |
+|---|---|
+| `POST /api/productos` | `unidadMedidaId` OBLIGATORIO. `400` con `campos.unidadMedidaId` si falta, no existe o está inactiva |
+| `PUT /api/productos/:id` | `unidadMedidaId` OBLIGATORIO — también para los productos anteriores a US17, que llegan sin ella: editarlos exige completarla (US17-AS3). Reenviar la unidad que el producto YA tiene se acepta aunque esté inactiva: desactivarla impide asignarla, no bloquea al producto que la referencia (mismo criterio que FR-086) |
+| `GET /api/inventario`, `GET /api/inventario/:id`, `GET /api/productos` | cada producto lleva `unidadMedida: { id, nombre, abreviatura } | null` — `null` solo en los anteriores a US17 |
+
+La columna es NULLABLE en la base y obligatoria en la aplicación, y esa asimetría es
+deliberada: ver data-model.md § unidades_medida.
+
+**La carga masiva gana la columna "Unidad de medida"** (FR-104), en la plantilla y en el catálogo
+exportable:
+
+- Se escribe por NOMBRE o por ABREVIATURA, indistintamente y sin distinguir mayúsculas ni
+  espacios: quien llena un Excel escribe `kg`, no `Kilogramo`.
+- Fila que CREA un producto sin unidad → error de ESA fila, sin bloquear las demás.
+- Fila con una unidad que NO existe en el catálogo, o que existe pero está INACTIVA → error de
+  ESA fila nombrándola. Escribirla es asignarla, así que rige la misma regla que en el
+  formulario.
+- Fila que ACTUALIZA con la celda VACÍA → el producto **conserva** su unidad. Es la única columna
+  opcional que NO se interpreta como "déjalo en blanco" (`ubicacion` sí lo hace): permitirlo
+  sería una forma de quitarle la unidad a un producto que ya la tenía, justo lo que FR-102
+  prohíbe. Para cambiarla se escribe la nueva.
+- Fila que ACTUALIZA un producto ANTERIOR a US17 con la celda vacía → se procesa con normalidad y
+  el producto sigue sin unidad (FR-103). Rechazarla convertiría una corrección masiva de precios
+  en una clasificación previa de todo el catálogo; el sitio donde esos productos se completan es
+  su ficha, de uno en uno.
+
 ## Carga masiva de inventario (`/api/productos/importar*`) — solo A,G (US8, FR-048…FR-051)
 
 | Método y ruta | Roles | Body/Query | Respuesta OK | Errores |

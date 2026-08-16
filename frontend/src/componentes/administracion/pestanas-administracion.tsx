@@ -24,16 +24,19 @@ import { PERMISOS } from '@/lib/permisos';
 export const SECCIONES_ADMINISTRACION = [
   { href: '/administracion/categorias', etiqueta: 'Categorías', permiso: PERMISOS.CATEGORIAS_GESTIONAR },
   { href: '/administracion/proveedores', etiqueta: 'Proveedores', permiso: PERMISOS.PROVEEDORES_GESTIONAR },
+  { href: '/administracion/unidades-medida', etiqueta: 'Unidades de medida', permiso: PERMISOS.UNIDADES_MEDIDA_GESTIONAR },
 ] as const;
 
 export function PestanasAdministracion() {
   const pathname = usePathname();
   const puedeCategorias = usePuede(PERMISOS.CATEGORIAS_GESTIONAR);
   const puedeProveedores = usePuede(PERMISOS.PROVEEDORES_GESTIONAR);
+  const puedeUnidades = usePuede(PERMISOS.UNIDADES_MEDIDA_GESTIONAR);
 
   const permitidas: Record<string, boolean> = {
     [PERMISOS.CATEGORIAS_GESTIONAR]: puedeCategorias,
     [PERMISOS.PROVEEDORES_GESTIONAR]: puedeProveedores,
+    [PERMISOS.UNIDADES_MEDIDA_GESTIONAR]: puedeUnidades,
   };
 
   const visibles = SECCIONES_ADMINISTRACION.filter((seccion) => permitidas[seccion.permiso]);

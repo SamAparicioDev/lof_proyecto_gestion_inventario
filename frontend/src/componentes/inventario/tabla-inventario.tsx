@@ -44,7 +44,7 @@ import { useRouter } from 'next/navigation';
 import type { DatosActualizarProducto, FilaInventario } from '@trazo/compartido';
 import { cambiarEstadoProducto } from '@/lib/api/productos';
 import { ErrorApi } from '@/lib/api/cliente';
-import { formatoFechaHora } from '@/lib/formato';
+import { formatoCantidadConUnidad, formatoFechaHora } from '@/lib/formato';
 import { mensajeListadoVacio } from '@/lib/filtros';
 import { PERMISOS } from '@/lib/permisos';
 import { usePuede } from '@/lib/sesion';
@@ -59,6 +59,9 @@ function aValoresFormulario(fila: FilaInventario): DatosActualizarProducto {
   return {
     descripcion: fila.producto.descripcion,
     categoriaId: fila.producto.categoria?.id ?? null,
+    // US17: `0` cuando el producto es anterior a la historia — el esquema exige un entero
+    // positivo, así que el formulario no deja guardar hasta que se elige una (FR-103).
+    unidadMedidaId: fila.producto.unidadMedida?.id ?? 0,
     ubicacion: fila.producto.ubicacion ?? '',
     umbralStockBajo: fila.producto.umbralStockBajo,
     // US12: mismo criterio que `panel-producto.tsx` — el costo viaja precargado con el vigente
@@ -136,9 +139,9 @@ export function TablaInventario({ filas, hayFiltros }: { filas: FilaInventario[]
                       <Link href={`/inventario/${fila.producto.id}`}>{fila.producto.sku}</Link>
                     </td>
                     <td>{fila.producto.descripcion}</td>
-                    <td>{fila.stock}</td>
-                    <td>{fila.comprometido}</td>
-                    <td>{fila.disponible}</td>
+                    <td>{formatoCantidadConUnidad(fila.stock, fila.producto.unidadMedida)}</td>
+                    <td>{formatoCantidadConUnidad(fila.comprometido, fila.producto.unidadMedida)}</td>
+                    <td>{formatoCantidadConUnidad(fila.disponible, fila.producto.unidadMedida)}</td>
                     <td className="text-muted">{fila.producto.ubicacion ?? '—'}</td>
                     <td className="text-muted">
                       {fila.producto.fechaUltimoMovimiento ? formatoFechaHora(fila.producto.fechaUltimoMovimiento) : '—'}
@@ -187,6 +190,7 @@ export function TablaInventario({ filas, hayFiltros }: { filas: FilaInventario[]
           productoId={filaEditando.producto.id}
           sku={filaEditando.producto.sku}
           valoresIniciales={aValoresFormulario(filaEditando)}
+          unidadActual={filaEditando.producto.unidadMedida}
           categoriaActual={filaEditando.producto.categoria}
           onCerrar={() => setFilaEditando(null)}
           onGuardado={() => router.refresh()}

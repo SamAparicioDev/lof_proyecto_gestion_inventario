@@ -32,6 +32,8 @@ import type { Categoria } from '../../src/dominio/entidades/categoria';
 import type { DatosCategoria, RepositorioCategorias } from '../../src/dominio/puertos/repositorio-categorias';
 import type { Proveedor } from '../../src/dominio/entidades/proveedor';
 import type { RepositorioProveedores } from '../../src/dominio/puertos/repositorio-proveedores';
+import type { UnidadMedida } from '../../src/dominio/entidades/unidad-medida';
+import type { RepositorioUnidadesMedida } from '../../src/dominio/puertos/repositorio-unidades-medida';
 import type { EstadoProducto, Producto } from '../../src/dominio/entidades/producto';
 import type {
   ContextoCambioCosto,
@@ -65,6 +67,7 @@ function crearProductoExistente(datos: { id: number; sku: string; estado?: Estad
     sku: datos.sku,
     descripcion: `Descripción previa de ${datos.sku}`,
     categoria: null,
+    unidadMedida: { id: 50, nombre: 'Kilogramo', abreviatura: 'kg' },
     ubicacion: null,
     umbralStockBajo: 0,
     stockActual: 0,
@@ -172,6 +175,49 @@ class RepositorioProveedoresFalso implements RepositorioProveedores {
     throw new Error('no usado en estas pruebas');
   }
   async contarIngresos(): Promise<number> {
+    throw new Error('no usado en estas pruebas');
+  }
+  async eliminar(): Promise<void> {
+    throw new Error('no usado en estas pruebas');
+  }
+}
+
+/**
+ * `RepositorioUnidadesMedida` falso: resuelve "kg"/"Kilogramo" y nada más, que es lo único que
+ * la importación le pide (FR-104 — el mismo texto se prueba contra nombre y abreviatura).
+ */
+class RepositorioUnidadesMedidaFalso implements RepositorioUnidadesMedida {
+  private readonly porTexto = new Map<string, UnidadMedida>();
+
+  constructor() {
+    const kilogramo: UnidadMedida = { id: 50, nombre: 'Kilogramo', abreviatura: 'kg', estado: 'ACTIVA' };
+    this.porTexto.set('kilogramo', kilogramo);
+    this.porTexto.set('kg', kilogramo);
+  }
+
+  async buscarPorTexto(nombreNormalizado: string, abreviaturaNormalizada: string) {
+    const unidad = this.porTexto.get(nombreNormalizado) ?? this.porTexto.get(abreviaturaNormalizada);
+    if (!unidad) return null;
+    return { unidad, campo: 'nombre' as const };
+  }
+
+  async buscarPorId(id: number): Promise<UnidadMedida | null> {
+    return [...this.porTexto.values()].find((unidad) => unidad.id === id) ?? null;
+  }
+
+  async listar(): Promise<never[]> {
+    throw new Error('no usado en estas pruebas');
+  }
+  async crear(): Promise<number> {
+    throw new Error('no usado en estas pruebas');
+  }
+  async actualizar(): Promise<void> {
+    throw new Error('no usado en estas pruebas');
+  }
+  async cambiarEstado(): Promise<void> {
+    throw new Error('no usado en estas pruebas');
+  }
+  async contarProductos(): Promise<number> {
     throw new Error('no usado en estas pruebas');
   }
   async eliminar(): Promise<void> {
@@ -338,6 +384,10 @@ function filaDatos(overrides: Partial<FilaImportacionProducto> & { sku: string }
   return {
     descripcion: `Producto ${overrides.sku}`,
     umbralStockBajo: 0,
+    // US17 (FR-102): desde esta historia una fila que CREA un producto sin unidad se rechaza,
+    // así que el caso base de estas pruebas la trae. La ausencia se ejercita en su propia
+    // prueba, más abajo.
+    unidadMedida: 'kg',
     ...overrides,
   };
 }
@@ -369,6 +419,7 @@ describe('ImportarProductosCasoUso — construcción de ResumenImportacion (T098
       lector,
       repositorioCategorias,
       new RepositorioProveedoresFalso(),
+      new RepositorioUnidadesMedidaFalso(),
     );
 
     const resumen = await casoUso.ejecutar({ archivo: Buffer.from(''), usuarioId: USUARIO_ID });
@@ -405,6 +456,7 @@ describe('ImportarProductosCasoUso — construcción de ResumenImportacion (T098
       lector,
       repositorioCategorias,
       new RepositorioProveedoresFalso(),
+      new RepositorioUnidadesMedidaFalso(),
     );
 
     const resumen = await casoUso.ejecutar({ archivo: Buffer.from(''), usuarioId: USUARIO_ID });
@@ -437,6 +489,7 @@ describe('ImportarProductosCasoUso — construcción de ResumenImportacion (T098
       lector,
       repositorioCategorias,
       new RepositorioProveedoresFalso(),
+      new RepositorioUnidadesMedidaFalso(),
     );
 
     const resumen = await casoUso.ejecutar({ archivo: Buffer.from(''), usuarioId: USUARIO_ID });
@@ -464,6 +517,7 @@ describe('ImportarProductosCasoUso — construcción de ResumenImportacion (T098
       lector,
       repositorioCategorias,
       new RepositorioProveedoresFalso(),
+      new RepositorioUnidadesMedidaFalso(),
     );
 
     await expect(casoUso.ejecutar({ archivo: Buffer.from(''), usuarioId: USUARIO_ID })).rejects.toThrow(
@@ -497,6 +551,7 @@ describe('ImportarProductosCasoUso — agrupación del Ingreso sintético (T098,
       lector,
       repositorioCategorias,
       new RepositorioProveedoresFalso(),
+      new RepositorioUnidadesMedidaFalso(),
     );
 
     const resumen = await casoUso.ejecutar({ archivo: Buffer.from(''), usuarioId: USUARIO_ID });
@@ -532,6 +587,7 @@ describe('ImportarProductosCasoUso — agrupación del Ingreso sintético (T098,
       lector,
       repositorioCategorias,
       new RepositorioProveedoresFalso(),
+      new RepositorioUnidadesMedidaFalso(),
     );
 
     const resumen = await casoUso.ejecutar({ archivo: Buffer.from(''), usuarioId: USUARIO_ID });

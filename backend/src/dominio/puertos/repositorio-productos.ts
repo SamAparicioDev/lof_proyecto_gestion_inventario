@@ -37,6 +37,8 @@ export interface DatosNuevoProducto {
   readonly sku: string;
   readonly descripcion: string;
   readonly categoriaId: number | null;
+  /** US17 (FR-102): obligatoria al crear y al editar, aunque la columna admita nulos. */
+  readonly unidadMedidaId: number;
   readonly ubicacion: string | null;
   readonly umbralStockBajo: number;
   readonly usuarioCreacionId: number;
@@ -47,6 +49,13 @@ export interface DatosNuevoProducto {
 export interface DatosActualizarProducto {
   readonly descripcion: string;
   readonly categoriaId: number | null;
+  /**
+   * US17. `null` NO significa "quítale la unidad": es el único caso en que la carga masiva
+   * actualiza un producto ANTERIOR a la historia cuya celda de unidad vino vacía, y entonces
+   * escribe el mismo `null` que ya tenía (FR-103/FR-104). La edición por formulario siempre pasa
+   * un id — su esquema Zod la exige—, así que ese camino no puede llegar aquí con `null`.
+   */
+  readonly unidadMedidaId: number | null;
   readonly ubicacion: string | null;
   readonly umbralStockBajo: number;
   readonly usuarioModificacionId: number;

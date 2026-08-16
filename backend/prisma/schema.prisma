@@ -82,6 +82,14 @@ enum EstadoCategoria {
   @@map("estado_categoria")
 }
 
+/** US17 — en femenino: "unidad de medida". */
+enum EstadoUnidadMedida {
+  ACTIVA
+  INACTIVA
+
+  @@map("estado_unidad_medida")
+}
+
 /** US15 — en masculino, a diferencia de `EstadoCategoria`, por el mismo motivo: el sustantivo. */
 enum EstadoProveedor {
   ACTIVO
@@ -275,6 +283,8 @@ model Usuario {
   productosModificados  Producto[]             @relation("ProductoModificadoPor")
   categoriasCreadas     Categoria[]            @relation("CategoriaCreadaPor")
   categoriasModificadas Categoria[]            @relation("CategoriaModificadaPor")
+  unidadesMedidaCreadas     UnidadMedida[]     @relation("UnidadMedidaCreadaPor")
+  unidadesMedidaModificadas UnidadMedida[]     @relation("UnidadMedidaModificadaPor")
   proveedoresCreados     Proveedor[]           @relation("ProveedorCreadoPor")
   proveedoresModificados Proveedor[]           @relation("ProveedorModificadoPor")
   ordenesCompraCreadas     OrdenCompra[]       @relation("OrdenCompraCreadaPor")
@@ -314,6 +324,10 @@ model Producto {
    *  `20260814235000_categorias_como_catalogo`). */
   categoriaId           BigInt?        @map("categoria_id")
   categoria             Categoria?     @relation(fields: [categoriaId], references: [id])
+  /** US17 (FR-102/FR-103): NULLABLE en la base por los productos anteriores a esa historia; el
+   *  alta y la edición la exigen. Ver el TSDoc de `UnidadMedida`. */
+  unidadMedidaId        BigInt?        @map("unidad_medida_id")
+  unidadMedida          UnidadMedida?  @relation(fields: [unidadMedidaId], references: [id])
   ubicacion             String?        @db.VarChar(100)
   umbralStockBajo       Decimal        @default(0) @map("umbral_stock_bajo") @db.Decimal(12, 2)
   stockActual           Decimal        @default(0) @map("stock_actual") @db.Decimal(12, 2)
@@ -345,6 +359,37 @@ model Producto {
   @@index([categoriaId])
   @@index([ubicacion])
   @@map("productos")
+}
+
+/**
+ * Unidad en la que se mide un producto — catálogo administrable (US17, FR-101…FR-105).
+ *
+ * Tercer catálogo de la familia de US15, con una diferencia: tiene DOS textos únicos. El
+ * `nombre` es lo que se lee en un formulario ("Kilogramo") y la `abreviatura` lo que cabe junto
+ * a una cantidad en una tabla ("kg"); si dos unidades compartieran abreviatura, la tabla —que es
+ * donde la unidad hace falta— dejaría de distinguirlas.
+ *
+ * `usuarioCreacionId` es opcional a diferencia del resto de catálogos: las unidades iniciales
+ * las inserta la migración, que corre antes de que exista ningún usuario. `null` significa "vino
+ * con el sistema".
+ */
+model UnidadMedida {
+  id          BigInt             @id @default(autoincrement())
+  nombre      String             @db.VarChar(60)
+  abreviatura String             @db.VarChar(10)
+  estado      EstadoUnidadMedida @default(ACTIVA)
+
+  fechaCreacion         DateTime  @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
+  usuarioCreacionId     BigInt?   @map("usuario_creacion_id")
+  usuarioCreacion       Usuario?  @relation("UnidadMedidaCreadaPor", fields: [usuarioCreacionId], references: [id])
+  fechaModificacion     DateTime? @map("fecha_modificacion") @db.Timestamptz(6)
+  usuarioModificacionId BigInt?   @map("usuario_modificacion_id")
+  usuarioModificacion   Usuario?  @relation("UnidadMedidaModificadaPor", fields: [usuarioModificacionId], references: [id])
+
+  productos Producto[]
+
+  @@index([estado])
+  @@map("unidades_medida")
 }
 
 /**

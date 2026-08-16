@@ -63,6 +63,9 @@ const COLUMNA_UBICACION = 4;
 const COLUMNA_UMBRAL_STOCK_BAJO = 5;
 const COLUMNA_CANTIDAD_INICIAL = 6;
 const COLUMNA_VALOR_UNITARIO = 7;
+/** US17 (FR-104): al FINAL de las importables para no correr las posiciones de los archivos
+ *  que los usuarios ya tienen guardados — ver `ENCABEZADOS_PRODUCTOS_IMPORTACION`. */
+const COLUMNA_UNIDAD_MEDIDA = 8;
 const COLUMNAS_DE_DATOS = [
   COLUMNA_SKU,
   COLUMNA_DESCRIPCION,
@@ -71,6 +74,7 @@ const COLUMNAS_DE_DATOS = [
   COLUMNA_UMBRAL_STOCK_BAJO,
   COLUMNA_CANTIDAD_INICIAL,
   COLUMNA_VALOR_UNITARIO,
+  COLUMNA_UNIDAD_MEDIDA,
 ];
 
 /**
@@ -145,6 +149,7 @@ function procesarFilaDeDatos(
     sku: valorTexto(fila, COLUMNA_SKU),
     descripcion: valorTexto(fila, COLUMNA_DESCRIPCION),
     categoria: valorTexto(fila, COLUMNA_CATEGORIA),
+    unidadMedida: valorTexto(fila, COLUMNA_UNIDAD_MEDIDA),
     ubicacion: valorTexto(fila, COLUMNA_UBICACION),
     umbralStockBajo: numericos.umbralStockBajo,
     cantidadInicial: numericos.cantidadInicial,

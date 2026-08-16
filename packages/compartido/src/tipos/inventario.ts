@@ -28,6 +28,9 @@ export interface FilaInventario {
     /** US15: referencia al catálogo, con el nombre resuelto para poder pintarlo sin otra
      *  petición. Era una cadena de texto libre hasta US14. */
     categoria: { id: number; nombre: string } | null;
+    /** US17 (FR-105): en qué se mide. Viaja con la ABREVIATURA porque es lo que se pinta junto
+     *  a la cantidad en la tabla; `null` solo en los productos anteriores a esa historia. */
+    unidadMedida: { id: number; nombre: string; abreviatura: string } | null;
     ubicacion: string | null;
     umbralStockBajo: number;
     /**

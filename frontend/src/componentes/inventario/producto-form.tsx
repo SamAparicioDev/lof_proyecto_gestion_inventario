@@ -37,6 +37,7 @@ import { Controller, useForm, type UseFormRegisterReturn } from 'react-hook-form
 import { zodResolver } from '@hookform/resolvers/zod';
 import { esquemaActualizarProducto, type DatosActualizarProducto } from '@trazo/compartido';
 import { SelectorCategoria } from '@/componentes/categorias/selector-categoria';
+import { SelectorUnidadMedida } from '@/componentes/unidades-medida/selector-unidad-medida';
 import { actualizarProducto } from '@/lib/api/productos';
 import { ErrorApi } from '@/lib/api/cliente';
 
@@ -44,6 +45,7 @@ const MENSAJE_ERROR_RED = 'No fue posible comunicarse con el servidor. Intenta d
 const CAMPOS_VALIDOS = new Set<keyof DatosActualizarProducto>([
   'descripcion',
   'categoriaId',
+  'unidadMedidaId',
   'ubicacion',
   'umbralStockBajo',
   'ultimoCosto',
@@ -56,13 +58,24 @@ interface ProductoFormProps {
   valoresIniciales: DatosActualizarProducto;
   /** Categoría que el producto ya tiene, para no perderla si fue desactivada (FR-086). */
   categoriaActual?: { id: number; nombre: string } | null;
+  /** Unidad que el producto ya tiene, para conservarla aunque esté inactiva. `null` en los
+   *  productos anteriores a US17: el formulario abre el campo vacío y exige completarlo. */
+  unidadActual?: { id: number; nombre: string; abreviatura: string } | null;
   /** Cierra el diálogo sin guardar (botón "Cancelar", clic en el fondo). */
   onCerrar: () => void;
   /** Tras guardar con éxito, antes de cerrar — el llamador hace `router.refresh()`. */
   onGuardado: () => void;
 }
 
-export function ProductoForm({ productoId, sku, valoresIniciales, categoriaActual, onCerrar, onGuardado }: ProductoFormProps) {
+export function ProductoForm({
+  productoId,
+  sku,
+  valoresIniciales,
+  categoriaActual,
+  unidadActual,
+  onCerrar,
+  onGuardado,
+}: ProductoFormProps) {
   const [errorGeneral, setErrorGeneral] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
 
@@ -139,6 +152,33 @@ export function ProductoForm({ productoId, sku, valoresIniciales, categoriaActua
             {errors.categoriaId && (
               <p role="alert" style={{ fontSize: 12, color: 'var(--color-accent-300)', marginTop: 5 }}>
                 {errors.categoriaId.message}
+              </p>
+            )}
+          </div>
+          <div className="field">
+            <label htmlFor="producto-editar-unidad">Unidad de medida</label>
+            <Controller
+              name="unidadMedidaId"
+              control={control}
+              render={({ field }) => (
+                <SelectorUnidadMedida
+                  id="producto-editar-unidad"
+                  value={typeof field.value === 'number' ? field.value : undefined}
+                  onChange={field.onChange}
+                  unidadActual={unidadActual}
+                  ariaInvalid={!!errors.unidadMedidaId}
+                />
+              )}
+            />
+            {errors.unidadMedidaId && (
+              <p role="alert" style={{ fontSize: 12, color: 'var(--color-accent-300)', marginTop: 5 }}>
+                {errors.unidadMedidaId.message}
+              </p>
+            )}
+            {!unidadActual && (
+              <p className="text-muted" style={{ fontSize: 12, marginTop: 5 }}>
+                Este producto es anterior a que existieran las unidades de medida: elige la suya
+                para poder guardar.
               </p>
             )}
           </div>

@@ -35,7 +35,7 @@
  * | Reportes | `reportes.ver` | `GET /api/reportes/*` |
  * | Usuarios | `usuarios.gestionar` | todo `/api/usuarios` |
  * | Roles y permisos | `roles.gestionar` | `/api/roles`, `GET /api/permisos` |
- * | Administración | `categorias.gestionar` **o** `proveedores.gestionar` | el módulo tiene varias secciones y basta con poder abrir una |
+ * | Administración | `categorias.gestionar`, `proveedores.gestionar` **o** `unidades_medida.gestionar` | el módulo tiene varias secciones y basta con poder abrir una |
  *
  * ## "Panel" es el único elemento SIN permiso (US10/T116)
  *
@@ -118,7 +118,11 @@ export const ELEMENTOS_NAVEGACION: ElementoNavegacion[] = [
     href: '/administracion',
     etiqueta: 'Administración',
     icono: SlidersHorizontal,
-    permisosAlternativos: [PERMISOS.CATEGORIAS_GESTIONAR, PERMISOS.PROVEEDORES_GESTIONAR],
+    permisosAlternativos: [
+      PERMISOS.CATEGORIAS_GESTIONAR,
+      PERMISOS.PROVEEDORES_GESTIONAR,
+      PERMISOS.UNIDADES_MEDIDA_GESTIONAR,
+    ],
   },
 ];
 

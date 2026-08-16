@@ -35,6 +35,27 @@ export const esquemaCrearProducto = z.object({
     .positive('La categoría no es válida')
     .nullable()
     .optional(),
+  /**
+   * US17 (FR-102): en qué se mide el producto. OBLIGATORIA desde esta historia — una cantidad
+   * sin unidad es un número que nadie puede interpretar después.
+   *
+   * La columna de la base es NULLABLE por los productos anteriores (FR-103), pero este esquema
+   * NO lo refleja a propósito: gobierna el alta y la EDICIÓN, y las dos exigen la unidad. Editar
+   * un producto viejo es la ocasión en la que alguien decide su unidad, así el catálogo se
+   * limpia con el uso en vez de con una tarea aparte.
+   *
+   * El mensaje de `.positive()` dice "obligatoria" y no "no es válida" porque ese es el caso
+   * real que lo dispara: el formulario arranca con `0` —ningún id de verdad es 0— y ese 0 es
+   * exactamente "todavía no he elegido ninguna". Decirle "no es válida" a quien no ha tocado el
+   * campo le haría buscar un error en algo que nunca escribió.
+   */
+  unidadMedidaId: z
+    .number({
+      required_error: 'La unidad de medida es obligatoria',
+      invalid_type_error: 'La unidad de medida es obligatoria',
+    })
+    .int('La unidad de medida no es válida')
+    .positive('La unidad de medida es obligatoria'),
   ubicacion: z.string().trim().max(100, 'La ubicación no puede superar 100 caracteres').optional(),
   umbralStockBajo: z
     .number({ invalid_type_error: 'El umbral de stock bajo debe ser un número' })
@@ -58,6 +79,7 @@ export type DatosCrearProducto = z.infer<typeof esquemaCrearProducto>;
 export const esquemaActualizarProducto = z.object({
   descripcion: esquemaCrearProducto.shape.descripcion,
   categoriaId: esquemaCrearProducto.shape.categoriaId,
+  unidadMedidaId: esquemaCrearProducto.shape.unidadMedidaId,
   ubicacion: esquemaCrearProducto.shape.ubicacion,
   umbralStockBajo: esquemaCrearProducto.shape.umbralStockBajo,
   ultimoCosto: z
@@ -88,6 +110,16 @@ export const esquemaFilaImportacionProducto = z
      *  catálogo ignorando mayúsculas y espacios (FR-090): pedirle un id a quien llena una hoja
      *  de cálculo no tendría sentido. Una categoría desconocida invalida esa fila. */
     categoria: z.string().trim().max(100, 'La categoría no puede superar 100 caracteres').optional(),
+    /**
+     * US17 (FR-104): en el Excel la unidad se escribe por NOMBRE o por ABREVIATURA —quien llena
+     * una hoja escribe "kg", no "Kilogramo"— y el backend la resuelve contra el catálogo.
+     *
+     * Es opcional AQUÍ, en la validación de FORMA, y no lo es en la de NEGOCIO: una fila que
+     * CREA un producto sin unidad se rechaza (FR-102), pero una que ACTUALIZA puede traerla
+     * vacía, y entonces el producto conserva la que ya tenía. Esa distinción necesita saber si
+     * el SKU existe, que es información que este esquema no tiene.
+     */
+    unidadMedida: z.string().trim().max(60, 'La unidad de medida no puede superar 60 caracteres').optional(),
     ubicacion: esquemaCrearProducto.shape.ubicacion,
     umbralStockBajo: esquemaCrearProducto.shape.umbralStockBajo,
     cantidadInicial: z

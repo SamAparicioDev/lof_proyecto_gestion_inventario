@@ -114,6 +114,26 @@ presentes (agrupando por `lower(trim(...))`, que es lo que colapsa las variantes
 se rellena `categoria_id` emparejando por ese mismo criterio, y solo entonces se elimina la
 columna vieja. Va en un `migration.sql` escrito a mano: Prisma no genera un traspaso de datos.
 
+### unidades_medida (US17)
+
+| Columna | Tipo | Constraints |
+|---|---|---|
+| `id` | BIGINT PK | |
+| `nombre` | VARCHAR(60) | NOT NULL; **UNIQUE sobre `lower(trim(nombre))`** vía índice funcional (FR-101) |
+| `abreviatura` | VARCHAR(10) | NOT NULL; **UNIQUE sobre `lower(trim(abreviatura))`** — dos unidades que se abrevien igual serían indistinguibles en una tabla de cantidades |
+| `estado` | ENUM `ACTIVA/INACTIVA` | NOT NULL DEFAULT ACTIVA (baja lógica, nunca DELETE) |
+
+Reglas (FR-101…FR-104), mismas que `categorias` salvo lo que se indica:
+
+- **Dos unicidades funcionales, no una**: el nombre y la abreviatura se comparan cada uno por su
+  cuenta con `lower(trim(...))`. Las tildes no se normalizan, igual que en el resto de catálogos.
+- **Nunca se elimina si está en uso**: la FK de `productos.unidad_medida_id` es
+  `ON DELETE RESTRICT` y el caso de uso comprueba antes, devolviendo cuántos productos la usan.
+- **La FK es NULLABLE y eso es deliberado** (FR-103): los productos anteriores a US17 se quedan
+  sin unidad. La obligatoriedad vive en la APLICACIÓN —alta y edición la exigen— y no en la base,
+  porque un `NOT NULL` habría exigido inventarle una unidad a cada producto existente en la
+  migración, que es precisamente el dato que nadie tiene.
+
 ### productos
 
 | Columna | Tipo | Constraints |
@@ -122,6 +142,7 @@ columna vieja. Va en un `migration.sql` escrito a mano: Prisma no genera un tras
 | `sku` | VARCHAR(50) | NOT NULL, **UNIQUE** (FR-010) |
 | `descripcion` | VARCHAR(300) | NOT NULL |
 | `categoria_id` | BIGINT FK → categorias | NULL (US15, FR-086 — la categoría sigue siendo opcional, pero ya no es texto libre: sustituye a la columna `categoria VARCHAR(100)` de US8) |
+| `unidad_medida_id` | BIGINT FK → unidades_medida | NULL en la BD por los productos anteriores a US17 (FR-103); OBLIGATORIA en el alta y la edición (FR-102) |
 | `ubicacion` | VARCHAR(100) | NULL (texto libre, un solo almacén) |
 | `umbral_stock_bajo` | DECIMAL(12,2) | NOT NULL DEFAULT 0, CHECK `>= 0` (FR-010/FR-022) |
 | `stock_actual` | DECIMAL(12,2) | NOT NULL DEFAULT 0, **CHECK `stock_actual >= 0`** (Principio I — red final en BD) |
@@ -360,6 +381,7 @@ usuarios 1───n movimientos_inventario
 clientes 1───n proyectos
 proyectos 1───n salidas
 categorias 1───n productos          (opcional — FR-086)
+unidades_medida 1───n productos     (obligatoria desde US17 — FR-102/FR-103)
 proveedores 1───n ingresos          (OBLIGATORIO — FR-091)
 proveedores 1───n ordenes_compra    (OBLIGATORIO — FR-094)
 ordenes_compra 1───n detalles_ordenes_compra n───1 productos
@@ -464,6 +486,7 @@ cruzado sería sobre-ingeniería para este caso de uso (Principio V, YAGNI).
 | Tabla | Índice | Justifica |
 |---|---|---|
 | productos | UNIQUE(sku); btree(descripcion); btree(estado); btree(categoria_id); btree(ubicacion) | búsqueda FR-023; los dos últimos, filtro por categoría/ubicación de FR-075 (US13) — medido en rendimiento.md § (g), que además corrige la expectativa de que sirvieran al `DISTINCT` de FR-076. Desde US15 el índice es sobre la FK `categoria_id`, no sobre el texto |
+| unidades_medida | UNIQUE funcional sobre `lower(trim(nombre))` y sobre `lower(trim(abreviatura))`; btree(estado) | las dos unicidades de FR-101 y el listado de las activas para el selector |
 | categorias | UNIQUE funcional sobre `lower(trim(nombre))`; btree(estado) | unicidad insensible a mayúsculas/espacios (FR-085) y listado de las activas para los selectores (FR-088) |
 | proveedores | UNIQUE funcional sobre `lower(trim(nombre))`; btree(estado) | lo mismo que `categorias`, aplicado a proveedores (FR-091) |
 | ordenes_compra | UNIQUE(numero); btree(proveedor_id, estado); btree(fecha_orden); btree(estado) | listado y filtros de US16; el compuesto responde "qué le pedí a este proveedor y qué sigue pendiente" |

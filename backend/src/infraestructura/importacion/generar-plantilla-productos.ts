@@ -40,7 +40,7 @@ export const HOJA_PRODUCTOS_IMPORTACION = 'Productos';
 /**
  * Encabezados de la hoja "Productos", en el mismo orden posicional que
  * `esquemaFilaImportacionProducto`: sku, descripcion, categoria, ubicacion,
- * umbralStockBajo, cantidadInicial, valorUnitario.
+ * umbralStockBajo, cantidadInicial, valorUnitario, unidadMedida.
  *
  * Se exporta para que `leer-filas-importacion-productos.ts` pueda NOMBRAR una columna al
  * explicar por qué rechazó una celda ("la columna «Valor unitario»"). Eso NO cambia la forma de
@@ -55,8 +55,16 @@ export const ENCABEZADOS_PRODUCTOS_IMPORTACION = [
   'Umbral stock bajo',
   'Cantidad inicial',
   'Valor unitario',
-  // Columna 8: SOLO INFORMATIVA. El lector (`leer-filas-importacion-productos.ts`) mapea las
-  // columnas por POSICIÓN 1..7, así que todo lo que venga después lo ignora — por eso se puede
+  // Columna 8 (US17, FR-104): va AL FINAL de las importables y no junto a "Categoría", que es
+  // donde encajaría por sentido. El lector mapea las columnas por POSICIÓN, así que insertarla
+  // en medio habría corrido "Ubicación" y todo lo siguiente un puesto: los archivos que el
+  // usuario ya tiene guardados se leerían mal —la ubicación entendida como unidad— y fallarían
+  // fila a fila. Al final, esos archivos siguen funcionando: no traen la columna, así que las
+  // filas que ACTUALIZAN conservan su unidad y solo las que crean un producto nuevo se rechazan,
+  // que es exactamente la regla nueva.
+  'Unidad de medida',
+  // Columna 9: SOLO INFORMATIVA. El lector (`leer-filas-importacion-productos.ts`) mapea las
+  // columnas por POSICIÓN 1..8, así que todo lo que venga después lo ignora — por eso se puede
   // mostrar el stock aquí sin ningún riesgo de que al re-subir el archivo se sume al inventario.
   // Responde a una petición concreta del dueño del proyecto: al descargar el catálogo quería
   // VER cuánto tiene de cada producto, no solo poder editar sus datos.
@@ -72,6 +80,7 @@ const FILA_EJEMPLO_PRODUCTOS_IMPORTACION = [
   10,
   100,
   2500,
+  'kg', // Unidad de medida — se escribe por nombre o por abreviatura (FR-104).
   null, // Stock actual — informativa: en la plantilla vacía no hay stock que mostrar.
 ];
 
@@ -85,13 +94,20 @@ const FILA_EJEMPLO_PRODUCTOS_IMPORTACION = [
  *
  *   - `ultimoCosto`  → columna 7 "Valor unitario". SEGURO: el importador solo consume esa
  *     columna cuando "Cantidad inicial" es mayor a 0, así que con la cantidad vacía se ignora.
- *   - `stockActual`  → columna 8 "Stock actual (informativo)", FUERA del rango 1..7 que lee el
+ *   - `stockActual`  → columna 9 "Stock actual (informativo)", FUERA del rango 1..8 que lee el
  *     importador. NUNCA a la columna 6 "Cantidad inicial": eso sí volvería a sumarlo al
  *     inventario al re-subir el archivo, que es precisamente para lo que se descarga.
  */
 export type FilaCatalogoImportacion = Pick<
   Producto,
-  'sku' | 'descripcion' | 'categoria' | 'ubicacion' | 'umbralStockBajo' | 'stockActual' | 'ultimoCosto'
+  | 'sku'
+  | 'descripcion'
+  | 'categoria'
+  | 'unidadMedida'
+  | 'ubicacion'
+  | 'umbralStockBajo'
+  | 'stockActual'
+  | 'ultimoCosto'
 >;
 
 /** Una fila de la hoja "Instrucciones": qué significa una columna de la hoja "Productos". */
@@ -121,6 +137,14 @@ const NOTA_CATALOGO_INSTRUCCIONES =
 /** Significado de las 5 columnas de catálogo — IDÉNTICO en la plantilla vacía y en el catálogo
  *  exportado (las dos se suben por el mismo endpoint, así que se leen igual). */
 const INSTRUCCIONES_COLUMNAS_CATALOGO: ReadonlyArray<InstruccionColumna> = [
+  {
+    columna: 'Unidad de medida',
+    significado:
+      'En qué se mide el producto. Escríbela por su nombre ("Kilogramo") o por su abreviatura ("kg"), como prefieras: ' +
+      'da igual mayúsculas y espacios. Debe existir en Administración → Unidades de medida. ' +
+      'OBLIGATORIA para dar de alta un producto NUEVO. Si la fila actualiza un producto que ya existe y dejas la ' +
+      'celda vacía, el producto conserva la unidad que ya tenía.',
+  },
   {
     columna: 'SKU',
     significado:
@@ -208,11 +232,13 @@ export async function generarPlantillaProductos(): Promise<Buffer> {
  * cantidad:
  *   - "Cantidad inicial" (col. 6) → SIEMPRE `null`. Es la columna que dispara una entrada de
  *     mercancía: si trajera el stock actual, re-subir el archivo lo sumaría otra vez y
- *     duplicaría el inventario. El stock se muestra, pero en la columna informativa 8.
+ *     duplicaría el inventario. El stock se muestra, pero en la columna informativa 9.
  *   - "Valor unitario" (col. 7) → el costo actual del producto. Se puede mostrar sin riesgo
  *     porque el importador solo lo consume acompañado de una cantidad; y si el usuario decide
  *     escribir una cantidad en esa fila, el costo correcto ya está puesto.
- *   - "Stock actual" (col. 8) → informativa, fuera del rango que lee el importador.
+ *   - "Unidad de medida" (col. 8) → la abreviatura actual; vacía en los productos anteriores
+ *     a US17, que al re-subir el archivo conservan la que tengan (FR-104).
+ *   - "Stock actual" (col. 9) → informativa, fuera del rango que lee el importador.
  */
 export async function generarCatalogoProductos(productos: readonly FilaCatalogoImportacion[]): Promise<Buffer> {
   const libro = crearLibro();
@@ -231,6 +257,10 @@ export async function generarCatalogoProductos(productos: readonly FilaCatalogoI
       producto.umbralStockBajo,
       null, // Cantidad inicial — VACÍA SIEMPRE: evita duplicar el inventario al re-subir.
       producto.ultimoCosto, // Valor unitario — costo actual (FR-070); se ignora sin cantidad.
+      // La ABREVIATURA, que es lo más corto de escribir y el importador acepta las dos formas
+      // (FR-104). Vacía en los productos anteriores a US17: al re-subir el archivo esa fila
+      // ACTUALIZA y conserva lo que tenga, así que el catálogo sigue siendo re-subible entero.
+      producto.unidadMedida?.abreviatura ?? null,
       producto.stockActual, // Stock actual — informativa, el importador no lee esta columna.
     ]);
   }

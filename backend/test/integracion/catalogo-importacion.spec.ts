@@ -26,8 +26,10 @@ import { NOMBRE_COOKIE_SESION } from '../../src/infraestructura/seguridad/cookie
 import { cerrarAppDePrueba, crearAppDePrueba, crearUsuarioDePrueba, truncarTablas, type AppDePrueba } from './setup';
 
 /** Columnas de la hoja "Productos" (`generar-plantilla-productos.ts`), por POSICIÓN. */
-/** 7 columnas del contrato de importación + la 8ª informativa "Stock actual" (FR-070). */
-const TOTAL_COLUMNAS = 8;
+/** 8 columnas del contrato de importación —la 8ª es "Unidad de medida", que US17 añadió AL
+ *  FINAL del rango legible para no correr de sitio las que los usuarios ya tenían— más la 9ª
+ *  informativa "Stock actual" (FR-070/FR-104). */
+const TOTAL_COLUMNAS = 9;
 const COLUMNA_SKU = 0;
 const COLUMNA_DESCRIPCION = 1;
 const COLUMNA_CATEGORIA = 2;
@@ -35,8 +37,10 @@ const COLUMNA_UBICACION = 3;
 const COLUMNA_UMBRAL = 4;
 const COLUMNA_CANTIDAD_INICIAL = 5;
 const COLUMNA_VALOR_UNITARIO = 6;
-/** Columna 8 (índice 7): informativa, FUERA del rango 1..7 que lee el importador — FR-070. */
-const COLUMNA_STOCK_INFORMATIVO = 7;
+/** Columna 8 (índice 7): la unidad viaja por ABREVIATURA, que es como se vuelve a escribir. */
+const COLUMNA_UNIDAD_MEDIDA = 7;
+/** Columna 9 (índice 8): informativa, FUERA del rango 1..8 que lee el importador — FR-070. */
+const COLUMNA_STOCK_INFORMATIVO = 8;
 
 /** Content-Type del `.xlsx` (contracts/api-rest.md § Carga masiva de inventario). */
 const CONTENT_TYPE_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -61,13 +65,18 @@ interface ProductoSembrado {
   stockActual: number;
   ultimoCosto: number;
   estado?: 'ACTIVO' | 'INACTIVO';
+  /** US17: `null` es un producto ANTERIOR a la historia — su celda de unidad viaja vacía y el
+   *  archivo se puede volver a subir tal cual (FR-103). */
+  unidadMedida?: { nombre: string; abreviatura: string } | null;
 }
 
 /**
  * Catálogo de partida de las pruebas. Deliberadamente variado: stock y último costo distintos
  * de cero (para que "columna vacía" sea una afirmación con contenido, no una casualidad de una
- * BD recién truncada), un producto sin categoría ni ubicación (columnas opcionales vacías) y
- * uno dado de baja (sigue siendo parte del catálogo — FR-012 es baja lógica, nunca DELETE).
+ * BD recién truncada), un producto sin categoría ni ubicación (columnas opcionales vacías), uno
+ * dado de baja (sigue siendo parte del catálogo — FR-012 es baja lógica, nunca DELETE) y —desde
+ * US17— uno CON unidad de medida y dos SIN ella, que son los anteriores a esa historia: el ida y
+ * vuelta del archivo tiene que funcionar para los tres (FR-103).
  */
 const CATALOGO_SEMBRADO: readonly ProductoSembrado[] = [
   {
@@ -78,6 +87,7 @@ const CATALOGO_SEMBRADO: readonly ProductoSembrado[] = [
     umbralStockBajo: 10,
     stockActual: 42,
     ultimoCosto: 28500,
+    unidadMedida: { nombre: 'Bulto', abreviatura: 'bulto' },
   },
   {
     sku: 'CAT-EXPORT-002',
@@ -116,6 +126,7 @@ describe('Catálogo exportable en formato de plantilla — GET /api/productos/ca
     // El TRUNCATE se lleva las categorías y reinicia sus ids: sin vaciar la caché, la segunda
     // prueba sembraría productos apuntando a un id que ya no existe y violaría la FK.
     categoriasSembradas.clear();
+    unidadesSembradas.clear(); // mismo motivo: el TRUNCATE reinicia también sus ids
   });
 
   const servidor = (): ReturnType<AppDePrueba['app']['getHttpServer']> => contexto.app.getHttpServer();
@@ -162,6 +173,9 @@ describe('Catálogo exportable en formato de plantilla — GET /api/productos/ca
         // en su columna —segura, porque el importador solo la consume acompañada de una
         // cantidad— y el stock en la columna informativa, fuera del rango que lee el importador.
         expect(fila[COLUMNA_VALOR_UNITARIO]).toBe(sembrado.ultimoCosto);
+        // US17 (FR-104): la unidad viaja por ABREVIATURA —lo que se vuelve a escribir— y vacía
+        // en los productos anteriores a la historia.
+        expect(fila[COLUMNA_UNIDAD_MEDIDA] ?? null).toBe(sembrado.unidadMedida?.abreviatura ?? null);
         expect(fila[COLUMNA_STOCK_INFORMATIVO]).toBe(sembrado.stockActual);
       }
     },
@@ -341,6 +355,23 @@ describe('Catálogo exportable en formato de plantilla — GET /api/productos/ca
     return Number(creada.id);
   }
 
+  /** Misma idea que `idCategoria`, y por el mismo motivo: dos unicidades funcionales que
+   *  Prisma no puede expresar, así que nada de `connectOrCreate`. */
+  const unidadesSembradas = new Map<string, number>();
+  async function idUnidadMedida(
+    unidad: { nombre: string; abreviatura: string },
+    usuarioCreacionId: number,
+  ): Promise<number> {
+    const existente = unidadesSembradas.get(unidad.nombre);
+    if (existente !== undefined) return existente;
+    const creada = await contexto.prisma.unidadMedida.create({
+      data: { ...unidad, usuarioCreacionId: BigInt(usuarioCreacionId) },
+      select: { id: true },
+    });
+    unidadesSembradas.set(unidad.nombre, Number(creada.id));
+    return Number(creada.id);
+  }
+
   async function sembrarCatalogo(usuarioCreacionId: number): Promise<void> {
     for (const producto of CATALOGO_SEMBRADO) {
       await contexto.prisma.producto.create({
@@ -353,6 +384,9 @@ describe('Catálogo exportable en formato de plantilla — GET /api/productos/ca
           stockActual: producto.stockActual,
           ultimoCosto: producto.ultimoCosto,
           estado: producto.estado ?? 'ACTIVO',
+          unidadMedidaId: producto.unidadMedida
+            ? BigInt(await idUnidadMedida(producto.unidadMedida, usuarioCreacionId))
+            : null,
           usuarioCreacionId: BigInt(usuarioCreacionId),
         },
       });

@@ -46,6 +46,7 @@ import { ProductosModule } from './interfaces/http/productos/productos.module';
 import { ReportesModule } from './interfaces/http/reportes/reportes.module';
 import { CategoriasModule } from './interfaces/http/categorias/categorias.module';
 import { ProveedoresModule } from './interfaces/http/proveedores/proveedores.module';
+import { UnidadesMedidaModule } from './interfaces/http/unidades-medida/unidades-medida.module';
 import { OrdenesCompraModule } from './interfaces/http/ordenes-compra/ordenes-compra.module';
 import { MarcaModule } from './interfaces/http/marca/marca.module';
 import { RolesModule } from './interfaces/http/roles/roles.module';
@@ -79,6 +80,8 @@ import { UsuariosModule } from './interfaces/http/usuarios/usuarios.module';
     // US15: catálogos parametrizables — categorías (T151) y proveedores (T160).
     CategoriasModule,
     ProveedoresModule,
+    // US17: unidad de medida de los productos — el tercer catálogo de la familia (T180).
+    UnidadesMedidaModule,
     // US16: órdenes de compra — el lado del ciclo de compra que faltaba (T171).
     OrdenesCompraModule,
     // Identidad de LOF: sirve el logotipo a la web y lo comparte con la exportación (FR-067).

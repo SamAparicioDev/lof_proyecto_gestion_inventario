@@ -41,6 +41,9 @@ export interface FilaInventario {
     readonly sku: string;
     readonly descripcion: string;
     readonly categoria: { readonly id: number; readonly nombre: string } | null;
+    /** US17 (FR-105): viaja para que la cantidad se lea "12 kg" y no "12". `null` solo en los
+     *  productos anteriores a la historia (FR-103). */
+    readonly unidadMedida: { readonly id: number; readonly nombre: string; readonly abreviatura: string } | null;
     readonly ubicacion: string | null;
     readonly umbralStockBajo: number;
     readonly ultimoCosto: number;
@@ -67,6 +70,7 @@ export function construirFilaInventario(producto: Producto, comprometido: number
       sku: producto.sku,
       descripcion: producto.descripcion,
       categoria: producto.categoria,
+      unidadMedida: producto.unidadMedida,
       ubicacion: producto.ubicacion,
       umbralStockBajo: producto.umbralStockBajo,
       ultimoCosto: producto.ultimoCosto,

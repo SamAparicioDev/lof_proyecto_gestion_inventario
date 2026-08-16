@@ -33,12 +33,23 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { CasoDeUso } from '../comunes/caso-de-uso';
 import { REPOSITORIO_PRODUCTOS, type RepositorioProductos } from '../../dominio/puertos/repositorio-productos';
+import {
+  REPOSITORIO_UNIDADES_MEDIDA,
+  type RepositorioUnidadesMedida,
+} from '../../dominio/puertos/repositorio-unidades-medida';
+import { verificarUnidadMedidaAsignable } from './verificar-unidad-medida-asignable';
 
 /** Entrada: datos validados por `esquemaActualizarProducto` + auditoría (FR-045). */
 export interface ActualizarProductoEntrada {
   readonly productoId: number;
   readonly descripcion: string;
   readonly categoriaId: number | null;
+  /**
+   * US17 (FR-102/FR-103): obligatoria TAMBIÉN al editar, y ese es el punto. Los productos
+   * anteriores a la historia llegan sin unidad; exigirla aquí hace que el catálogo se limpie
+   * con el uso en lugar de con una tarea de migración que tendría que inventar los datos.
+   */
+  readonly unidadMedidaId: number;
   readonly ubicacion: string | null;
   readonly umbralStockBajo: number;
   /**
@@ -52,12 +63,26 @@ export interface ActualizarProductoEntrada {
 
 @Injectable()
 export class ActualizarProductoCasoUso implements CasoDeUso<ActualizarProductoEntrada, void> {
-  constructor(@Inject(REPOSITORIO_PRODUCTOS) private readonly repositorioProductos: RepositorioProductos) {}
+  constructor(
+    @Inject(REPOSITORIO_PRODUCTOS) private readonly repositorioProductos: RepositorioProductos,
+    @Inject(REPOSITORIO_UNIDADES_MEDIDA) private readonly repositorioUnidades: RepositorioUnidadesMedida,
+  ) {}
 
   async ejecutar(entrada: ActualizarProductoEntrada): Promise<void> {
+    // La unidad que el producto ya tiene se pasa como excepción: reenviarla se acepta aunque
+    // esté inactiva, porque desactivar una unidad impide asignarla, no bloquea al producto que
+    // la referencia (ver el TSDoc de `verificarUnidadMedidaAsignable`).
+    const actual = await this.repositorioProductos.buscarPorId(entrada.productoId);
+    await verificarUnidadMedidaAsignable(
+      this.repositorioUnidades,
+      entrada.unidadMedidaId,
+      actual?.unidadMedida?.id ?? null,
+    );
+
     await this.repositorioProductos.actualizar(entrada.productoId, {
       descripcion: entrada.descripcion,
       categoriaId: entrada.categoriaId,
+      unidadMedidaId: entrada.unidadMedidaId,
       ubicacion: entrada.ubicacion,
       umbralStockBajo: entrada.umbralStockBajo,
       usuarioModificacionId: entrada.usuarioId,

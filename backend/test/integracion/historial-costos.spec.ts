@@ -231,6 +231,7 @@ describe('Costo editable con historial — US12 (T129)', () => {
         .send({
           descripcion: 'Cemento gris 50 kg',
           umbralStockBajo: 10,
+          unidadMedidaId: unidadMedidaSembradaId,
           ultimoCosto: 30000,
         });
 
@@ -260,7 +261,11 @@ describe('Costo editable con historial — US12 (T129)', () => {
       const respuesta = await request(servidor())
         .put(`/api/productos/${producto.id}`)
         .set('Cookie', cookie)
-        .send({ descripcion: 'Varilla 3/8 x 6 m — descripción corregida', umbralStockBajo: 3 });
+        .send({
+          descripcion: 'Varilla 3/8 x 6 m — descripción corregida',
+          umbralStockBajo: 3,
+          unidadMedidaId: unidadMedidaSembradaId,
+        });
 
       expect(respuesta.status).toBe(204);
       const actualizado = await contexto.prisma.producto.findUniqueOrThrow({ where: { id: producto.id } });
@@ -275,7 +280,12 @@ describe('Costo editable con historial — US12 (T129)', () => {
       await sembrarCatalogo(admin.id);
       const producto = await contexto.prisma.producto.findUniqueOrThrow({ where: { sku: 'COSTO-003' } });
 
-      const cuerpo = { descripcion: 'Alambre negro por kg', umbralStockBajo: 0, ultimoCosto: 9900 };
+      const cuerpo = {
+        descripcion: 'Alambre negro por kg',
+        umbralStockBajo: 0,
+        unidadMedidaId: unidadMedidaSembradaId,
+        ultimoCosto: 9900,
+      };
       const respuesta = await request(servidor()).put(`/api/productos/${producto.id}`).set('Cookie', cookie).send(cuerpo);
 
       expect(respuesta.status).toBe(204);
@@ -291,7 +301,12 @@ describe('Costo editable con historial — US12 (T129)', () => {
       const respuesta = await request(servidor())
         .put(`/api/productos/${producto.id}`)
         .set('Cookie', cookie)
-        .send({ descripcion: 'Cemento gris 50 kg', umbralStockBajo: 10, ultimoCosto: -5 });
+        .send({
+          descripcion: 'Cemento gris 50 kg',
+          umbralStockBajo: 10,
+          unidadMedidaId: unidadMedidaSembradaId,
+          ultimoCosto: -5,
+        });
 
       expect(respuesta.status).toBe(400);
       expect(respuesta.body.error.campos?.ultimoCosto).toContain('no puede ser negativo');
@@ -489,8 +504,19 @@ describe('Costo editable con historial — US12 (T129)', () => {
   // ---------------------------------------------------------------------------------------
 
   /** Siembra `CATALOGO` DIRECTAMENTE con Prisma: `POST /api/productos` nace siempre con
-   *  `stockActual`/`ultimoCosto` en 0, y esta suite necesita justo lo contrario. */
+   *  `stockActual`/`ultimoCosto` en 0, y esta suite necesita justo lo contrario.
+   *
+   *  US17: se siembran CON unidad de medida porque lo que aquí se prueba es el costo, y editar
+   *  un producto sin ella se rechaza por otra razón (FR-103) que no tiene nada que ver con el
+   *  historial de precios. Esa regla tiene su propia prueba en `unidades-medida.spec.ts`. */
+  let unidadMedidaSembradaId: number | null = null;
   async function sembrarCatalogo(usuarioCreacionId: number): Promise<void> {
+    const unidad = await contexto.prisma.unidadMedida.create({
+      data: { nombre: 'Bulto', abreviatura: 'bulto', usuarioCreacionId: BigInt(usuarioCreacionId) },
+      select: { id: true },
+    });
+    unidadMedidaSembradaId = Number(unidad.id);
+
     for (const producto of CATALOGO) {
       await contexto.prisma.producto.create({
         data: {
@@ -498,6 +524,7 @@ describe('Costo editable con historial — US12 (T129)', () => {
           descripcion: producto.descripcion,
           stockActual: producto.stockActual,
           ultimoCosto: producto.ultimoCosto,
+          unidadMedidaId: unidad.id,
           usuarioCreacionId: BigInt(usuarioCreacionId),
         },
       });
@@ -509,7 +536,12 @@ describe('Costo editable con historial — US12 (T129)', () => {
     const respuesta = await request(servidor())
       .put(`/api/productos/${productoId}`)
       .set('Cookie', cookie)
-      .send({ descripcion: 'Cemento gris 50 kg', umbralStockBajo: 10, ultimoCosto });
+      .send({
+        descripcion: 'Cemento gris 50 kg',
+        umbralStockBajo: 10,
+        unidadMedidaId: unidadMedidaSembradaId,
+        ultimoCosto,
+      });
     expect(respuesta.status).toBe(204);
   }
 

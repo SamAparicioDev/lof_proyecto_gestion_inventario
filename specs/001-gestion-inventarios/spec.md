@@ -283,6 +283,27 @@ Cuando falta mercancía, el negocio arma una ORDEN DE COMPRA dirigida a un prove
 
 ---
 
+### User Story 17 - Unidad de medida de los productos (Priority: P2)
+
+Cada producto se mide en algo —kilogramos, metros, unidades, cajas— y hoy el sistema no lo sabe: una cantidad de "12" no dice si son 12 sacos o 12 toneladas. La unidad pasa a ser un catálogo administrable, obligatorio al dar de alta un producto y visible allí donde se muestran cantidades.
+
+**Why this priority**: no bloquea ninguna operación —el inventario lleva meses funcionando sin ello— pero cada número que sale del sistema es ambiguo, y esa ambigüedad viaja a los documentos que se le envían a clientes y proveedores. Cuanto más tarde se corrija, más productos hay que completar a mano.
+
+**El inventario que ya existe NO se rompe**: los productos cargados hasta hoy se quedan sin unidad, y así siguen hasta que alguien los edite. Exigirla retroactivamente habría dejado el catálogo entero en estado inválido de un día para otro.
+
+**Independent Test**: Se prueba dando de alta una unidad ("Kilogramo / kg"), creando un producto que la use y comprobando que la cantidad se muestra acompañada de su unidad en el inventario. Entrega valor por sí sola: cantidades que se leen sin adivinar.
+
+**Acceptance Scenarios**:
+
+1. **Given** un usuario con permiso para gestionar unidades, **When** crea una ("Kilogramo", abreviatura "kg"), **Then** queda disponible de inmediato para los productos y como opción del formulario.
+2. **Given** el formulario de alta de un producto, **When** el usuario intenta guardarlo sin unidad, **Then** el sistema lo rechaza señalando el campo: desde ahora la unidad es obligatoria.
+3. **Given** un producto ANTIGUO sin unidad, **When** alguien lo edita, **Then** se le exige completarla para poder guardar — así el inventario se limpia con el uso, sin una tarea aparte.
+4. **Given** una carga masiva desde Excel, **When** una fila crea un producto NUEVO sin unidad, **Then** esa fila se rechaza con un mensaje que lo explica, sin bloquear las demás (misma regla de proceso parcial de FR-051).
+5. **Given** una carga masiva que ACTUALIZA un producto que ya tenía unidad, **When** la celda de unidad viene vacía, **Then** el producto CONSERVA su unidad — una celda en blanco no puede devolver un producto al estado que las reglas de arriba prohíben.
+6. **Given** una unidad usada por algún producto, **When** se intenta eliminarla, **Then** el sistema NO la elimina: se desactiva, y los productos que la usan la conservan (mismo criterio que categorías).
+
+---
+
 ### Edge Cases
 
 - **Salida mayor al disponible**: debe rechazarse siempre, incluida la carrera entre dos usuarios simultáneos sobre el mismo producto (solo una confirmación puede ganar).
@@ -456,6 +477,14 @@ que recordar por separado.
 - **FR-099**: Una orden ENVIADA DEBE poder convertirse en ingreso: el registro del ingreso parte precargado con el proveedor y las líneas de la orden, el ingreso queda VINCULADO a ella, y cuando ese ingreso se recibe (FR-017) la orden pasa a RECIBIDA sola. El vínculo es opcional en el otro sentido: un ingreso puede seguir registrándose sin orden previa.
 - **FR-100**: Crear y editar borradores lo DEBEN poder hacer los tres roles —quien ve faltar la mercancía es quien arma el pedido—, pero ENVIAR y ANULAR una orden DEBEN quedar restringidos: son las dos acciones que comprometen o liberan un gasto frente a un tercero.
 
+**Unidad de medida (US17)**
+
+- **FR-101**: Las unidades de medida DEBEN vivir en un catálogo propio y administrable, con las MISMAS reglas que categorías y proveedores (FR-084…FR-088): unicidad ignorando mayúsculas y espacios, baja lógica cuando están en uso, y selectores alimentados del catálogo. Cada unidad tiene un NOMBRE ("Kilogramo") y una ABREVIATURA ("kg"), y ambos son únicos entre sí: dos unidades que se abrevien igual serían indistinguibles justo donde más importa, en una tabla de cantidades.
+- **FR-102**: La unidad de un producto DEBE ser OBLIGATORIA al darlo de alta, por cualquier vía (formulario o carga masiva). Un producto nuevo sin unidad es una cantidad que nadie podrá interpretar después.
+- **FR-103**: Los productos que existían ANTES de esta historia quedan sin unidad y el sistema DEBE seguir operando con ellos con normalidad —consultarlos, moverlos, exportarlos y actualizarlos por carga masiva—; lo que NO se admite es guardarlos tras editarlos EN SU FICHA sin completarla. La limpieza ocurre con el uso, de uno en uno y con criterio, no con una migración que invente datos ni exigiéndola a la carga masiva: eso convertiría cualquier corrección de precios a escala en una clasificación previa de todo el catálogo.
+- **FR-104**: En la carga masiva la unidad DEBE escribirse por NOMBRE o por ABREVIATURA —quien llena un Excel escribe "kg", no "Kilogramo"— y resolverse contra el catálogo ignorando mayúsculas y espacios. Una unidad desconocida invalida ESA fila con un mensaje que la nombra, sin bloquear el resto del archivo (FR-051). Una celda vacía que ACTUALIZA un producto conserva su unidad actual, a diferencia de las demás columnas opcionales: dejarla en blanco no puede ser una forma de quitarle la unidad a un producto que ya la tenía (y si ese producto todavía no tiene ninguna, la fila se procesa igual y lo deja sin ella — FR-103). Una unidad INACTIVA escrita en la hoja invalida la fila igual que una desconocida: escribirla es asignarla.
+- **FR-105**: La unidad DEBE mostrarse junto a las cantidades del producto (inventario y ficha) — es la razón de ser de la historia: que un "12" se lea como "12 kg".
+
 **Auditoría y trazabilidad (transversal)**
 
 - **FR-045**: Toda operación de creación, edición, cambio de estado o anulación DEBE registrar usuario y fecha/hora; los registros con relevancia de inventario DEBEN conservar además el documento asociado.
@@ -468,6 +497,7 @@ que recordar por separado.
 - **Producto**: artículo almacenable; SKU único, descripción, categoría (referencia OPCIONAL al catálogo de categorías, US15), ubicación en almacén, umbral de stock bajo, estado. Su stock se deriva de los movimientos.
 - **Categoría**: clasificación de productos administrada como catálogo (US15); nombre único ignorando mayúsculas y espacios, descripción opcional, estado activa/inactiva. Nunca se elimina si está en uso: se desactiva, para no despojar de su clasificación a los productos que la referencian.
 - **Proveedor**: empresa o persona a la que se compra la mercancía, administrada como catálogo (US15, FR-091); nombre único ignorando mayúsculas y espacios, datos de contacto opcionales (NIT, teléfono, email), estado activo/inactivo, y una marca de "del sistema" para el proveedor que usa la carga masiva (FR-093). Referenciado de forma OBLIGATORIA por cada ingreso.
+- **Unidad de medida**: en qué se mide un producto (US17, FR-101); nombre y abreviatura únicos ignorando mayúsculas y espacios, estado activa/inactiva. Referenciada de forma OBLIGATORIA por todo producto creado desde US17, y OPCIONAL en los anteriores (FR-103).
 - **Orden de compra**: pedido formal de mercancía a un proveedor (US16, FR-094); número correlativo propio, proveedor obligatorio, fecha, líneas con producto/cantidad/precio estimado, valor total calculado, estado (borrador, enviada, recibida, anulada) y motivo de anulación. NO mueve inventario: es un compromiso de compra, y el stock solo se mueve cuando el ingreso correspondiente se recibe.
 - **Cliente**: empresa o persona a la que se destinan salidas; nombre, NIT único, contacto (teléfono, email), dirección, ciudad, estado, fecha de registro. Tiene uno o más proyectos.
 - **Proyecto**: trabajo específico de un cliente; nombre, descripción, fechas de inicio y cierre estimada, responsable, presupuesto estimado, estado (Activo/Completado/Suspendido). Destino obligatorio de las salidas.

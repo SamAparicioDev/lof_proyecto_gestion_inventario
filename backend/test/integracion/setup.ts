@@ -141,6 +141,12 @@ const TABLAS_DE_NEGOCIO = [
   // US15: va DESPUÉS de `productos` porque la FK `productos.categoria_id` es RESTRICT; el
   // `CASCADE` del TRUNCATE la resolvería igual, pero el orden explícito documenta la dependencia.
   'categorias',
+  // US17: mismo caso que `categorias` — la FK `productos.unidad_medida_id` es RESTRICT, así que
+  // va después de `productos`. Se lista EXPLÍCITAMENTE aunque el `CASCADE` la arrastraría de
+  // todos modos por su FK a `usuarios`: dejarla implícita escondía que las quince unidades que
+  // siembra la migración NO sobreviven al truncado, que es justo lo que hay que saber al
+  // escribir una suite (por eso existe `crearUnidadMedidaDePrueba`).
+  'unidades_medida',
   'usuarios',
 ] as const;
 
@@ -370,6 +376,13 @@ export interface OpcionesProductoDePrueba {
    * (`null`/`ACTIVO`) para que ninguna suite anterior cambie de comportamiento.
    */
   categoriaId?: number | null;
+  /**
+   * Unidad de medida (US17/FR-103). Por defecto `null`: un producto sembrado por esta factory
+   * es, deliberadamente, uno de los ANTERIORES a la historia — así las suites que verifican qué
+   * ocurre con ellos (editar exige completarla, importar la conserva) no tienen que deshacer
+   * nada primero.
+   */
+  unidadMedidaId?: number | null;
   ubicacion?: string | null;
   estado?: 'ACTIVO' | 'INACTIVO';
   /**
@@ -472,6 +485,32 @@ export async function crearProveedorDelSistemaDePrueba(prisma: PrismaService): P
   return Number(proveedor.id);
 }
 
+/**
+ * Crea una unidad de medida del catálogo (US17, FR-101) y devuelve su id.
+ *
+ * Hace falta explícitamente en cada suite que dé de alta un producto por HTTP: la migración
+ * siembra quince unidades, pero `truncarTablas` vacía la tabla antes de cada prueba (ver
+ * `TABLAS_DE_NEGOCIO`). Los productos creados con `crearProductoDePrueba` NO la necesitan —
+ * nacen sin unidad a propósito, que es como quedaron los anteriores a la historia (FR-103).
+ *
+ * El nombre y la abreviatura se guardan TAL CUAL, mismo criterio que categorías y proveedores:
+ * hay pruebas que los comprueban en un documento exportado. Dos llamadas con el mismo texto
+ * dentro de una prueba chocan contra los índices funcionales — cada suite pasa los suyos.
+ */
+export async function crearUnidadMedidaDePrueba(
+  prisma: PrismaService,
+  nombre = 'Unidad',
+  abreviatura = 'und',
+  usuarioCreacionId?: number,
+): Promise<number> {
+  const creadorId = usuarioCreacionId ?? (await usuarioParaAuditoria(prisma));
+  const unidad = await prisma.unidadMedida.create({
+    data: { nombre, abreviatura, usuarioCreacionId: BigInt(creadorId) },
+    select: { id: true },
+  });
+  return Number(unidad.id);
+}
+
 export async function crearProductoDePrueba(
   prisma: PrismaService,
   opciones: OpcionesProductoDePrueba = {},
@@ -486,6 +525,10 @@ export async function crearProductoDePrueba(
       stockActual: opciones.stockActual ?? 0,
       umbralStockBajo: opciones.umbralStockBajo ?? 0,
       categoriaId: opciones.categoriaId === undefined || opciones.categoriaId === null ? null : BigInt(opciones.categoriaId),
+      unidadMedidaId:
+        opciones.unidadMedidaId === undefined || opciones.unidadMedidaId === null
+          ? null
+          : BigInt(opciones.unidadMedidaId),
       ubicacion: opciones.ubicacion ?? null,
       estado: opciones.estado ?? 'ACTIVO',
       usuarioCreacionId: BigInt(usuarioCreacionId),

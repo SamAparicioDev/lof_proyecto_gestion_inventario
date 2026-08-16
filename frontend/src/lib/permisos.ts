@@ -78,6 +78,11 @@ export const PERMISOS = {
   PROVEEDORES_VER: 'proveedores.ver',
   PROVEEDORES_GESTIONAR: 'proveedores.gestionar',
 
+  // US17 — unidades de medida, mismo par de la familia: `VER` alimenta el selector obligatorio
+  // del formulario de producto, así que lo tienen los tres roles (FR-102).
+  UNIDADES_MEDIDA_VER: 'unidades_medida.ver',
+  UNIDADES_MEDIDA_GESTIONAR: 'unidades_medida.gestionar',
+
   // US16 — órdenes de compra. Ver, crear y editar borradores lo tienen los tres roles; enviar y
   // anular comprometen o liberan un gasto frente a un tercero y quedan restringidos (FR-100).
   ORDENES_COMPRA_VER: 'ordenes_compra.ver',

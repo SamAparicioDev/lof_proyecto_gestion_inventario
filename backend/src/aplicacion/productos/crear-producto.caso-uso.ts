@@ -15,12 +15,20 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { CasoDeUso } from '../comunes/caso-de-uso';
 import { REPOSITORIO_PRODUCTOS, type RepositorioProductos } from '../../dominio/puertos/repositorio-productos';
+import {
+  REPOSITORIO_UNIDADES_MEDIDA,
+  type RepositorioUnidadesMedida,
+} from '../../dominio/puertos/repositorio-unidades-medida';
+import { verificarUnidadMedidaAsignable } from './verificar-unidad-medida-asignable';
+
 
 /** Entrada: datos ya validados por `esquemaCrearProducto` (pipe HTTP) + auditoría (FR-045). */
 export interface CrearProductoEntrada {
   readonly sku: string;
   readonly descripcion: string;
   readonly categoriaId: number | null;
+  /** US17 (FR-102): obligatoria — una cantidad sin unidad no se puede interpretar. */
+  readonly unidadMedidaId: number;
   readonly ubicacion: string | null;
   readonly umbralStockBajo: number;
   /** Quién da de alta el producto — nunca confiar en un valor del body (FR-045). */
@@ -33,13 +41,19 @@ export interface CrearProductoSalida {
 
 @Injectable()
 export class CrearProductoCasoUso implements CasoDeUso<CrearProductoEntrada, CrearProductoSalida> {
-  constructor(@Inject(REPOSITORIO_PRODUCTOS) private readonly repositorioProductos: RepositorioProductos) {}
+  constructor(
+    @Inject(REPOSITORIO_PRODUCTOS) private readonly repositorioProductos: RepositorioProductos,
+    @Inject(REPOSITORIO_UNIDADES_MEDIDA) private readonly repositorioUnidades: RepositorioUnidadesMedida,
+  ) {}
 
   async ejecutar(entrada: CrearProductoEntrada): Promise<CrearProductoSalida> {
+    await verificarUnidadMedidaAsignable(this.repositorioUnidades, entrada.unidadMedidaId);
+
     const producto = await this.repositorioProductos.crear({
       sku: entrada.sku,
       descripcion: entrada.descripcion,
       categoriaId: entrada.categoriaId,
+      unidadMedidaId: entrada.unidadMedidaId,
       ubicacion: entrada.ubicacion,
       umbralStockBajo: entrada.umbralStockBajo,
       usuarioCreacionId: entrada.usuarioId,

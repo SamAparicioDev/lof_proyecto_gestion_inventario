@@ -444,6 +444,29 @@ Proveedores — MISMO patrón que categorías (FR-091), con dos diferencias que 
 
 ---
 
+## Phase 20: User Story 17 - Unidad de medida de los productos (Priority: P2)
+
+**Goal**: Que una cantidad del inventario se lea sin adivinar — "12 kg" y no "12" (FR-101…FR-105)
+
+**Independent Test**: Dar de alta la unidad "Kilogramo / kg", crear un producto que la use y verlo en el inventario con su cantidad acompañada de la unidad (US17-AS1)
+
+**Sigue el patrón de US15**: es el tercer catálogo de la misma familia, así que espeja categorías y proveedores salvo en lo que se indica.
+
+- [x] T177 [US17] Migración `*_unidades_medida/migration.sql`: tabla con las DOS unicidades funcionales (nombre y abreviatura), `productos.unidad_medida_id` NULLABLE con FK RESTRICT (FR-103), los permisos del catálogo con su matriz rol→permiso, y un juego inicial de unidades comunes — sin él, crear un producto sería imposible hasta que alguien invente la primera unidad. Más el modelo en `schema.prisma`
+- [x] T178 [P] [US17] Permisos `unidades_medida.ver` (los tres roles: sin él no se da de alta un producto) y `unidades_medida.gestionar` (Administrador y Gerente) en el seed, junto con las mismas unidades iniciales
+- [x] T179 [P] [US17] Esquemas `packages/compartido/src/esquemas/unidades-medida.ts` + `unidadMedidaId` OBLIGATORIO en los esquemas de crear y actualizar producto + `unidadMedida` en el tipo de lectura
+- [x] T180 [US17] Dominio, adaptador Prisma, casos de uso y `ControladorUnidadesMedida` (`/api/unidades-medida`) — espejo de T148-T151, con el duplicado señalando el campo que choca (nombre o abreviatura)
+- [x] T181 [US17] `Producto` expone `unidadMedida: {id, nombre, abreviatura} | null`; crear y actualizar la exigen y verifican que exista y esté ACTIVA (FR-102/FR-103)
+- [x] T182 [US17] Carga masiva: columna "Unidad de medida" en la plantilla y en el catálogo exportable; se resuelve por NOMBRE o ABREVIATURA (FR-104); fila que CREA sin unidad → error de esa fila; celda vacía que ACTUALIZA → conserva la unidad, a diferencia del resto de columnas opcionales
+- [x] T183 [US17] Frontend `/administracion/unidades-medida` (mismo patrón que las otras dos secciones) y su pestaña
+- [x] T184 [US17] Frontend: selector de unidad OBLIGATORIO en el alta rápida y en la edición de producto, y la unidad junto a las cantidades en el listado de inventario y en la ficha (FR-105)
+- [x] T185 [P] [US17] Pruebas de integración `backend/test/integracion/unidades-medida.spec.ts`: duplicado por nombre y por abreviatura señalando cada campo; unidad en uso no se elimina; crear producto sin unidad → 400; editar un producto ANTIGUO sin completarla → 400
+- [x] T186 [P] [US17] Pruebas de integración de la importación: fila nueva sin unidad rechazada sin bloquear las demás; unidad escrita por abreviatura resuelta; y celda vacía en una actualización que CONSERVA la unidad previa
+
+**Checkpoint**: Toda cantidad del inventario se lee con su unidad, y ningún producto nuevo puede nacer sin ella
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies

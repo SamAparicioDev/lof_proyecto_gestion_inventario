@@ -36,6 +36,9 @@ function aValoresFormulario(fila: FilaInventario): DatosActualizarProducto {
   return {
     descripcion: fila.producto.descripcion,
     categoriaId: fila.producto.categoria?.id ?? null,
+    // US17: `0` cuando el producto es anterior a la historia — el esquema exige un entero
+    // positivo, así que el formulario no deja guardar hasta que se elige una (FR-103).
+    unidadMedidaId: fila.producto.unidadMedida?.id ?? 0,
     ubicacion: fila.producto.ubicacion ?? '',
     umbralStockBajo: fila.producto.umbralStockBajo,
     // US12: el costo se precarga con el vigente para que una edición de otro campo no lo
@@ -86,14 +89,29 @@ export function PanelProducto({ fila }: { fila: FilaInventario }) {
       </div>
 
       <dl className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', margin: 0 }}>
-        <CifraInventario etiqueta="Stock" valor={fila.stock} />
-        <CifraInventario etiqueta="Comprometido" valor={fila.comprometido} />
-        <CifraInventario etiqueta="Disponible" valor={fila.disponible} destacar={fila.stockBajo} />
+        <CifraInventario etiqueta="Stock" valor={fila.stock} unidad={fila.producto.unidadMedida} />
+        <CifraInventario etiqueta="Comprometido" valor={fila.comprometido} unidad={fila.producto.unidadMedida} />
+        <CifraInventario
+          etiqueta="Disponible"
+          valor={fila.disponible}
+          unidad={fila.producto.unidadMedida}
+          destacar={fila.stockBajo}
+        />
       </dl>
 
       <dl className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', margin: 0 }}>
         <DatoSoloLectura etiqueta="Descripción" valor={fila.producto.descripcion} />
         <DatoSoloLectura etiqueta="Categoría" valor={fila.producto.categoria?.nombre ?? '—'} />
+        {/* US17/FR-105: el nombre completo cabe aquí; junto a las cifras va la abreviatura.
+            "Sin definir" es un producto anterior a la historia — se completa al editarlo. */}
+        <DatoSoloLectura
+          etiqueta="Unidad de medida"
+          valor={
+            fila.producto.unidadMedida
+              ? `${fila.producto.unidadMedida.nombre} (${fila.producto.unidadMedida.abreviatura})`
+              : 'Sin definir'
+          }
+        />
         <DatoSoloLectura etiqueta="Ubicación" valor={fila.producto.ubicacion ?? '—'} />
         <DatoSoloLectura etiqueta="Umbral de stock bajo" valor={String(fila.producto.umbralStockBajo)} />
         {/* Costo de referencia vigente (US12/FR-071): editable desde "Editar", y su procedencia
@@ -135,6 +153,7 @@ export function PanelProducto({ fila }: { fila: FilaInventario }) {
           productoId={fila.producto.id}
           sku={fila.producto.sku}
           valoresIniciales={aValoresFormulario(fila)}
+          unidadActual={fila.producto.unidadMedida}
           categoriaActual={fila.producto.categoria}
           onCerrar={() => setEditando(false)}
           onGuardado={() => router.refresh()}
@@ -144,7 +163,19 @@ export function PanelProducto({ fila }: { fila: FilaInventario }) {
   );
 }
 
-function CifraInventario({ etiqueta, valor, destacar }: { etiqueta: string; valor: number; destacar?: boolean }) {
+/** La abreviatura va en un `<span>` más pequeño y apagado: acompaña a la cifra sin competir
+ *  con ella, que es lo que pide FR-105 ("que un 12 se lea como 12 kg"). */
+function CifraInventario({
+  etiqueta,
+  valor,
+  unidad,
+  destacar,
+}: {
+  etiqueta: string;
+  valor: number;
+  unidad?: { abreviatura: string } | null;
+  destacar?: boolean;
+}) {
   return (
     <div>
       <dt className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
@@ -159,6 +190,11 @@ function CifraInventario({ etiqueta, valor, destacar }: { etiqueta: string; valo
         }}
       >
         {valor}
+        {unidad && (
+          <span className="text-muted" style={{ fontSize: 13, marginLeft: 4 }}>
+            {unidad.abreviatura}
+          </span>
+        )}
       </dd>
     </div>
   );

@@ -82,3 +82,22 @@ const FORMATEADOR_FECHA_HORA = new Intl.DateTimeFormat('es-CO', {
 export function formatoFechaHora(fecha: string | Date): string {
   return FORMATEADOR_FECHA_HORA.format(new Date(fecha));
 }
+
+/**
+ * Cantidad con su unidad de medida — "12" pasa a leerse "12 kg" (US17, FR-105).
+ *
+ * Es la razón de ser de la historia: en el inventario un número suelto no dice si son doce
+ * bultos o doce kilos. Se usa la ABREVIATURA porque va dentro de una celda de tabla, junto a
+ * la cifra, y el nombre completo la haría ilegible.
+ *
+ * `null` devuelve solo el número, sin marcador ni "—": los productos anteriores a US17 no
+ * tienen unidad y su cantidad sigue siendo perfectamente válida; adornarla llamaría la
+ * atención sobre un dato que falta en una pantalla que no es el sitio para completarlo (el
+ * sitio es la ficha, que sí lo pide al guardar).
+ */
+export function formatoCantidadConUnidad(
+  cantidad: number,
+  unidad: { abreviatura: string } | null | undefined,
+): string {
+  return unidad ? `${cantidad} ${unidad.abreviatura}` : String(cantidad);
+}

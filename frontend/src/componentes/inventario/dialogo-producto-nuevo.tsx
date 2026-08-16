@@ -25,6 +25,7 @@
  * Operario en ninguna de sus dos entradas: es una acción que sí puede ejecutar.
  */
 import { SelectorCategoria } from '@/componentes/categorias/selector-categoria';
+import { SelectorUnidadMedida } from '@/componentes/unidades-medida/selector-unidad-medida';
 import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -33,7 +34,14 @@ import { crearProducto } from '@/lib/api/productos';
 import { ErrorApi } from '@/lib/api/cliente';
 
 const MENSAJE_ERROR_RED = 'No fue posible comunicarse con el servidor. Intenta de nuevo.';
-const CAMPOS_VALIDOS = new Set(['sku', 'descripcion', 'categoriaId', 'ubicacion', 'umbralStockBajo']);
+const CAMPOS_VALIDOS = new Set([
+  'sku',
+  'descripcion',
+  'categoriaId',
+  'unidadMedidaId',
+  'ubicacion',
+  'umbralStockBajo',
+]);
 
 interface DialogoProductoNuevoProps {
   onCerrar: () => void;
@@ -52,7 +60,16 @@ export function DialogoProductoNuevo({ onCerrar, onCreado }: DialogoProductoNuev
     formState: { errors },
   } = useForm<DatosCrearProducto>({
     resolver: zodResolver(esquemaCrearProducto),
-    defaultValues: { sku: '', descripcion: '', categoriaId: null, ubicacion: '', umbralStockBajo: 0 },
+    // `unidadMedidaId: 0` no es elegible: el esquema exige un entero POSITIVO, así que enviar
+    // el formulario sin tocar el selector marca el campo en vez de crear el producto (FR-102).
+    defaultValues: {
+      sku: '',
+      descripcion: '',
+      categoriaId: null,
+      unidadMedidaId: 0,
+      ubicacion: '',
+      umbralStockBajo: 0,
+    },
   });
 
   async function alEnviar(datos: DatosCrearProducto): Promise<void> {
@@ -137,6 +154,27 @@ export function DialogoProductoNuevo({ onCerrar, onCreado }: DialogoProductoNuev
                 <SelectorCategoria id="producto-nuevo-categoria" value={field.value} onChange={field.onChange} />
               )}
             />
+          </div>
+
+          <div className="field">
+            <label htmlFor="producto-nuevo-unidad">Unidad de medida</label>
+            <Controller
+              name="unidadMedidaId"
+              control={control}
+              render={({ field }) => (
+                <SelectorUnidadMedida
+                  id="producto-nuevo-unidad"
+                  value={field.value}
+                  onChange={field.onChange}
+                  ariaInvalid={!!errors.unidadMedidaId}
+                />
+              )}
+            />
+            {errors.unidadMedidaId && (
+              <p role="alert" style={{ fontSize: 12, color: 'var(--color-accent-300)', marginTop: 5 }}>
+                {errors.unidadMedidaId.message}
+              </p>
+            )}
           </div>
 
           <div className="field">

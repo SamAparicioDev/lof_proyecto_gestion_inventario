@@ -71,6 +71,7 @@ no es control de acceso.
 | `/administracion` | ✓ | ✓ | ✗ | **Módulo de catálogos del sistema** (US15). No tiene contenido propio: redirige a la primera sección que la sesión pueda abrir — con roles a medida no se puede asumir que quien entra tenga permiso sobre la primera (misma lección que el `/` de US9/T108). Aquí se agrupan los CRUD de los datos de apoyo que el negocio parametriza, para que la barra lateral no crezca con una entrada por catálogo |
 | `/administracion/categorias` | ✓ | ✓ | ✗ | Catálogo de categorías de producto (US15, FR-084…FR-087): alta, edición y activar/desactivar con diálogos `.dialog` sobre el propio listado, mismo patrón que `/usuarios`. Exige `categorias.gestionar`; el permiso `categorias.ver` NO abre esta pantalla — sirve para clasificar productos y para el filtro del inventario, y lo tienen los tres roles (FR-088) |
 | `/administracion/proveedores` | ✓ | ✓ | ✗ | Catálogo de proveedores (US15, FR-091…FR-093), mismo patrón. Exige `proveedores.gestionar` |
+| `/administracion/unidades-medida` | ✓ | ✓ | ✗ | Catálogo de unidades de medida (US17, FR-101), mismo patrón: nombre y abreviatura. Exige `unidades_medida.gestionar`; el permiso `unidades_medida.ver` NO abre esta pantalla — sirve para el selector del formulario de producto, y lo tienen los tres roles |
 
 **Nota US9**: a partir de la implementación de roles y permisos, esta tabla deja de ser el
 contrato de acceso por ROL fijo y pasa a describir el permiso que exige cada ruta; las

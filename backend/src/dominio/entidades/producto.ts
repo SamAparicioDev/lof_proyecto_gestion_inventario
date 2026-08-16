@@ -27,6 +27,14 @@ export interface Producto {
    *  pantallas que muestran un producto muestran el nombre, y resolverlo aparte obligaría a una
    *  segunda consulta por fila. */
   readonly categoria: { readonly id: number; readonly nombre: string } | null;
+  /**
+   * En qué se mide (US17, FR-102/FR-103). Viaja con la ABREVIATURA además del nombre porque es
+   * lo que se imprime junto a una cantidad, que es donde la unidad hace falta.
+   *
+   * `null` SOLO en los productos anteriores a US17: desde esa historia el alta y la edición la
+   * exigen. La base de datos la admite nula a propósito — ver `data-model.md § unidades_medida`.
+   */
+  readonly unidadMedida: { readonly id: number; readonly nombre: string; readonly abreviatura: string } | null;
   readonly ubicacion: string | null;
   readonly umbralStockBajo: number;
   readonly stockActual: number;
