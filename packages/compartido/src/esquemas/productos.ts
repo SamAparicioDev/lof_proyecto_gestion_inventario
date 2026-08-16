@@ -15,54 +15,123 @@
  */
 import { z } from 'zod';
 
+/** Mismo criterio que en ingresos y salidas: las cantidades del inventario admiten como mucho
+ *  dos decimales (data-model.md — `NUMERIC(14,2)`). */
+function tieneMaximoDosDecimales(valor: number): boolean {
+  return Number.isInteger(Math.round(valor * 100));
+}
+
+/**
+ * Campos del alta, SIN la validación cruzada de las existencias iniciales.
+ *
+ * Existe aparte porque `.superRefine()` devuelve un `ZodEffects`, que ya no tiene `.shape`: los
+ * esquemas de edición y de fila de importación reutilizan campos de aquí uno a uno, y sin este
+ * objeto intermedio tendrían que redefinirlos —que es justo lo que ese reúso vino a evitar—.
+ */
+const camposCrearProducto = z
+  .object({
+    sku: z
+      .string({ required_error: 'El SKU es obligatorio' })
+      .trim()
+      .min(1, 'El SKU es obligatorio')
+      .max(50, 'El SKU no puede superar 50 caracteres'),
+    descripcion: z
+      .string({ required_error: 'La descripción es obligatoria' })
+      .trim()
+      .min(1, 'La descripción es obligatoria')
+      .max(300, 'La descripción no puede superar 300 caracteres'),
+    /** US15 (FR-086): la categoría dejó de escribirse y pasó a elegirse del catálogo. `null`
+     *  desclasifica un producto ya clasificado; omitirlo lo deja como está. */
+    categoriaId: z
+      .number({ invalid_type_error: 'La categoría no es válida' })
+      .int('La categoría no es válida')
+      .positive('La categoría no es válida')
+      .nullable()
+      .optional(),
+    /**
+     * US17 (FR-102): en qué se mide el producto. OBLIGATORIA desde esta historia — una cantidad
+     * sin unidad es un número que nadie puede interpretar después.
+     *
+     * La columna de la base es NULLABLE por los productos anteriores (FR-103), pero este esquema
+     * NO lo refleja a propósito: gobierna el alta y la EDICIÓN, y las dos exigen la unidad. Editar
+     * un producto viejo es la ocasión en la que alguien decide su unidad, así el catálogo se
+     * limpia con el uso en vez de con una tarea aparte.
+     *
+     * El mensaje de `.positive()` dice "obligatoria" y no "no es válida" porque ese es el caso
+     * real que lo dispara: el formulario arranca con `0` —ningún id de verdad es 0— y ese 0 es
+     * exactamente "todavía no he elegido ninguna". Decirle "no es válida" a quien no ha tocado el
+     * campo le haría buscar un error en algo que nunca escribió.
+     */
+    unidadMedidaId: z
+      .number({
+        required_error: 'La unidad de medida es obligatoria',
+        invalid_type_error: 'La unidad de medida es obligatoria',
+      })
+      .int('La unidad de medida no es válida')
+      .positive('La unidad de medida es obligatoria'),
+    ubicacion: z.string().trim().max(100, 'La ubicación no puede superar 100 caracteres').optional(),
+    umbralStockBajo: z
+      .number({ invalid_type_error: 'El umbral de stock bajo debe ser un número' })
+      .min(0, 'El umbral de stock bajo no puede ser negativo')
+      .optional()
+      .default(0),
+
+    // ---------------------------------------------------------------------------------------
+    // Existencias iniciales (US18, FR-106). Los tres viajan juntos o no viajan.
+    //
+    // Un producto que YA está en la bodega se daba de alta en dos gestiones: crearlo (nace en
+    // cero) y registrar después un ingreso. Estos campos lo hacen en una — pero NO escriben
+    // stock: el backend genera con ellos un ingreso real, con su movimiento de entrada, igual
+    // que hace la carga masiva con su columna "Cantidad inicial" (FR-050).
+    //
+    // El alta rápida invocada DESDE un ingreso no los envía (FR-107): ahí la cantidad y el
+    // precio los pone la línea del ingreso que se está registrando, y mandarlos también aquí
+    // registraría la entrada dos veces.
+    // ---------------------------------------------------------------------------------------
+    proveedorId: z
+      .number({ invalid_type_error: 'El proveedor no es válido' })
+      .int('El proveedor no es válido')
+      .positive('El proveedor no es válido')
+      .optional(),
+    cantidadInicial: z
+      .number({ invalid_type_error: 'La cantidad inicial debe ser un número' })
+      .min(0, 'La cantidad inicial no puede ser negativa')
+      .refine(tieneMaximoDosDecimales, 'La cantidad inicial admite máximo 2 decimales')
+      .optional(),
+    valorUnitario: z
+      .number({ invalid_type_error: 'El valor unitario debe ser un número' })
+      .min(0, 'El valor unitario no puede ser negativo')
+      .optional(),
+  });
+
 /** Body de `POST /api/productos` (contracts/api-rest.md). */
-export const esquemaCrearProducto = z.object({
-  sku: z
-    .string({ required_error: 'El SKU es obligatorio' })
-    .trim()
-    .min(1, 'El SKU es obligatorio')
-    .max(50, 'El SKU no puede superar 50 caracteres'),
-  descripcion: z
-    .string({ required_error: 'La descripción es obligatoria' })
-    .trim()
-    .min(1, 'La descripción es obligatoria')
-    .max(300, 'La descripción no puede superar 300 caracteres'),
-  /** US15 (FR-086): la categoría dejó de escribirse y pasó a elegirse del catálogo. `null`
-   *  desclasifica un producto ya clasificado; omitirlo lo deja como está. */
-  categoriaId: z
-    .number({ invalid_type_error: 'La categoría no es válida' })
-    .int('La categoría no es válida')
-    .positive('La categoría no es válida')
-    .nullable()
-    .optional(),
+export const esquemaCrearProducto = camposCrearProducto
   /**
-   * US17 (FR-102): en qué se mide el producto. OBLIGATORIA desde esta historia — una cantidad
-   * sin unidad es un número que nadie puede interpretar después.
+   * La regla que hace de estos tres campos un bloque y no tres opcionales sueltos (FR-106).
    *
-   * La columna de la base es NULLABLE por los productos anteriores (FR-103), pero este esquema
-   * NO lo refleja a propósito: gobierna el alta y la EDICIÓN, y las dos exigen la unidad. Editar
-   * un producto viejo es la ocasión en la que alguien decide su unidad, así el catálogo se
-   * limpia con el uso en vez de con una tarea aparte.
-   *
-   * El mensaje de `.positive()` dice "obligatoria" y no "no es válida" porque ese es el caso
-   * real que lo dispara: el formulario arranca con `0` —ningún id de verdad es 0— y ese 0 es
-   * exactamente "todavía no he elegido ninguna". Decirle "no es válida" a quien no ha tocado el
-   * campo le haría buscar un error en algo que nunca escribió.
+   * Sin cantidad no hay nada que registrar y los otros dos sobran. Con cantidad hay que emitir
+   * un ingreso, y un ingreso sin proveedor no existe (FR-091) ni una línea sin precio (el costo
+   * del producto saldría de la nada). El error se ancla al campo que falta —no a un mensaje
+   * general— porque es lo que el formulario necesita para pintarlo donde toca.
    */
-  unidadMedidaId: z
-    .number({
-      required_error: 'La unidad de medida es obligatoria',
-      invalid_type_error: 'La unidad de medida es obligatoria',
-    })
-    .int('La unidad de medida no es válida')
-    .positive('La unidad de medida es obligatoria'),
-  ubicacion: z.string().trim().max(100, 'La ubicación no puede superar 100 caracteres').optional(),
-  umbralStockBajo: z
-    .number({ invalid_type_error: 'El umbral de stock bajo debe ser un número' })
-    .min(0, 'El umbral de stock bajo no puede ser negativo')
-    .optional()
-    .default(0),
-});
+  .superRefine((datos, contexto) => {
+    if (!datos.cantidadInicial || datos.cantidadInicial <= 0) return;
+
+    if (datos.proveedorId === undefined) {
+      contexto.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['proveedorId'],
+        message: 'Indica a qué proveedor le compraste estas existencias iniciales',
+      });
+    }
+    if (datos.valorUnitario === undefined) {
+      contexto.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['valorUnitario'],
+        message: 'Indica el valor unitario de las existencias iniciales',
+      });
+    }
+  });
 export type DatosCrearProducto = z.infer<typeof esquemaCrearProducto>;
 
 /**
@@ -77,11 +146,11 @@ export type DatosCrearProducto = z.infer<typeof esquemaCrearProducto>;
  * MISMA transacción (contracts/api-rest.md § Historial de costos del producto).
  */
 export const esquemaActualizarProducto = z.object({
-  descripcion: esquemaCrearProducto.shape.descripcion,
-  categoriaId: esquemaCrearProducto.shape.categoriaId,
-  unidadMedidaId: esquemaCrearProducto.shape.unidadMedidaId,
-  ubicacion: esquemaCrearProducto.shape.ubicacion,
-  umbralStockBajo: esquemaCrearProducto.shape.umbralStockBajo,
+  descripcion: camposCrearProducto.shape.descripcion,
+  categoriaId: camposCrearProducto.shape.categoriaId,
+  unidadMedidaId: camposCrearProducto.shape.unidadMedidaId,
+  ubicacion: camposCrearProducto.shape.ubicacion,
+  umbralStockBajo: camposCrearProducto.shape.umbralStockBajo,
   ultimoCosto: z
     .number({ invalid_type_error: 'El costo unitario debe ser un número' })
     .min(0, 'El costo unitario no puede ser negativo')
@@ -104,8 +173,8 @@ export type DatosActualizarProducto = z.infer<typeof esquemaActualizarProducto>;
  */
 export const esquemaFilaImportacionProducto = z
   .object({
-    sku: esquemaCrearProducto.shape.sku,
-    descripcion: esquemaCrearProducto.shape.descripcion,
+    sku: camposCrearProducto.shape.sku,
+    descripcion: camposCrearProducto.shape.descripcion,
     /** En el Excel la categoría se escribe por NOMBRE y el backend la resuelve contra el
      *  catálogo ignorando mayúsculas y espacios (FR-090): pedirle un id a quien llena una hoja
      *  de cálculo no tendría sentido. Una categoría desconocida invalida esa fila. */
@@ -120,8 +189,8 @@ export const esquemaFilaImportacionProducto = z
      * el SKU existe, que es información que este esquema no tiene.
      */
     unidadMedida: z.string().trim().max(60, 'La unidad de medida no puede superar 60 caracteres').optional(),
-    ubicacion: esquemaCrearProducto.shape.ubicacion,
-    umbralStockBajo: esquemaCrearProducto.shape.umbralStockBajo,
+    ubicacion: camposCrearProducto.shape.ubicacion,
+    umbralStockBajo: camposCrearProducto.shape.umbralStockBajo,
     cantidadInicial: z
       .number({ invalid_type_error: 'La cantidad inicial debe ser un número' })
       .min(0, 'La cantidad inicial no puede ser negativa')

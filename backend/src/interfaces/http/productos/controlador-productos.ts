@@ -162,7 +162,7 @@ export class ControladorProductos {
   async crear(
     @Body(new PipeValidacionZod(esquemaCrearProducto)) datos: DatosCrearProducto,
     @UsuarioActual() usuario: Usuario,
-  ): Promise<{ id: number }> {
+  ): Promise<{ id: number; ingresoId: number | null }> {
     return this.crearProducto.ejecutar({
       sku: datos.sku,
       descripcion: datos.descripcion,
@@ -170,6 +170,11 @@ export class ControladorProductos {
       unidadMedidaId: datos.unidadMedidaId,
       ubicacion: datos.ubicacion ?? null,
       umbralStockBajo: datos.umbralStockBajo,
+      // US18 (FR-106): los tres viajan tal cual, incluido el `undefined` — el esquema ya
+      // garantizó que o vienen los tres o no viene ninguno.
+      proveedorId: datos.proveedorId,
+      cantidadInicial: datos.cantidadInicial,
+      valorUnitario: datos.valorUnitario,
       usuarioId: usuario.id,
     });
   }

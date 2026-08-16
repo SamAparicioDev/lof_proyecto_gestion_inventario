@@ -275,7 +275,7 @@ ningún requisito lo pide y el recorte correcto vive en el selector.
 | Método y ruta | Roles | Body/Query (Zod) | Respuesta OK | Errores |
 |---|---|---|---|---|
 | `GET /api/productos?buscar=` | A,G,O | `esquemaListarProductos` {buscar?} | `200` `ProductoResumen[]` {id,sku,descripcion,ultimoCosto,disponible} — listado simple SIN paginar, solo para poblar selectores (extensión T035; `ultimoCosto`/`disponible` añadidos en T052 para el formulario de salidas — `disponible = stockActual − comprometidoPorProducto` de TODAS las salidas PENDIENTE, sin excluir nada, ver TSDoc de `listar-resumen-productos.caso-uso.ts`) | — |
-| `POST /api/productos` | A,G,O | `esquemaCrearProducto` {sku, descripcion, categoriaId?, ubicacion?, umbralStockBajo?} | `201` {id} (alta rápida desde ingresos — FR-011) | `400` SKU duplicado; `400` categoría inexistente o inactiva |
+| `POST /api/productos` | A,G,O | `esquemaCrearProducto` {sku, descripcion, categoriaId?, unidadMedidaId, ubicacion?, umbralStockBajo?, proveedorId?, cantidadInicial?, valorUnitario?} | `201` {id, ingresoId} — `ingresoId` es `null` salvo que se hayan informado existencias iniciales (FR-106) | `400` SKU duplicado; `400` categoría inexistente o inactiva; `400` cantidad inicial sin proveedor o sin valor unitario |
 | `PUT /api/productos/:id` | A,G | `esquemaActualizarProducto` {descripcion, categoriaId?, ubicacion?, umbralStockBajo?, ultimoCosto?} | `204` | `404`; `400` categoría inexistente o inactiva |
 | `PUT /api/productos/:id/estado` | A,G | {estado} | `204` (nunca DELETE — FR-012) | `404` |
 
@@ -353,6 +353,20 @@ Reglas del contrato:
   que es trabajo diario (los tres roles tienen `productos.crear`). `.gestionar` es lo restringido.
 - **Dos duplicados posibles, dos campos distintos**: el error señala `nombre` o `abreviatura`
   según cuál choque, nunca un `409` genérico — son campos de un formulario.
+
+**Existencias iniciales en el alta** (US18, FR-106/FR-107):
+
+Los tres campos viajan juntos o no viajan. `cantidadInicial > 0` exige `proveedorId` y
+`valorUnitario`; los errores se anclan al campo que falta, no a un mensaje general.
+
+Cuando llegan, el alta hace exactamente lo que haría el usuario en dos pasos: crea el producto y
+a continuación un **ingreso real** (una línea, el proveedor informado, fecha de hoy) que se
+RECIBE, con su movimiento `ENTRADA` y su registro en el historial de costos. El stock nunca se
+escribe directo — mismo camino que FR-050 para la carga masiva. El número de documento se
+autogenera con prefijo `ALTA-`: nace de un alta de catálogo, no de una factura que alguien tenga
+en la mano, y pedirlo convertiría el diálogo en un formulario de ingreso.
+
+`ingresoId` en la respuesta permite al frontend enlazar al documento generado.
 
 **El producto pasa a exigir `unidadMedidaId`** (FR-102/FR-103):
 

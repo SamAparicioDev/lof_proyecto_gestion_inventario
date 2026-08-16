@@ -304,6 +304,26 @@ Cada producto se mide en algo —kilogramos, metros, unidades, cajas— y hoy el
 
 ---
 
+### User Story 18 - Alta de producto con existencias iniciales (Priority: P2)
+
+Dar de alta un producto que YA está físicamente en la bodega son hoy dos gestiones: crearlo en el catálogo —donde nace en cero— y después registrar un ingreso para darle stock. El Excel de carga masiva sí lo hace de una vez ("Cantidad inicial" y "Valor unitario"), así que quien da de alta uno a uno hace más trabajo que quien carga cien.
+
+**Why this priority**: no bloquea nada —el camino de dos pasos existe y funciona— pero es el hueco que más se nota al usar el sistema a diario, y nació de una asimetría que no decidió nadie: la carga masiva ganó esas dos columnas en US8 y el formulario nunca las tuvo.
+
+**El stock sigue sin escribirse a mano**: la cantidad inicial NO se guarda en el producto; genera un INGRESO real, con su proveedor, su línea y su movimiento de entrada, igual que si se hubiera registrado a mano (misma regla que FR-050 aplica a la carga masiva). Por eso el alta pregunta el proveedor: un ingreso sin él no existe, y atribuirlo a un proveedor sintético haría que el movimiento mintiera sobre de dónde vino la mercancía.
+
+**Independent Test**: Se prueba dando de alta un producto con proveedor, cantidad y valor unitario, y comprobando que aparece en el inventario con ese stock Y que existe un ingreso recibido que lo respalda. Entrega valor por sí sola: una gestión en vez de dos.
+
+**Acceptance Scenarios**:
+
+1. **Given** el formulario de alta desde el catálogo, **When** el usuario informa proveedor, cantidad inicial y valor unitario, **Then** el producto queda creado con ese stock y con un ingreso RECIBIDO que lo respalda, con su movimiento de entrada y su registro en el historial de costos.
+2. **Given** el mismo formulario, **When** el usuario deja la cantidad inicial vacía o en cero, **Then** el producto se crea en cero y NO se genera ningún ingreso — el alta se comporta como antes de esta historia.
+3. **Given** una cantidad inicial mayor que cero, **When** falta el proveedor o el valor unitario, **Then** el sistema lo rechaza señalando el campo que falta: sin ellos el ingreso no se puede registrar.
+4. **Given** el alta rápida DENTRO del formulario de ingresos, **When** se crea un producto desde ahí, **Then** NO se piden cantidad ni proveedor: los pone la línea del ingreso que se está registrando, y pedirlos dos veces registraría el stock por duplicado.
+5. **Given** un alta con existencias, **When** se consulta el producto recién creado, **Then** su costo unitario es el informado y el historial de costos muestra ese primer valor con su origen.
+
+---
+
 ### Edge Cases
 
 - **Salida mayor al disponible**: debe rechazarse siempre, incluida la carrera entre dos usuarios simultáneos sobre el mismo producto (solo una confirmación puede ganar).
@@ -484,6 +504,9 @@ que recordar por separado.
 - **FR-103**: Los productos que existían ANTES de esta historia quedan sin unidad y el sistema DEBE seguir operando con ellos con normalidad —consultarlos, moverlos, exportarlos y actualizarlos por carga masiva—; lo que NO se admite es guardarlos tras editarlos EN SU FICHA sin completarla. La limpieza ocurre con el uso, de uno en uno y con criterio, no con una migración que invente datos ni exigiéndola a la carga masiva: eso convertiría cualquier corrección de precios a escala en una clasificación previa de todo el catálogo.
 - **FR-104**: En la carga masiva la unidad DEBE escribirse por NOMBRE o por ABREVIATURA —quien llena un Excel escribe "kg", no "Kilogramo"— y resolverse contra el catálogo ignorando mayúsculas y espacios. Una unidad desconocida invalida ESA fila con un mensaje que la nombra, sin bloquear el resto del archivo (FR-051). Una celda vacía que ACTUALIZA un producto conserva su unidad actual, a diferencia de las demás columnas opcionales: dejarla en blanco no puede ser una forma de quitarle la unidad a un producto que ya la tenía (y si ese producto todavía no tiene ninguna, la fila se procesa igual y lo deja sin ella — FR-103). Una unidad INACTIVA escrita en la hoja invalida la fila igual que una desconocida: escribirla es asignarla.
 - **FR-105**: La unidad DEBE mostrarse junto a las cantidades del producto (inventario y ficha) — es la razón de ser de la historia: que un "12" se lea como "12 kg".
+- **FR-106**: El alta de un producto desde el catálogo DEBE aceptar existencias iniciales (proveedor, cantidad y valor unitario) y registrarlas como un INGRESO real con la misma trazabilidad que uno manual (usuario, fecha, documento, movimiento de entrada) — nunca como una escritura directa de stock. Los tres campos son opcionales en conjunto y obligatorios entre sí: sin cantidad no se genera nada; con cantidad, el proveedor y el valor unitario son exigibles.
+- **FR-107**: El alta rápida invocada DESDE un ingreso NO DEBE pedir existencias iniciales: la cantidad y el precio los aporta la línea del ingreso que se está registrando, y pedirlos también en el alta duplicaría la entrada de stock.
+
 
 **Auditoría y trazabilidad (transversal)**
 

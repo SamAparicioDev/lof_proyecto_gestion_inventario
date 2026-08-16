@@ -32,6 +32,9 @@ export function BotonNuevoProducto() {
       </button>
       {abierto && (
         <DialogoProductoNuevo
+          // Desde el catálogo el alta SÍ ofrece existencias iniciales (US18, FR-106); desde el
+          // formulario de ingresos no, porque ahí las pone la línea del ingreso (FR-107).
+          pideExistenciasIniciales
           onCerrar={() => setAbierto(false)}
           onCreado={() => {
             setAbierto(false);

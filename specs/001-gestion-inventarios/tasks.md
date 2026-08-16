@@ -467,6 +467,23 @@ Proveedores — MISMO patrón que categorías (FR-091), con dos diferencias que 
 
 ---
 
+## Phase 21: User Story 18 - Alta de producto con existencias iniciales (Priority: P2)
+
+**Goal**: Dar de alta un producto que ya está en la bodega en UNA gestión, no en dos (FR-106/FR-107)
+
+**Independent Test**: Crear un producto con proveedor, cantidad y valor unitario, y comprobar que aparece en el inventario con ese stock Y con un ingreso recibido que lo respalda (US18-AS1)
+
+**Sin cambios de esquema**: reutiliza `ingresos`/`detalles_ingresos`/`movimientos_inventario` tal cual — el stock inicial de US18 es el mismo camino que el de la carga masiva (FR-050).
+
+- [x] T187 [US18] `esquemaCrearProducto` gana `proveedorId`/`cantidadInicial`/`valorUnitario` opcionales con validación cruzada: con cantidad > 0, los otros dos son obligatorios y el error señala el campo que falta
+- [x] T188 [US18] `CrearProductoCasoUso` registra las existencias iniciales como un ingreso REAL (crear + recibir, prefijo `ALTA-`) y devuelve `{id, ingresoId}`; sin cantidad, se comporta exactamente como antes
+- [x] T189 [US18] Frontend: el diálogo de alta pide proveedor, cantidad y valor unitario SOLO cuando se abre desde el catálogo; desde un ingreso sigue sin pedirlos (FR-107)
+- [x] T190 [P] [US18] Pruebas de integración: alta con existencias → stock, ingreso RECIBIDO, movimiento ENTRADA e historial de costos; alta sin cantidad → ningún ingreso; cantidad sin proveedor o sin valor unitario → 400 con el campo señalado
+
+**Checkpoint**: Un producto que ya está en bodega se da de alta con su stock en una sola pantalla, y ese stock tiene el mismo rastro que un ingreso manual
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -558,7 +575,7 @@ persona: orden estricto de fases 1→10.
 
 ## Notes
 
-- Total: **139 tareas** (Setup 7, Foundational 20, US1 11, US2 8, US3 12, US5 8, US4 8, US6 5, US7 5, US8 8, Polish 6, US9 11, Experiencia de uso 4, US10 4, US11 6, US12 6, US13 10); **MVP = 66 tareas** (T001–T066). Siete bloques se agregaron fuera del plan original, a pedido directo del dueño del proyecto: US8/carga masiva (T091-T098, ver research R15), US9/roles y permisos (T099-T109, ver research R16), la Phase 13 de experiencia de uso (T110-T113, cierra huecos detectados usando el sistema en vivo), US10/panel (T114-T117), US11/exportación universal (T118-T123), US12/costo con historial (T124-T129) y US13/filtrado de listados (T130-T139, 2026-08-12).
+- Total: **143 tareas** (Setup 7, Foundational 20, US1 11, US2 8, US3 12, US5 8, US4 8, US6 5, US7 5, US8 8, Polish 6, US9 11, Experiencia de uso 4, US10 4, US11 6, US12 6, US13 10); **MVP = 66 tareas** (T001–T066). Siete bloques se agregaron fuera del plan original, a pedido directo del dueño del proyecto: US8/carga masiva (T091-T098, ver research R15), US9/roles y permisos (T099-T109, ver research R16), la Phase 13 de experiencia de uso (T110-T113, cierra huecos detectados usando el sistema en vivo), US10/panel (T114-T117), US11/exportación universal (T118-T123), US12/costo con historial (T124-T129) y US13/filtrado de listados (T130-T139, 2026-08-12).
 - [P] = archivos distintos sin dependencias pendientes dentro de su fase
 - Cada checkpoint de historia es un incremento demostrable e independientemente testeable
 - Toda tarea de backend respeta la regla de dependencia y las convenciones de [docs/arquitectura.md](../../docs/arquitectura.md); TSDoc con `FR-###` obligatorio en casos de uso, puertos y controladores
