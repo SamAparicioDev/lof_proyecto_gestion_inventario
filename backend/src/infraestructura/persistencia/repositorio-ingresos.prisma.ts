@@ -20,6 +20,10 @@
  * distinto del vigente deja su registro en `historial_costos_producto` con
  * `origen: RECEPCION_INGRESO`, dentro de la misma transacción — ver TSDoc de `recibir`).
  */
+import {
+  impuestosDeDocumento,
+  impuestosDeLinea,
+} from '../../dominio/servicios/servicio-impuestos';
 import { Injectable } from '@nestjs/common';
 import {
   Prisma,
@@ -124,6 +128,10 @@ export class RepositorioIngresosPrisma implements RepositorioIngresos {
         cantidad: linea.cantidad,
         precioUnitario: linea.precioUnitario,
         valorTotal: calcularValorTotalLinea(linea),
+        // US20 (FR-109/FR-110): la tasa se guarda tal como se eligió y el impuesto se calcula
+        // sobre la base de ESTA línea, nunca sobre el total del documento.
+        tasaIva: linea.tasaIva ?? 0,
+        valorIva: impuestosDeLinea(linea).iva,
       }));
       const valorTotal = calcularValorTotalIngreso(datos.lineas);
 
@@ -136,6 +144,7 @@ export class RepositorioIngresosPrisma implements RepositorioIngresos {
           fechaRecepcion: datos.fechaRecepcion,
           observaciones: datos.observaciones,
           valorTotal,
+          valorIva: impuestosDeDocumento(datos.lineas).iva,
           usuarioRegistraId: BigInt(datos.usuarioId),
           usuarioCreacionId: BigInt(datos.usuarioId),
           detalles: { create: detallesCrear },
@@ -449,6 +458,7 @@ function aIngresoDominio(registro: IngresoPrismaConProveedor): Ingreso {
     observaciones: registro.observaciones,
     estado: mapearEstadoIngresoDeDominio(registro.estado),
     valorTotal: registro.valorTotal.toNumber(),
+    valorIva: registro.valorIva.toNumber(),
     usuarioRegistraId: Number(registro.usuarioRegistraId),
     motivoAnulacion: registro.motivoAnulacion,
     ordenCompraId: registro.ordenCompraId === null ? null : Number(registro.ordenCompraId),
@@ -464,6 +474,8 @@ function aDetalleIngresoDominio(registro: DetalleIngresoPrisma): DetalleIngreso 
     cantidad: registro.cantidad.toNumber(),
     precioUnitario: registro.precioUnitario.toNumber(),
     valorTotal: registro.valorTotal.toNumber(),
+    tasaIva: registro.tasaIva.toNumber(),
+    valorIva: registro.valorIva.toNumber(),
   };
 }
 

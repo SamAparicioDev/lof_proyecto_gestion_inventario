@@ -236,6 +236,26 @@ ingresos huérfanos de proveedor.
 | `valor_total` | DECIMAL(14,2) | NOT NULL DEFAULT 0 (recalculado al guardar líneas — FR-094) |
 | `motivo_anulacion` | TEXT | NULL (obligatorio a nivel de aplicación al anular) |
 
+
+**Columnas de IVA (US20, FR-109/FR-110)** — las MISMAS tres en las cuatro tablas de detalle
+(`detalles_ingresos`, `detalles_salidas`, `detalles_ordenes_compra`, `detalles_cotizaciones`) y
+las mismas dos en sus cabeceras:
+
+| Columna | Tipo | Constraints |
+|---|---|---|
+| `tasa_iva` (detalle) | DECIMAL(5,2) | NOT NULL DEFAULT 0, CHECK `IN (0, 5, 19)` — tasas vigentes en Colombia |
+| `valor_iva` (detalle) | DECIMAL(14,2) | NOT NULL DEFAULT 0 = `valor_total × tasa_iva / 100` |
+| `valor_iva` (cabecera) | DECIMAL(14,2) | NOT NULL DEFAULT 0 = suma del `valor_iva` de sus líneas |
+
+`valor_total` NO cambia de significado ni en las líneas ni en las cabeceras: sigue siendo la
+BASE GRAVABLE (cantidad × precio unitario). Esa decisión es deliberada — redefinirlo como total
+con impuesto habría cambiado en silencio el valor de todos los reportes de valorización y del
+panel, que es justo lo que FR-111 prohíbe. El total con IVA se deriva (`valor_total + valor_iva`)
+y se expone como `valorConIva`; nunca se almacena, para que no pueda contradecir a sus sumandos.
+
+El `DEFAULT 0` es lo que hace que la migración no toque ningún documento existente: todo lo
+registrado antes de US20 queda con tasa 0 y su total intacto.
+
 ### detalles_ordenes_compra (US16)
 
 | Columna | Tipo | Constraints |
@@ -253,6 +273,42 @@ UNIQUE `(orden_compra_id, producto_id)`: un producto por línea, mismo criterio 
 **Una orden NO escribe en `movimientos_inventario`** (FR-096) y por eso no aparece en
 `documento_tipo`: es un compromiso de compra, no un movimiento de mercancía. El stock se mueve
 cuando el INGRESO vinculado se recibe, con el flujo atómico que ya existe (FR-017).
+
+### cotizaciones (US21)
+
+| Columna | Tipo | Constraints |
+|---|---|---|
+| `id` | BIGINT PK | |
+| `numero` | BIGINT | NOT NULL, **UNIQUE** — correlativo de `contadores['cotizacion']` (FR-112, mismo mecanismo que salidas y órdenes de compra) |
+| `cliente_id` | BIGINT FK → clientes | NOT NULL, `ON DELETE RESTRICT` |
+| `proyecto_id` | BIGINT FK → proyectos | NOT NULL, `ON DELETE RESTRICT` |
+| `fecha` | DATE | NOT NULL |
+| `fecha_validez` | DATE | NOT NULL — hasta cuándo se sostiene el precio ofrecido; vencida se deriva comparando con hoy, NUNCA con un estado que alguien tenga que marcar |
+| `observaciones` | TEXT | NULL |
+| `estado` | ENUM `BORRADOR/ENVIADA/ACEPTADA/RECHAZADA/ANULADA` | NOT NULL DEFAULT BORRADOR (FR-112) |
+| `valor_total` | DECIMAL(14,2) | NOT NULL DEFAULT 0 — base gravable |
+| `valor_iva` | DECIMAL(14,2) | NOT NULL DEFAULT 0 |
+| `motivo_anulacion` | TEXT | NULL (obligatorio a nivel de aplicación al anular) |
+
+### detalles_cotizaciones (US21)
+
+| Columna | Tipo | Constraints |
+|---|---|---|
+| `id` | BIGINT PK | |
+| `cotizacion_id` | BIGINT FK → cotizaciones | NOT NULL, `ON DELETE CASCADE` (solo se ejerce mientras la cotización es BORRADOR) |
+| `producto_id` | BIGINT FK → productos | NOT NULL, `ON DELETE RESTRICT` |
+| `cantidad` | DECIMAL(12,2) | NOT NULL, CHECK `> 0` |
+| `precio_unitario` | DECIMAL(14,2) | NOT NULL, CHECK `> 0` |
+| `tasa_iva` | DECIMAL(5,2) | NOT NULL DEFAULT 0, CHECK `IN (0, 5, 19)` |
+| `valor_iva` | DECIMAL(14,2) | NOT NULL DEFAULT 0 |
+| `valor_total` | DECIMAL(14,2) | NOT NULL |
+
+UNIQUE `(cotizacion_id, producto_id)`: un producto por línea, mismo criterio que el resto.
+
+**Una cotización NO escribe en `movimientos_inventario`** (FR-113) y por eso no aparece en
+`documento_tipo`: es una oferta, no una entrega. `salidas.cotizacion_id` (FK NULL,
+`ON DELETE RESTRICT`) enlaza la salida que nace al aceptarla — espejo exacto de
+`ingresos.orden_compra_id`.
 
 ### ingresos
 

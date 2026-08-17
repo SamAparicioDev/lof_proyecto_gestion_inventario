@@ -40,6 +40,10 @@
  * Implementa: FR-025…FR-033 (registro, edición y las cuatro transiciones de estado de la
  * máquina de `entidades/salida.ts`).
  */
+import {
+  impuestosDeDocumento,
+  impuestosDeLinea,
+} from '../../dominio/servicios/servicio-impuestos';
 import { Injectable } from '@nestjs/common';
 import {
   Prisma,
@@ -153,6 +157,9 @@ export class RepositorioSalidasPrisma implements RepositorioSalidas {
         cantidad: linea.cantidad,
         precioUnitario: linea.precioUnitario,
         valorTotal: calcularValorTotalLinea(linea),
+        // US20 (FR-109/FR-110) — ver el mismo bloque en `repositorio-ingresos.prisma.ts`.
+        tasaIva: linea.tasaIva ?? 0,
+        valorIva: impuestosDeLinea(linea).iva,
       }));
       const valorTotal = calcularValorTotalSalida(datos.lineas);
 
@@ -163,6 +170,7 @@ export class RepositorioSalidasPrisma implements RepositorioSalidas {
           proyectoId: BigInt(datos.proyectoId),
           observaciones: datos.observaciones,
           valorTotal,
+          valorIva: impuestosDeDocumento(datos.lineas).iva,
           usuarioCreacionId: BigInt(usuarioId),
           detalles: { create: detallesCrear },
         },
@@ -191,6 +199,9 @@ export class RepositorioSalidasPrisma implements RepositorioSalidas {
         cantidad: linea.cantidad,
         precioUnitario: linea.precioUnitario,
         valorTotal: calcularValorTotalLinea(linea),
+        // US20 (FR-109/FR-110) — ver el mismo bloque en `repositorio-ingresos.prisma.ts`.
+        tasaIva: linea.tasaIva ?? 0,
+        valorIva: impuestosDeLinea(linea).iva,
       }));
       const valorTotal = calcularValorTotalSalida(datos.lineas);
 
@@ -202,6 +213,7 @@ export class RepositorioSalidasPrisma implements RepositorioSalidas {
           proyectoId: BigInt(datos.proyectoId),
           observaciones: datos.observaciones,
           valorTotal,
+          valorIva: impuestosDeDocumento(datos.lineas).iva,
           usuarioModificacionId: BigInt(usuarioId),
           fechaModificacion: new Date(),
           detalles: { create: detallesNuevos },
@@ -528,6 +540,7 @@ function aSalidaDominio(registro: SalidaPrisma): Salida {
     observaciones: registro.observaciones,
     estado: mapearEstadoSalidaDeDominio(registro.estado),
     valorTotal: registro.valorTotal.toNumber(),
+    valorIva: registro.valorIva.toNumber(),
     usuarioAutorizaId: registro.usuarioAutorizaId ? Number(registro.usuarioAutorizaId) : null,
     fechaConfirmacion: registro.fechaConfirmacion,
     motivoAnulacion: registro.motivoAnulacion,
@@ -543,6 +556,8 @@ function aDetalleSalidaDominio(registro: DetalleSalidaPrisma): DetalleSalida {
     cantidad: registro.cantidad.toNumber(),
     precioUnitario: registro.precioUnitario.toNumber(),
     valorTotal: registro.valorTotal.toNumber(),
+    tasaIva: registro.tasaIva.toNumber(),
+    valorIva: registro.valorIva.toNumber(),
   };
 }
 

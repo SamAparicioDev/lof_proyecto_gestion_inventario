@@ -40,10 +40,17 @@ import { CampoFecha as CampoFechaBase } from '@/componentes/comunes/campo-fecha'
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
 import { Plus, Trash } from '@phosphor-icons/react/dist/ssr';
-import { esquemaCrearIngreso, type DatosCrearIngreso, type LineaIngreso, type ProductoResumen } from '@trazo/compartido';
+import {
+  esquemaCrearIngreso,
+  TASA_IVA_POR_DEFECTO,
+  type DatosCrearIngreso,
+  type LineaIngreso,
+  type ProductoResumen,
+} from '@trazo/compartido';
 import { actualizarIngreso, crearIngreso } from '@/lib/api/ingresos';
 import { ErrorApi } from '@/lib/api/cliente';
 import { formatoMoneda } from '@/lib/formato';
+import { ResumenTotales, SelectorTasaIva, calcularTotales } from '@/componentes/comunes/campos-iva';
 import { DialogoProductoNuevo } from '@/componentes/inventario/dialogo-producto-nuevo';
 import { SelectorProveedor } from '@/componentes/proveedores/selector-proveedor';
 import { formatoNumeroOrdenCompra } from '@trazo/compartido';
@@ -61,7 +68,8 @@ const CAMPOS_CABECERA = new Set<keyof DatosCrearIngreso>([
 ]);
 
 function crearLineaVacia(): LineaIngreso {
-  return { productoId: 0, cantidad: 1, precioUnitario: 0 };
+  // US20 (FR-109): la línea nueva se propone al 19%, la tasa general.
+  return { productoId: 0, cantidad: 1, precioUnitario: 0, tasaIva: TASA_IVA_POR_DEFECTO };
 }
 
 const VALORES_INICIALES_VACIOS: DatosCrearIngreso = {
@@ -131,10 +139,7 @@ export function IngresoForm({
     setAsignacionPendiente(null);
   }, [asignacionPendiente, productosDisponibles, setValue]);
 
-  const total = lineasEnVivo.reduce(
-    (acumulado, linea) => acumulado + (Number(linea.cantidad) || 0) * (Number(linea.precioUnitario) || 0),
-    0,
-  );
+  const totales = calcularTotales(lineasEnVivo);
 
   function aplicarErroresServidor(campos: Record<string, string>): void {
     for (const [campo, mensaje] of Object.entries(campos)) {
@@ -257,7 +262,8 @@ export function IngresoForm({
                   <th>Producto</th>
                   <th>Cantidad</th>
                   <th>Precio unitario</th>
-                  <th>Valor de línea</th>
+                  <th>IVA</th>
+                <th>Valor de línea</th>
                   <th aria-label="Quitar" />
                 </tr>
               </thead>
@@ -331,6 +337,12 @@ export function IngresoForm({
                           </p>
                         )}
                       </td>
+                      <td style={{ width: 130 }}>
+                        <SelectorTasaIva
+                          indice={indice}
+                          registro={register(`lineas.${indice}.tasaIva`, { valueAsNumber: true })}
+                        />
+                      </td>
                       <td className="text-muted" style={{ whiteSpace: 'nowrap' }}>
                         {formatoMoneda(valorLinea)}
                       </td>
@@ -353,9 +365,7 @@ export function IngresoForm({
             </table>
           </div>
 
-          <div className="flex justify-end" style={{ fontSize: 16, fontFamily: 'var(--font-heading)' }}>
-            Total: {formatoMoneda(total)}
-          </div>
+          <ResumenTotales totales={totales} />
         </div>
 
         {errorGeneral && (

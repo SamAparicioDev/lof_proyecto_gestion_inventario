@@ -484,6 +484,58 @@ Proveedores — MISMO patrón que categorías (FR-091), con dos diferencias que 
 
 ---
 
+## Phase 22: User Story 19 - Modo claro (Priority: P3)
+
+**Goal**: Poder trabajar en claro o en oscuro, y que la aplicación lo recuerde (FR-108)
+
+**Independent Test**: Pulsar el control, ver toda la interfaz en claro, recargar y comprobar que sigue en claro (US19-AS2)
+
+- [x] T191 [US19] Paleta clara en `globals.css` como capa PROPIA que redefine los tokens bajo `[data-tema='claro']`, sin tocar el bloque vendorizado de Nocturne
+- [x] T192 [US19] Botón de tema en el shell + `/login`, preferencia en `localStorage` con respaldo en `prefers-color-scheme`, y script inline que fija el tema ANTES de la primera pintura (sin destello)
+
+**Checkpoint**: La aplicación se ve entera en los dos temas y recuerda la elección
+
+---
+
+## Phase 23: User Story 20 - IVA en las líneas de los documentos (Priority: P2)
+
+**Goal**: Que el total de un documento sea el que se paga, sin cambiar la valorización del inventario (FR-109…FR-111)
+
+**Independent Test**: Registrar un ingreso con una línea al 19%, ver base/IVA/total en el documento y comprobar que el costo del producto quedó en la base (US20-AS4)
+
+- [x] T193 [US20] Migración `*_iva_en_lineas`: `tasa_iva`/`valor_iva` en las tres tablas de detalle existentes y `valor_iva` en sus cabeceras, todo `DEFAULT 0` con `CHECK IN (0,5,19)`, más el modelo en `schema.prisma`
+- [x] T194 [US20] Servicio de dominio `calcularImpuestos` (base, IVA y total, línea a línea) + `tasaIva` en los esquemas Zod de ingresos, salidas y órdenes de compra
+- [x] T195 [US20] Repositorios y casos de uso: persistir la tasa, recalcular `valor_iva` de cabecera y exponer las tres cifras; el costo del producto sigue siendo la base (FR-111)
+- [x] T196 [US20] Frontend: selector de IVA en las líneas de los tres formularios y las tres cifras en fichas y listados
+- [x] T197 [US20] Exportables: base, IVA y total en los PDF y Excel de los documentos afectados (FR-110)
+
+- [x] T206 [P] [US20] Pruebas de integración `backend/test/integracion/iva-documentos.spec.ts`: un ingreso con dos tasas distintas guarda el impuesto línea a línea y su cabecera; el costo del producto al recibirlo es la BASE, no el total (FR-111); y un documento sin tasa vale exactamente lo que valía antes de US20
+
+**Checkpoint**: Un documento con IVA se lee y se exporta con sus tres cifras, y ningún reporte de valorización cambió de escala
+
+---
+
+## Phase 24: User Story 21 - Cotizaciones a clientes (Priority: P2)
+
+**Goal**: Registrar la oferta que hoy se hace fuera del sistema, y convertirla en salida al aceptarla (FR-112…FR-117)
+
+**Independent Test**: Crear una cotización, exportarla a PDF y aceptarla, comprobando que aparece una salida pendiente con las mismas líneas (US21-AS3)
+
+**Sigue el patrón de US16**: es el mismo documento-compromiso que una orden de compra, mirando al cliente en vez de al proveedor.
+
+- [ ] T198 [US21] Migración `*_cotizaciones`: tablas `cotizaciones`/`detalles_cotizaciones`, `salidas.cotizacion_id`, contador `cotizacion`, y los permisos con su matriz rol→permiso
+- [ ] T199 [P] [US21] Permisos de cotizaciones en el seed (ver/crear/editar los tres roles; enviar/cerrar/anular restringidos — FR-117)
+- [ ] T200 [P] [US21] Esquemas `packages/compartido/src/esquemas/cotizaciones.ts` con líneas que ya nacen con `tasaIva`
+- [ ] T201 [US21] Dominio, adaptador Prisma, casos de uso y `ControladorCotizaciones` — espejo de órdenes de compra, con `vencida` derivada de la fecha de validez
+- [ ] T202 [US21] Aceptar → salida PENDIENTE con las mismas líneas, enlazada por `salidas.cotizacion_id`, sin mover stock (FR-115)
+- [ ] T203 [US21] Exportación a PDF/Excel con el logo institucional y las tres cifras (FR-116)
+- [ ] T204 [US21] Frontend `/cotizaciones` completo: listado con filtros y badge de vencida, formulario, ficha con acciones por estado y enlace a la salida generada
+- [ ] T205 [P] [US21] Pruebas de integración: correlativo; solo BORRADOR editable; aceptar genera la salida enlazada SIN mover stock; rechazar no genera nada; vencida derivada, no marcada
+
+**Checkpoint**: Una oferta al cliente vive en el sistema desde que se hace hasta que se convierte en salida
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -575,7 +627,7 @@ persona: orden estricto de fases 1→10.
 
 ## Notes
 
-- Total: **143 tareas** (Setup 7, Foundational 20, US1 11, US2 8, US3 12, US5 8, US4 8, US6 5, US7 5, US8 8, Polish 6, US9 11, Experiencia de uso 4, US10 4, US11 6, US12 6, US13 10); **MVP = 66 tareas** (T001–T066). Siete bloques se agregaron fuera del plan original, a pedido directo del dueño del proyecto: US8/carga masiva (T091-T098, ver research R15), US9/roles y permisos (T099-T109, ver research R16), la Phase 13 de experiencia de uso (T110-T113, cierra huecos detectados usando el sistema en vivo), US10/panel (T114-T117), US11/exportación universal (T118-T123), US12/costo con historial (T124-T129) y US13/filtrado de listados (T130-T139, 2026-08-12).
+- Total: **159 tareas** (Setup 7, Foundational 20, US1 11, US2 8, US3 12, US5 8, US4 8, US6 5, US7 5, US8 8, Polish 6, US9 11, Experiencia de uso 4, US10 4, US11 6, US12 6, US13 10); **MVP = 66 tareas** (T001–T066). Siete bloques se agregaron fuera del plan original, a pedido directo del dueño del proyecto: US8/carga masiva (T091-T098, ver research R15), US9/roles y permisos (T099-T109, ver research R16), la Phase 13 de experiencia de uso (T110-T113, cierra huecos detectados usando el sistema en vivo), US10/panel (T114-T117), US11/exportación universal (T118-T123), US12/costo con historial (T124-T129) y US13/filtrado de listados (T130-T139, 2026-08-12).
 - [P] = archivos distintos sin dependencias pendientes dentro de su fase
 - Cada checkpoint de historia es un incremento demostrable e independientemente testeable
 - Toda tarea de backend respeta la regla de dependencia y las convenciones de [docs/arquitectura.md](../../docs/arquitectura.md); TSDoc con `FR-###` obligatorio en casos de uso, puertos y controladores

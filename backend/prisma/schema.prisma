@@ -48,9 +48,11 @@ datasource db {
 // Enums
 // ============================================================================
 
-/** Estado de un rol: baja lógica, nunca DELETE (data-model.md § roles — FR-055/FR-057).
- *  Enum propio (no reutiliza `estado_usuario`) por la misma convención que el resto del
- *  esquema: cada entidad declara su estado, aunque los valores coincidan. */
+/**
+ * Estado de un rol: baja lógica, nunca DELETE (data-model.md § roles — FR-055/FR-057).
+ * Enum propio (no reutiliza `estado_usuario`) por la misma convención que el resto del
+ * esquema: cada entidad declara su estado, aunque los valores coincidan.
+ */
 enum EstadoRol {
   ACTIVO
   INACTIVO
@@ -58,7 +60,9 @@ enum EstadoRol {
   @@map("estado_rol")
 }
 
-/** Estado de un usuario: baja lógica, nunca DELETE (FR-006/FR-008). */
+/**
+ * Estado de un usuario: baja lógica, nunca DELETE (FR-006/FR-008).
+ */
 enum EstadoUsuario {
   ACTIVO
   INACTIVO
@@ -66,7 +70,9 @@ enum EstadoUsuario {
   @@map("estado_usuario")
 }
 
-/** Estado de un producto del catálogo (FR-012: nunca se elimina, se inactiva). */
+/**
+ * Estado de un producto del catálogo (FR-012: nunca se elimina, se inactiva).
+ */
 enum EstadoProducto {
   ACTIVO
   INACTIVO
@@ -74,7 +80,9 @@ enum EstadoProducto {
   @@map("estado_producto")
 }
 
-/** US15 — en femenino porque el sustantivo lo es; los mensajes al usuario se leen mejor. */
+/**
+ * US15 — en femenino porque el sustantivo lo es; los mensajes al usuario se leen mejor.
+ */
 enum EstadoCategoria {
   ACTIVA
   INACTIVA
@@ -82,7 +90,9 @@ enum EstadoCategoria {
   @@map("estado_categoria")
 }
 
-/** US17 — en femenino: "unidad de medida". */
+/**
+ * US17 — en femenino: "unidad de medida".
+ */
 enum EstadoUnidadMedida {
   ACTIVA
   INACTIVA
@@ -90,7 +100,9 @@ enum EstadoUnidadMedida {
   @@map("estado_unidad_medida")
 }
 
-/** US15 — en masculino, a diferencia de `EstadoCategoria`, por el mismo motivo: el sustantivo. */
+/**
+ * US15 — en masculino, a diferencia de `EstadoCategoria`, por el mismo motivo: el sustantivo.
+ */
 enum EstadoProveedor {
   ACTIVO
   INACTIVO
@@ -98,9 +110,11 @@ enum EstadoProveedor {
   @@map("estado_proveedor")
 }
 
-/** Máquina de estados de una orden de compra (US16, FR-096). Una orden NUNCA mueve stock:
- *  `RECIBIDA` significa que llegó el ingreso que la surte, no que el sistema haya sumado nada
- *  por su cuenta. */
+/**
+ * Máquina de estados de una orden de compra (US16, FR-096). Una orden NUNCA mueve stock:
+ * `RECIBIDA` significa que llegó el ingreso que la surte, no que el sistema haya sumado nada
+ * por su cuenta.
+ */
 enum EstadoOrdenCompra {
   BORRADOR
   ENVIADA
@@ -110,7 +124,9 @@ enum EstadoOrdenCompra {
   @@map("estado_orden_compra")
 }
 
-/** Estado de un cliente (catálogo comercial — FR-034). */
+/**
+ * Estado de un cliente (catálogo comercial — FR-034).
+ */
 enum EstadoCliente {
   ACTIVO
   INACTIVO
@@ -118,7 +134,9 @@ enum EstadoCliente {
   @@map("estado_cliente")
 }
 
-/** Estado de un proyecto: solo ACTIVO de cliente ACTIVO recibe salidas (FR-036/FR-038). */
+/**
+ * Estado de un proyecto: solo ACTIVO de cliente ACTIVO recibe salidas (FR-036/FR-038).
+ */
 enum EstadoProyecto {
   ACTIVO
   COMPLETADO
@@ -127,7 +145,9 @@ enum EstadoProyecto {
   @@map("estado_proyecto")
 }
 
-/** Máquina de estados de un ingreso (data-model.md — FR-017/FR-019). */
+/**
+ * Máquina de estados de un ingreso (data-model.md — FR-017/FR-019).
+ */
 enum EstadoIngreso {
   PENDIENTE
   RECIBIDO
@@ -137,7 +157,9 @@ enum EstadoIngreso {
   @@map("estado_ingreso")
 }
 
-/** Máquina de estados de una salida (data-model.md — FR-029/FR-032). */
+/**
+ * Máquina de estados de una salida (data-model.md — FR-029/FR-032).
+ */
 enum EstadoSalida {
   PENDIENTE
   CONFIRMADA
@@ -147,7 +169,9 @@ enum EstadoSalida {
   @@map("estado_salida")
 }
 
-/** Tipo de movimiento de inventario; las anulaciones generan los AJUSTE_* (FR-046). */
+/**
+ * Tipo de movimiento de inventario; las anulaciones generan los AJUSTE_* (FR-046).
+ */
 enum TipoMovimiento {
   ENTRADA
   SALIDA
@@ -157,7 +181,9 @@ enum TipoMovimiento {
   @@map("tipo_movimiento")
 }
 
-/** A qué documento pertenece un movimiento (FR-045: trazabilidad del origen). */
+/**
+ * A qué documento pertenece un movimiento (FR-045: trazabilidad del origen).
+ */
 enum DocumentoTipo {
   INGRESO
   SALIDA
@@ -165,8 +191,10 @@ enum DocumentoTipo {
   @@map("documento_tipo")
 }
 
-/** De dónde vino un cambio de costo de producto (US12, FR-072) — los TRES caminos por los
- *  que `productos.ultimo_costo` puede cambiar hoy; ninguno más los muta. */
+/**
+ * De dónde vino un cambio de costo de producto (US12, FR-072) — los TRES caminos por los
+ * que `productos.ultimo_costo` puede cambiar hoy; ninguno más los muta.
+ */
 enum OrigenCambioCosto {
   IMPORTACION
   EDICION_MANUAL
@@ -183,7 +211,6 @@ enum OrigenCambioCosto {
  * Rol asignable a un usuario. Reemplaza al enum `rol` que vivía en `usuarios` hasta US9:
  * el control de acceso deja de estar fijo en el código y pasa a resolverse contra los
  * permisos de esta tabla (FR-054/FR-058).
- *
  * `esSistema = true` marca los tres roles originales (Administrador/Gerente/Operario),
  * sembrados por la migración con EXACTAMENTE los permisos que su `@Roles(...)` concedía
  * (FR-059/SC-013): no se pueden eliminar ni renombrar (FR-057). Baja lógica vía `estado`,
@@ -204,13 +231,11 @@ model Rol {
 
 /**
  * Catálogo de permisos del sistema — SOLO LECTURA desde la aplicación (FR-056).
- *
  * Cada fila corresponde a una verificación real del código (`@RequierePermiso('clave')` en
  * un endpoint): la lista es, en esencia, una enumeración del código, así que su ciclo de
  * vida es el del despliegue (semilla + migración), no el de la operación diaria. Permitir
  * crearlos desde la UI generaría casillas que ningún endpoint consulta — control aparente,
  * no real (research R16).
- *
  * Invariante de nomenclatura: `clave = modulo + '.' + accion` (p. ej. `salidas.confirmar`);
  * `modulo` es además la clave de agrupación de la pantalla de roles (T107).
  */
@@ -253,18 +278,22 @@ model RolPermiso {
  * las demás tablas de negocio.
  */
 model Usuario {
-  id                   BigInt        @id @default(autoincrement())
-  nombreCompleto       String        @map("nombre_completo") @db.VarChar(150)
-  email                String        @unique @db.VarChar(150)
-  login                String        @unique @db.VarChar(50)
-  /** Hash bcrypt (costo 12) — NUNCA se serializa hacia la API (FR-007). */
-  passwordHash         String        @map("password_hash") @db.VarChar(100)
-  /** FK al rol (US9, FR-002/FR-058) — reemplaza al enum `rol`: los permisos efectivos se
-   *  resuelven contra `roles_permisos` en cada petición, nunca contra un nombre fijo. */
-  rolId                BigInt        @map("rol_id")
-  rol                  Rol           @relation(fields: [rolId], references: [id])
-  estado               EstadoUsuario @default(ACTIVO)
-  debeCambiarPassword  Boolean       @default(true) @map("debe_cambiar_password")
+  id                  BigInt        @id @default(autoincrement())
+  nombreCompleto      String        @map("nombre_completo") @db.VarChar(150)
+  email               String        @unique @db.VarChar(150)
+  login               String        @unique @db.VarChar(50)
+  /**
+   * Hash bcrypt (costo 12) — NUNCA se serializa hacia la API (FR-007).
+   */
+  passwordHash        String        @map("password_hash") @db.VarChar(100)
+  /**
+   * FK al rol (US9, FR-002/FR-058) — reemplaza al enum `rol`: los permisos efectivos se
+   * resuelven contra `roles_permisos` en cada petición, nunca contra un nombre fijo.
+   */
+  rolId               BigInt        @map("rol_id")
+  rol                 Rol           @relation(fields: [rolId], references: [id])
+  estado              EstadoUsuario @default(ACTIVO)
+  debeCambiarPassword Boolean       @default(true) @map("debe_cambiar_password")
 
   // Auditoría (nullable: el admin semilla no tiene creador — nota de data-model.md).
   fechaCreacion         DateTime  @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
@@ -279,28 +308,28 @@ model Usuario {
   usuariosModificados Usuario[] @relation("UsuarioModificadoPor")
 
   // Back-relations de auditoría desde las demás tablas de negocio.
-  productosCreados      Producto[]             @relation("ProductoCreadoPor")
-  productosModificados  Producto[]             @relation("ProductoModificadoPor")
-  categoriasCreadas     Categoria[]            @relation("CategoriaCreadaPor")
-  categoriasModificadas Categoria[]            @relation("CategoriaModificadaPor")
-  unidadesMedidaCreadas     UnidadMedida[]     @relation("UnidadMedidaCreadaPor")
-  unidadesMedidaModificadas UnidadMedida[]     @relation("UnidadMedidaModificadaPor")
-  proveedoresCreados     Proveedor[]           @relation("ProveedorCreadoPor")
-  proveedoresModificados Proveedor[]           @relation("ProveedorModificadoPor")
-  ordenesCompraCreadas     OrdenCompra[]       @relation("OrdenCompraCreadaPor")
-  ordenesCompraModificadas OrdenCompra[]       @relation("OrdenCompraModificadaPor")
-  clientesCreados       Cliente[]              @relation("ClienteCreadoPor")
-  clientesModificados   Cliente[]              @relation("ClienteModificadoPor")
-  proyectosCreados      Proyecto[]             @relation("ProyectoCreadoPor")
-  proyectosModificados  Proyecto[]             @relation("ProyectoModificadoPor")
-  ingresosRegistrados   Ingreso[]              @relation("IngresoUsuarioRegistra")
-  ingresosCreados       Ingreso[]              @relation("IngresoCreadoPor")
-  ingresosModificados   Ingreso[]              @relation("IngresoModificadoPor")
-  salidasAutorizadas    Salida[]               @relation("SalidaUsuarioAutoriza")
-  salidasCreadas        Salida[]               @relation("SalidaCreadoPor")
-  salidasModificadas    Salida[]               @relation("SalidaModificadoPor")
-  movimientosGenerados  MovimientoInventario[] @relation("MovimientoUsuario")
-  cambiosDeCosto        HistorialCostoProducto[] @relation("CambioCostoUsuario")
+  productosCreados          Producto[]               @relation("ProductoCreadoPor")
+  productosModificados      Producto[]               @relation("ProductoModificadoPor")
+  categoriasCreadas         Categoria[]              @relation("CategoriaCreadaPor")
+  categoriasModificadas     Categoria[]              @relation("CategoriaModificadaPor")
+  unidadesMedidaCreadas     UnidadMedida[]           @relation("UnidadMedidaCreadaPor")
+  unidadesMedidaModificadas UnidadMedida[]           @relation("UnidadMedidaModificadaPor")
+  proveedoresCreados        Proveedor[]              @relation("ProveedorCreadoPor")
+  proveedoresModificados    Proveedor[]              @relation("ProveedorModificadoPor")
+  ordenesCompraCreadas      OrdenCompra[]            @relation("OrdenCompraCreadaPor")
+  ordenesCompraModificadas  OrdenCompra[]            @relation("OrdenCompraModificadaPor")
+  clientesCreados           Cliente[]                @relation("ClienteCreadoPor")
+  clientesModificados       Cliente[]                @relation("ClienteModificadoPor")
+  proyectosCreados          Proyecto[]               @relation("ProyectoCreadoPor")
+  proyectosModificados      Proyecto[]               @relation("ProyectoModificadoPor")
+  ingresosRegistrados       Ingreso[]                @relation("IngresoUsuarioRegistra")
+  ingresosCreados           Ingreso[]                @relation("IngresoCreadoPor")
+  ingresosModificados       Ingreso[]                @relation("IngresoModificadoPor")
+  salidasAutorizadas        Salida[]                 @relation("SalidaUsuarioAutoriza")
+  salidasCreadas            Salida[]                 @relation("SalidaCreadoPor")
+  salidasModificadas        Salida[]                 @relation("SalidaModificadoPor")
+  movimientosGenerados      MovimientoInventario[]   @relation("MovimientoUsuario")
+  cambiosDeCosto            HistorialCostoProducto[] @relation("CambioCostoUsuario")
 
   @@map("usuarios")
 }
@@ -319,21 +348,27 @@ model Producto {
   id                    BigInt         @id @default(autoincrement())
   sku                   String         @unique @db.VarChar(50)
   descripcion           String         @db.VarChar(300)
-  /** Clasificación OPCIONAL contra el catálogo de categorías (US15, FR-086). Nació en US8 como
-   *  texto libre y se convirtió en referencia sin perder ningún valor (FR-089, ver la migración
-   *  `20260814235000_categorias_como_catalogo`). */
+  /**
+   * Clasificación OPCIONAL contra el catálogo de categorías (US15, FR-086). Nació en US8 como
+   * texto libre y se convirtió en referencia sin perder ningún valor (FR-089, ver la migración
+   * `20260814235000_categorias_como_catalogo`).
+   */
   categoriaId           BigInt?        @map("categoria_id")
   categoria             Categoria?     @relation(fields: [categoriaId], references: [id])
-  /** US17 (FR-102/FR-103): NULLABLE en la base por los productos anteriores a esa historia; el
-   *  alta y la edición la exigen. Ver el TSDoc de `UnidadMedida`. */
+  /**
+   * US17 (FR-102/FR-103): NULLABLE en la base por los productos anteriores a esa historia; el
+   * alta y la edición la exigen. Ver el TSDoc de `UnidadMedida`.
+   */
   unidadMedidaId        BigInt?        @map("unidad_medida_id")
   unidadMedida          UnidadMedida?  @relation(fields: [unidadMedidaId], references: [id])
   ubicacion             String?        @db.VarChar(100)
   umbralStockBajo       Decimal        @default(0) @map("umbral_stock_bajo") @db.Decimal(12, 2)
   stockActual           Decimal        @default(0) @map("stock_actual") @db.Decimal(12, 2)
-  /** Nació como "último costo pagado al recibir mercancía"; desde US12 admite además edición
-   *  manual y masiva (FR-071), así que su lectura correcta es "costo de referencia vigente".
-   *  Su procedencia exacta siempre se puede reconstruir en `historial_costos_producto`. */
+  /**
+   * Nació como "último costo pagado al recibir mercancía"; desde US12 admite además edición
+   * manual y masiva (FR-071), así que su lectura correcta es "costo de referencia vigente".
+   * Su procedencia exacta siempre se puede reconstruir en `historial_costos_producto`.
+   */
   ultimoCosto           Decimal        @default(0) @map("ultimo_costo") @db.Decimal(14, 2)
   fechaUltimoMovimiento DateTime?      @map("fecha_ultimo_movimiento") @db.Timestamptz(6)
   estado                EstadoProducto @default(ACTIVO)
@@ -345,11 +380,11 @@ model Producto {
   usuarioModificacionId BigInt?   @map("usuario_modificacion_id")
   usuarioModificacion   Usuario?  @relation("ProductoModificadoPor", fields: [usuarioModificacionId], references: [id])
 
-  detallesIngresos DetalleIngreso[]
-  detallesSalidas  DetalleSalida[]
+  detallesIngresos      DetalleIngreso[]
+  detallesSalidas       DetalleSalida[]
   detallesOrdenesCompra DetalleOrdenCompra[]
-  movimientos      MovimientoInventario[]
-  historialCostos  HistorialCostoProducto[]
+  movimientos           MovimientoInventario[]
+  historialCostos       HistorialCostoProducto[]
 
   @@index([descripcion])
   @@index([estado])
@@ -363,12 +398,10 @@ model Producto {
 
 /**
  * Unidad en la que se mide un producto — catálogo administrable (US17, FR-101…FR-105).
- *
  * Tercer catálogo de la familia de US15, con una diferencia: tiene DOS textos únicos. El
  * `nombre` es lo que se lee en un formulario ("Kilogramo") y la `abreviatura` lo que cabe junto
  * a una cantidad en una tabla ("kg"); si dos unidades compartieran abreviatura, la tabla —que es
  * donde la unidad hace falta— dejaría de distinguirlas.
- *
  * `usuarioCreacionId` es opcional a diferencia del resto de catálogos: las unidades iniciales
  * las inserta la migración, que corre antes de que exista ningún usuario. `null` significa "vino
  * con el sistema".
@@ -394,13 +427,11 @@ model UnidadMedida {
 
 /**
  * Catálogo de categorías de producto (US15, FR-084…FR-087).
- *
  * La unicidad del nombre NO es un `@unique` de Prisma: es un índice FUNCIONAL sobre
  * `lower(btrim(nombre))` creado en la migración, porque el requisito es que "Ferretería",
  * "ferreteria" y "FERRETERIA " no puedan coexistir (FR-085). Prisma no sabe expresar un índice
  * sobre una expresión, así que el modelo lo declara aquí solo como comentario y la autoridad
  * vive en el SQL — igual que los `CHECK` de stock y el trigger de inmutabilidad.
- *
  * Nunca se elimina si algún producto la usa: la FK es `RESTRICT` y la baja es lógica
  * (`estado = INACTIVA`), para no despojar de su clasificación a lo ya registrado (Principio II).
  */
@@ -425,16 +456,14 @@ model Categoria {
 
 /**
  * Proveedor — catálogo administrable (US15, FR-091…FR-093).
- *
  * Gemelo de `Categoria` (misma unicidad funcional `lower(btrim(nombre))` declarada a mano en el
  * SQL de la migración, porque Prisma no sabe expresar un índice sobre una expresión), con dos
  * diferencias que la historia impone:
- *
- *  - `Ingreso.proveedorId` es NOT NULL: el proveedor de una factura es obligatorio.
- *  - `esSistema` marca el proveedor que usa la carga masiva ("Carga masiva de inventario",
- *    FR-050): la importación lo resuelve POR NOMBRE, así que renombrarlo o borrarlo rompería un
- *    proceso automático. El bloqueo vive en el caso de uso; esta columna es el dato con el que
- *    se decide, igual que `esSistema` en `Rol` (FR-059).
+ * - `Ingreso.proveedorId` es NOT NULL: el proveedor de una factura es obligatorio.
+ * - `esSistema` marca el proveedor que usa la carga masiva ("Carga masiva de inventario",
+ * FR-050): la importación lo resuelve POR NOMBRE, así que renombrarlo o borrarlo rompería un
+ * proceso automático. El bloqueo vive en el caso de uso; esta columna es el dato con el que
+ * se decide, igual que `esSistema` en `Rol` (FR-059).
  */
 model Proveedor {
   id        BigInt          @id @default(autoincrement())
@@ -452,8 +481,8 @@ model Proveedor {
   usuarioModificacionId BigInt?   @map("usuario_modificacion_id")
   usuarioModificacion   Usuario?  @relation("ProveedorModificadoPor", fields: [usuarioModificacionId], references: [id])
 
-  ingresos       Ingreso[]
-  ordenesCompra  OrdenCompra[]
+  ingresos      Ingreso[]
+  ordenesCompra OrdenCompra[]
 
   @@index([estado])
   @@map("proveedores")
@@ -461,18 +490,15 @@ model Proveedor {
 
 /**
  * Historial INMUTABLE de cambios de costo de un producto (US12, FR-071…FR-074).
- *
  * Por qué una tabla propia y NO `movimientos_inventario` (FR-073, data-model.md § Por qué una
  * tabla propia): un cambio de costo no mueve cantidades. Registrarlo como movimiento rompería
  * el invariante `stock_actual(p) = Σ movimientos(p)`, que es la base de la prueba de
  * conciliación y de la confianza en el inventario. Son dos historiales distintos porque
  * responden dos preguntas distintas: *cuánto hay y por qué* vs. *cuánto vale y desde cuándo*.
- *
  * Solo INSERT — la migración agrega el MISMO trigger de inmutabilidad que protege
  * `movimientos_inventario` (Principio II). Cada fila se escribe DENTRO de la misma transacción
  * que actualiza `productos.ultimo_costo`, de modo que jamás exista un costo cambiado sin su
  * registro, y solo cuando el costo REALMENTE cambia (`costo_nuevo <> costo_anterior`, FR-074).
- *
  * Sin campos de auditoría genéricos (`fecha_creacion`/`usuario_creacion_id`) por el mismo
  * criterio que `movimientos_inventario`: `fecha_hora` + `usuario_id` ya cumplen ese propósito y
  * no hay modificaciones posibles que registrar.
@@ -484,8 +510,10 @@ model HistorialCostoProducto {
   costoAnterior Decimal           @map("costo_anterior") @db.Decimal(14, 2)
   costoNuevo    Decimal           @map("costo_nuevo") @db.Decimal(14, 2)
   origen        OrigenCambioCosto
-  /** FK lógico (no declarado a nivel de BD, mismo criterio que `movimientos_inventario`) al
-   *  `Ingreso.id` cuando `origen = RECEPCION_INGRESO`; NULL en los otros dos orígenes. */
+  /**
+   * FK lógico (no declarado a nivel de BD, mismo criterio que `movimientos_inventario`) al
+   * `Ingreso.id` cuando `origen = RECEPCION_INGRESO`; NULL en los otros dos orígenes.
+   */
   documentoId   BigInt?           @map("documento_id")
   fechaHora     DateTime          @default(now()) @map("fecha_hora") @db.Timestamptz(6)
   usuarioId     BigInt            @map("usuario_id")
@@ -500,7 +528,9 @@ model HistorialCostoProducto {
 // Clientes y proyectos (FR-034…FR-038)
 // ============================================================================
 
-/** Cliente del catálogo comercial — destino final de toda salida (vía sus proyectos). */
+/**
+ * Cliente del catálogo comercial — destino final de toda salida (vía sus proyectos).
+ */
 model Cliente {
   id            BigInt        @id @default(autoincrement())
   nombre        String        @db.VarChar(150)
@@ -570,11 +600,9 @@ model Proyecto {
  */
 /**
  * Orden de compra — el pedido formal que se le envía a un proveedor (US16, FR-094…FR-100).
- *
  * Es el único documento del sistema que NO escribe en `movimientos_inventario`: pedir no es
  * mover mercancía. El stock se mueve cuando el `Ingreso` vinculado se recibe (FR-017), y ese
  * mismo momento es el que deja la orden en `RECIBIDA` (FR-099).
- *
  * `numero` es un correlativo de `contadores['orden_compra']`, pedido DENTRO de la transacción
  * que crea la orden — igual que el de las salidas y por el mismo motivo (research R5): un
  * `MAX()+1` se duplica bajo concurrencia y una secuencia deja huecos al revertir.
@@ -589,6 +617,11 @@ model OrdenCompra {
   observaciones        String?           @db.Text
   estado               EstadoOrdenCompra @default(BORRADOR)
   valorTotal           Decimal           @default(0) @map("valor_total") @db.Decimal(14, 2)
+  /**
+   * US20: suma del IVA de las líneas. `valorTotal` sigue siendo la base gravable; el total con
+   * impuesto se deriva y no se almacena (ver la migración `*_iva_en_lineas`).
+   */
+  valorIva             Decimal           @default(0) @map("valor_iva") @db.Decimal(14, 2)
   motivoAnulacion      String?           @map("motivo_anulacion") @db.Text
 
   fechaCreacion         DateTime  @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
@@ -607,9 +640,11 @@ model OrdenCompra {
   @@map("ordenes_compra")
 }
 
-/** Línea de una orden de compra. `ON DELETE CASCADE` solo se ejerce mientras la orden es
- *  BORRADOR (editarla reescribe sus líneas); una orden ENVIADA ya no se toca. El precio es
- *  ESTIMADO: el real lo fija la factura del proveedor. */
+/**
+ * Línea de una orden de compra. `ON DELETE CASCADE` solo se ejerce mientras la orden es
+ * BORRADOR (editarla reescribe sus líneas); una orden ENVIADA ya no se toca. El precio es
+ * ESTIMADO: el real lo fija la factura del proveedor.
+ */
 model DetalleOrdenCompra {
   id             BigInt      @id @default(autoincrement())
   ordenCompraId  BigInt      @map("orden_compra_id")
@@ -619,6 +654,12 @@ model DetalleOrdenCompra {
   cantidad       Decimal     @db.Decimal(12, 2)
   precioUnitario Decimal     @map("precio_unitario") @db.Decimal(14, 2)
   valorTotal     Decimal     @map("valor_total") @db.Decimal(14, 2)
+  /**
+   * US20 (FR-109/FR-110): tasa elegida para ESTA línea (0, 5 o 19 — `CHECK` en la base) y el
+   * impuesto que resulta de aplicarla a `valorTotal`, que sigue siendo la base gravable.
+   */
+  tasaIva        Decimal     @default(0) @map("tasa_iva") @db.Decimal(5, 2)
+  valorIva       Decimal     @default(0) @map("valor_iva") @db.Decimal(14, 2)
 
   @@unique([ordenCompraId, productoId])
   @@index([productoId])
@@ -629,19 +670,28 @@ model Ingreso {
   id                BigInt        @id @default(autoincrement())
   numeroFactura     String        @unique @map("numero_factura") @db.VarChar(50)
   fechaFactura      DateTime      @map("fecha_factura") @db.Date
-  /** US15 (FR-091): FK OBLIGATORIA al catálogo — sustituye a la columna `proveedor VARCHAR(150)`
-   *  de texto libre. Sin `?`: una factura sin saber a quién se le compró no es trazable. */
+  /**
+   * US15 (FR-091): FK OBLIGATORIA al catálogo — sustituye a la columna `proveedor VARCHAR(150)`
+   * de texto libre. Sin `?`: una factura sin saber a quién se le compró no es trazable.
+   */
   proveedorId       BigInt        @map("proveedor_id")
   proveedor         Proveedor     @relation(fields: [proveedorId], references: [id])
   fechaRecepcion    DateTime      @map("fecha_recepcion") @db.Date
   observaciones     String?       @db.Text
   estado            EstadoIngreso @default(PENDIENTE)
   valorTotal        Decimal       @default(0) @map("valor_total") @db.Decimal(14, 2)
+  /**
+   * US20: suma del IVA de las líneas. `valorTotal` sigue siendo la base gravable; el total con
+   * impuesto se deriva y no se almacena (ver la migración `*_iva_en_lineas`).
+   */
+  valorIva          Decimal       @default(0) @map("valor_iva") @db.Decimal(14, 2)
   usuarioRegistraId BigInt        @map("usuario_registra_id")
   usuarioRegistra   Usuario       @relation("IngresoUsuarioRegistra", fields: [usuarioRegistraId], references: [id])
   motivoAnulacion   String?       @map("motivo_anulacion") @db.Text
-  /** US16 (FR-099): la orden de compra que este ingreso surte, si nació de una. NULL es la
-   *  situación normal de todo ingreso registrado sin orden previa. */
+  /**
+   * US16 (FR-099): la orden de compra que este ingreso surte, si nació de una. NULL es la
+   * situación normal de todo ingreso registrado sin orden previa.
+   */
   ordenCompraId     BigInt?       @map("orden_compra_id")
   ordenCompra       OrdenCompra?  @relation(fields: [ordenCompraId], references: [id])
 
@@ -661,9 +711,10 @@ model Ingreso {
   @@map("ingresos")
 }
 
-
-/** Línea de factura. `ON DELETE CASCADE` solo se ejerce mientras el ingreso es PENDIENTE
- * (editable) — la aplicación nunca elimina líneas de un ingreso RECIBIDO/VERIFICADO. */
+/**
+ * Línea de factura. `ON DELETE CASCADE` solo se ejerce mientras el ingreso es PENDIENTE
+ * (editable) — la aplicación nunca elimina líneas de un ingreso RECIBIDO/VERIFICADO.
+ */
 model DetalleIngreso {
   id             BigInt   @id @default(autoincrement())
   ingresoId      BigInt   @map("ingreso_id")
@@ -673,6 +724,12 @@ model DetalleIngreso {
   cantidad       Decimal  @db.Decimal(12, 2)
   precioUnitario Decimal  @map("precio_unitario") @db.Decimal(14, 2)
   valorTotal     Decimal  @map("valor_total") @db.Decimal(14, 2)
+  /**
+   * US20 (FR-109/FR-110): tasa elegida para ESTA línea (0, 5 o 19 — `CHECK` en la base) y el
+   * impuesto que resulta de aplicarla a `valorTotal`, que sigue siendo la base gravable.
+   */
+  tasaIva        Decimal  @default(0) @map("tasa_iva") @db.Decimal(5, 2)
+  valorIva       Decimal  @default(0) @map("valor_iva") @db.Decimal(14, 2)
 
   @@unique([ingresoId, productoId])
   @@index([productoId])
@@ -691,7 +748,9 @@ model DetalleIngreso {
  */
 model Salida {
   id                BigInt       @id @default(autoincrement())
-  /** Correlativo emitido por el puerto Contadores al crear (FR-026, research R5). */
+  /**
+   * Correlativo emitido por el puerto Contadores al crear (FR-026, research R5).
+   */
   numero            BigInt       @unique
   fechaSalida       DateTime     @map("fecha_salida") @db.Date
   proyectoId        BigInt       @map("proyecto_id")
@@ -699,6 +758,11 @@ model Salida {
   observaciones     String?      @db.Text
   estado            EstadoSalida @default(PENDIENTE)
   valorTotal        Decimal      @default(0) @map("valor_total") @db.Decimal(14, 2)
+  /**
+   * US20: suma del IVA de las líneas. `valorTotal` sigue siendo la base gravable; el total con
+   * impuesto se deriva y no se almacena (ver la migración `*_iva_en_lineas`).
+   */
+  valorIva          Decimal      @default(0) @map("valor_iva") @db.Decimal(14, 2)
   usuarioAutorizaId BigInt?      @map("usuario_autoriza_id")
   usuarioAutoriza   Usuario?     @relation("SalidaUsuarioAutoriza", fields: [usuarioAutorizaId], references: [id])
   fechaConfirmacion DateTime?    @map("fecha_confirmacion") @db.Timestamptz(6)
@@ -722,7 +786,9 @@ model Salida {
   @@map("salidas")
 }
 
-/** Línea de salida. `ON DELETE CASCADE` solo se ejerce mientras la salida es PENDIENTE. */
+/**
+ * Línea de salida. `ON DELETE CASCADE` solo se ejerce mientras la salida es PENDIENTE.
+ */
 model DetalleSalida {
   id             BigInt   @id @default(autoincrement())
   salidaId       BigInt   @map("salida_id")
@@ -732,6 +798,12 @@ model DetalleSalida {
   cantidad       Decimal  @db.Decimal(12, 2)
   precioUnitario Decimal  @map("precio_unitario") @db.Decimal(14, 2)
   valorTotal     Decimal  @map("valor_total") @db.Decimal(14, 2)
+  /**
+   * US20 (FR-109/FR-110): tasa elegida para ESTA línea (0, 5 o 19 — `CHECK` en la base) y el
+   * impuesto que resulta de aplicarla a `valorTotal`, que sigue siendo la base gravable.
+   */
+  tasaIva        Decimal  @default(0) @map("tasa_iva") @db.Decimal(5, 2)
+  valorIva       Decimal  @default(0) @map("valor_iva") @db.Decimal(14, 2)
 
   @@unique([salidaId, productoId])
   @@index([productoId])
@@ -754,18 +826,26 @@ model MovimientoInventario {
   tipo            TipoMovimiento
   productoId      BigInt         @map("producto_id")
   producto        Producto       @relation(fields: [productoId], references: [id])
-  /** El signo lo define `tipo` (ENTRADA/AJUSTE_ENTRADA suman, SALIDA/AJUSTE_SALIDA restan). */
+  /**
+   * El signo lo define `tipo` (ENTRADA/AJUSTE_ENTRADA suman, SALIDA/AJUSTE_SALIDA restan).
+   */
   cantidad        Decimal        @db.Decimal(12, 2)
-  /** Snapshot de `stock_actual` inmediatamente después de este movimiento (auditoría). */
+  /**
+   * Snapshot de `stock_actual` inmediatamente después de este movimiento (auditoría).
+   */
   stockResultante Decimal        @map("stock_resultante") @db.Decimal(12, 2)
   documentoTipo   DocumentoTipo  @map("documento_tipo")
-  /** FK lógico (no declarado a nivel de BD) al `Ingreso.id` o `Salida.id` según documentoTipo. */
+  /**
+   * FK lógico (no declarado a nivel de BD) al `Ingreso.id` o `Salida.id` según documentoTipo.
+   */
   documentoId     BigInt         @map("documento_id")
   proyectoId      BigInt?        @map("proyecto_id")
   proyecto        Proyecto?      @relation(fields: [proyectoId], references: [id])
   usuarioId       BigInt         @map("usuario_id")
   usuario         Usuario        @relation("MovimientoUsuario", fields: [usuarioId], references: [id])
-  /** Obligatorio a nivel de aplicación en AJUSTE_ENTRADA/AJUSTE_SALIDA (motivo de anulación). */
+  /**
+   * Obligatorio a nivel de aplicación en AJUSTE_ENTRADA/AJUSTE_SALIDA (motivo de anulación).
+   */
   motivo          String?        @db.Text
 
   @@index([productoId, fechaHora])
@@ -780,8 +860,10 @@ model MovimientoInventario {
 // Contadores — tabla técnica (research R5)
 // ============================================================================
 
-/** Correlativos por clave (p. ej. `'salida'`), mutados con `UPDATE ... RETURNING` dentro
- * de la transacción del documento — nunca `MAX()+1` (carrera) ni secuencia (huecos). */
+/**
+ * Correlativos por clave (p. ej. `'salida'`), mutados con `UPDATE ... RETURNING` dentro
+ * de la transacción del documento — nunca `MAX()+1` (carrera) ni secuencia (huecos).
+ */
 model Contador {
   clave String @id @db.VarChar(30)
   valor BigInt @default(0)

@@ -17,6 +17,10 @@
  *
  * Implementa: FR-094…FR-097 y FR-099 (`marcarRecibida`, que invoca el flujo del ingreso).
  */
+import {
+  impuestosDeDocumento,
+  impuestosDeLinea,
+} from '../../dominio/servicios/servicio-impuestos';
 import { Injectable } from '@nestjs/common';
 import {
   Prisma,
@@ -39,6 +43,7 @@ import {
   type CriteriosOrdenesCompra,
   type DatosActualizarOrdenCompra,
   type DatosNuevaOrdenCompra,
+  type LineaNuevaOrdenCompra,
   type FiltrosListarOrdenesCompra,
   type OrdenCompraConDetalles,
   type PaginaOrdenesCompra,
@@ -118,6 +123,7 @@ export class RepositorioOrdenesCompraPrisma implements RepositorioOrdenesCompra 
           fechaEntregaEsperada: datos.fechaEntregaEsperada,
           observaciones: datos.observaciones,
           valorTotal: calcularValorTotalOrdenCompra(datos.lineas),
+        valorIva: impuestosDeDocumento(datos.lineas).iva,
           usuarioCreacionId: BigInt(datos.usuarioId),
           detalles: { create: datos.lineas.map(aLineaPrisma) },
         },
@@ -143,6 +149,7 @@ export class RepositorioOrdenesCompraPrisma implements RepositorioOrdenesCompra 
           fechaEntregaEsperada: datos.fechaEntregaEsperada,
           observaciones: datos.observaciones,
           valorTotal: calcularValorTotalOrdenCompra(datos.lineas),
+        valorIva: impuestosDeDocumento(datos.lineas).iva,
           usuarioModificacionId: BigInt(usuarioId),
           fechaModificacion: new Date(),
           detalles: { create: datos.lineas.map(aLineaPrisma) },
@@ -231,12 +238,15 @@ async function cargarParaMutar(tx: PrismaTransactionClient, id: number): Promise
   return orden;
 }
 
-function aLineaPrisma(linea: { productoId: number; cantidad: number; precioUnitario: number }) {
+function aLineaPrisma(linea: LineaNuevaOrdenCompra) {
   return {
     productoId: BigInt(linea.productoId),
     cantidad: linea.cantidad,
     precioUnitario: linea.precioUnitario,
     valorTotal: calcularValorTotalLineaOrden(linea),
+    // US20 (FR-109/FR-110) — ver el mismo bloque en `repositorio-ingresos.prisma.ts`.
+    tasaIva: linea.tasaIva ?? 0,
+    valorIva: impuestosDeLinea(linea).iva,
   };
 }
 
@@ -275,6 +285,7 @@ function aOrdenDominio(registro: OrdenCompraPrismaConProveedor): OrdenCompra {
     observaciones: registro.observaciones,
     estado: aEstadoDominio(registro.estado),
     valorTotal: registro.valorTotal.toNumber(),
+    valorIva: registro.valorIva.toNumber(),
     motivoAnulacion: registro.motivoAnulacion,
   };
 }
@@ -287,6 +298,8 @@ function aDetalleDominio(registro: DetalleOrdenCompraPrisma): DetalleOrdenCompra
     cantidad: registro.cantidad.toNumber(),
     precioUnitario: registro.precioUnitario.toNumber(),
     valorTotal: registro.valorTotal.toNumber(),
+    tasaIva: registro.tasaIva.toNumber(),
+    valorIva: registro.valorIva.toNumber(),
   };
 }
 

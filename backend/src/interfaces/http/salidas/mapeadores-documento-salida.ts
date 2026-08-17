@@ -32,10 +32,10 @@ import type {
 import type { Producto } from '../../../dominio/entidades/producto';
 import type { EstadoSalida, Salida } from '../../../dominio/entidades/salida';
 import type { SalidaConDetalles } from '../../../dominio/puertos/repositorio-salidas';
+import { totalesConIva } from '../comunes/totales-con-iva';
 import {
   formatoFechaHoraBogota,
   formatoFechaSoloDia,
-  formatoMonedaCop,
   textoFechaFiltro,
   soloFiltrosAplicados,
 } from '../comunes/formato-documento';
@@ -168,6 +168,6 @@ export function mapearSalidaADocumento(
       precioUnitario: detalle.precioUnitario,
       valorLinea: detalle.valorTotal,
     })),
-    totales: [{ etiqueta: 'Valor total', valor: formatoMonedaCop(salida.valorTotal) }],
+    totales: totalesConIva(salida),
   };
 }

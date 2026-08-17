@@ -118,3 +118,19 @@ sirve para qué; "Subir archivo" hace `POST /api/productos/importar` con
 `ResumenImportacion` en pantalla (nunca solo un mensaje genérico de éxito — el usuario
 necesita ver qué filas fallaron y por qué, mismo criterio que los errores de campo del resto
 de la app).
+
+
+## Cotizaciones (US21) y modo claro (US19)
+
+| Ruta | Permiso que la abre | Qué muestra |
+|---|---|---|
+| `/cotizaciones` | `cotizaciones.ver` | Listado paginado con filtros (cliente, estado, fechas), badge de "Vencida" derivado de la fecha de validez, y acciones por estado |
+| `/cotizaciones/nueva` | `cotizaciones.crear` | Formulario con cliente/proyecto, fechas y líneas con producto, cantidad, precio y **tasa de IVA** |
+| `/cotizaciones/[id]` | `cotizaciones.ver` | Ficha con las tres cifras del documento, exportación a PDF y las acciones de estado que el rol permita |
+| `/cotizaciones/[id]/editar` | `cotizaciones.editar` | Solo alcanzable en BORRADOR (FR-114) |
+
+**Modo claro (FR-108)**: el control de tema vive en el shell de la aplicación, visible en todas
+las pantallas autenticadas y también en `/login`. No hay ruta propia ni preferencia en servidor:
+la elección se guarda en el navegador, así que dos personas que comparten un usuario pueden ver
+la aplicación distinta, que es lo correcto — el tema es de quien mira la pantalla, no de la
+cuenta.

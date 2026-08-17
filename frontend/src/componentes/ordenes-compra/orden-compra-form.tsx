@@ -37,10 +37,12 @@ import {
   type LineaOrdenCompra,
   type ProductoResumen,
   type SugerenciaCompra,
+  TASA_IVA_POR_DEFECTO,
 } from '@trazo/compartido';
 import { actualizarOrdenCompra, crearOrdenCompra, sugerenciasDeCompra } from '@/lib/api/ordenes-compra';
 import { ErrorApi } from '@/lib/api/cliente';
 import { formatoMoneda } from '@/lib/formato';
+import { ResumenTotales, SelectorTasaIva, calcularTotales } from '@/componentes/comunes/campos-iva';
 import { CampoFecha as CampoFechaBase } from '@/componentes/comunes/campo-fecha';
 import { SelectorProveedor } from '@/componentes/proveedores/selector-proveedor';
 
@@ -56,7 +58,8 @@ const CAMPOS_CABECERA = new Set<keyof DatosCrearOrdenCompra>([
 ]);
 
 function crearLineaVacia(): LineaOrdenCompra {
-  return { productoId: 0, cantidad: 1, precioUnitario: 0 };
+  // US20 (FR-109): la línea nueva se propone al 19%, la tasa general.
+  return { productoId: 0, cantidad: 1, precioUnitario: 0, tasaIva: TASA_IVA_POR_DEFECTO };
 }
 
 interface OrdenCompraFormProps {
@@ -97,10 +100,7 @@ export function OrdenCompraForm({ productos, ordenId, valoresIniciales, proveedo
   const lineasEnVivo = useWatch({ control, name: 'lineas' });
   const proveedorSeleccionado = useWatch({ control, name: 'proveedorId' });
 
-  const total = lineasEnVivo.reduce(
-    (acumulado, linea) => acumulado + (Number(linea.cantidad) || 0) * (Number(linea.precioUnitario) || 0),
-    0,
-  );
+  const totales = calcularTotales(lineasEnVivo);
 
   const cargarSugerencias = useCallback(async (proveedorId: number) => {
     setCargandoSugerencias(true);
@@ -136,6 +136,8 @@ export function OrdenCompraForm({ productos, ordenId, valoresIniciales, proveedo
       productoId: sugerencia.productoId,
       cantidad: sugerencia.cantidadSugerida,
       precioUnitario: sugerencia.precioSugerido,
+      // Una sugerencia se agrega con la misma tasa que cualquier línea nueva (US20, FR-109).
+      tasaIva: TASA_IVA_POR_DEFECTO,
     };
     if (indiceVacia >= 0) remove(indiceVacia);
     append(nueva);
@@ -307,6 +309,7 @@ export function OrdenCompraForm({ productos, ordenId, valoresIniciales, proveedo
                 <th>Producto</th>
                 <th>Cantidad</th>
                 <th>Precio estimado</th>
+                <th>IVA</th>
                 <th>Valor de línea</th>
                 <th aria-label="Quitar" />
               </tr>
@@ -392,9 +395,7 @@ export function OrdenCompraForm({ productos, ordenId, valoresIniciales, proveedo
           </table>
         </div>
 
-        <div className="flex justify-end" style={{ fontSize: 16, fontFamily: 'var(--font-heading)' }}>
-          Total estimado: {formatoMoneda(total)}
-        </div>
+        <ResumenTotales totales={totales} etiquetaTotal="Total estimado" />
       </div>
 
       {errorGeneral && (

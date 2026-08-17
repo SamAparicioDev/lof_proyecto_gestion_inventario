@@ -36,9 +36,9 @@ import type {
 import type { EstadoIngreso, Ingreso } from '../../../dominio/entidades/ingreso';
 import type { IngresoConDetalles } from '../../../dominio/puertos/repositorio-ingresos';
 import type { Producto } from '../../../dominio/entidades/producto';
+import { totalesConIva } from '../comunes/totales-con-iva';
 import {
   formatoFechaSoloDia,
-  formatoMonedaCop,
   textoFechaFiltro,
   textoFiltroOpcional,
   soloFiltrosAplicados,
@@ -154,7 +154,7 @@ export function mapearIngresoADocumento(
       precioUnitario: detalle.precioUnitario,
       valorLinea: detalle.valorTotal,
     })),
-    totales: [{ etiqueta: 'Valor total', valor: formatoMonedaCop(ingreso.valorTotal) }],
+    totales: totalesConIva(ingreso),
   };
 }
 

@@ -60,11 +60,13 @@ import {
   type LineaSalida,
   type ProductoResumen,
   type Proyecto,
+  TASA_IVA_POR_DEFECTO,
 } from '@trazo/compartido';
 import { actualizarSalida, crearSalida } from '@/lib/api/salidas';
 import { obtenerProyectosDestino } from '@/lib/api/clientes';
 import { ErrorApi } from '@/lib/api/cliente';
 import { formatoMoneda } from '@/lib/formato';
+import { ResumenTotales, SelectorTasaIva, calcularTotales } from '@/componentes/comunes/campos-iva';
 
 const MENSAJE_ERROR_RED = 'No fue posible comunicarse con el servidor. Intenta de nuevo.';
 
@@ -73,7 +75,8 @@ const PATRON_ERROR_LINEA = /^lineas\.(\d+)\.(productoId|cantidad|precioUnitario)
 const CAMPOS_CABECERA = new Set<keyof DatosCrearSalida>(['proyectoId', 'fechaSalida', 'observaciones']);
 
 function crearLineaVacia(): LineaSalida {
-  return { productoId: 0, cantidad: 1, precioUnitario: 0 };
+  // US20 (FR-109): la línea nueva se propone al 19%, la tasa general.
+  return { productoId: 0, cantidad: 1, precioUnitario: 0, tasaIva: TASA_IVA_POR_DEFECTO };
 }
 
 const VALORES_INICIALES_VACIOS: DatosCrearSalida = {
@@ -171,10 +174,7 @@ export function SalidaForm({ clientes, productos, salidaId, valoresIniciales, pr
     }
   }
 
-  const total = lineasEnVivo.reduce(
-    (acumulado, linea) => acumulado + (Number(linea.cantidad) || 0) * (Number(linea.precioUnitario) || 0),
-    0,
-  );
+  const totales = calcularTotales(lineasEnVivo);
 
   function aplicarErroresServidor(campos: Record<string, string>): void {
     for (const [campo, mensaje] of Object.entries(campos)) {
@@ -295,6 +295,7 @@ export function SalidaForm({ clientes, productos, salidaId, valoresIniciales, pr
                 <th>Producto</th>
                 <th>Cantidad</th>
                 <th>Precio unitario</th>
+                <th>IVA</th>
                 <th>Valor de línea</th>
                 <th aria-label="Quitar" />
               </tr>
@@ -401,9 +402,7 @@ export function SalidaForm({ clientes, productos, salidaId, valoresIniciales, pr
           </table>
         </div>
 
-        <div className="flex justify-end" style={{ fontSize: 16, fontFamily: 'var(--font-heading)' }}>
-          Total: {formatoMoneda(total)}
-        </div>
+        <ResumenTotales totales={totales} />
       </div>
 
       {errorGeneral && (

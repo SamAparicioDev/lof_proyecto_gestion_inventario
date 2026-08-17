@@ -37,6 +37,8 @@ export interface LineaNuevaSalida {
   readonly productoId: number;
   readonly cantidad: number;
   readonly precioUnitario: number;
+  /** US20 (FR-109): ausente = 0, y entonces el documento vale lo que valía antes de la historia. */
+  readonly tasaIva?: number;
 }
 
 /** Salida junto con sus líneas — forma de lectura de `buscarPorId` (detalle completo). */

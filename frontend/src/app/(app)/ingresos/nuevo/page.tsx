@@ -56,6 +56,9 @@ export default async function PaginaNuevoIngreso({
           // El precio de la orden es ESTIMADO: llega como punto de partida y el usuario lo
           // ajusta a lo que diga la factura, que es lo que fija el costo del inventario.
           precioUnitario: detalle.precioUnitario,
+          // US20: la tasa de la orden viaja igual que el precio — el impuesto de lo que se
+          // pidió es el mismo que el de lo que se recibe, salvo que el usuario lo cambie.
+          tasaIva: detalle.tasaIva,
         })),
       }
     : undefined;

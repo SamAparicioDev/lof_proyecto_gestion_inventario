@@ -16,6 +16,7 @@
  * Sigue el patrón de esquemas/autenticacion.ts (archivo ejemplar).
  */
 import { z } from 'zod';
+import { esquemaTasaIva } from './impuestos';
 import { esquemaIdFiltro, esquemaPaginacion } from './comunes';
 
 /** `true` si `valor` tiene, como máximo, 2 cifras decimales (columnas `DECIMAL(12,2)` — FR-016). */
@@ -40,6 +41,9 @@ const esquemaLineaIngreso = z.object({
       invalid_type_error: 'El precio unitario debe ser un número',
     })
     .positive('El precio unitario debe ser mayor a 0'),
+  /** US20 (FR-109): tasa de IVA de ESTA línea. Opcional con defecto 0 — un documento anterior
+   *  a US20, o un cliente que no la envíe, vale exactamente lo que valía. */
+  tasaIva: esquemaTasaIva,
 });
 export type LineaIngreso = z.infer<typeof esquemaLineaIngreso>;
 

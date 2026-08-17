@@ -9,6 +9,7 @@
  *
  * Implementa: FR-013…FR-019 (forma de lectura de ingresos y sus líneas).
  */
+import type { TasaIva } from '../esquemas/impuestos';
 
 /** Máquina de estados de un ingreso (data-model.md — FR-017/FR-019). */
 export type EstadoIngreso = 'PENDIENTE' | 'RECIBIDO' | 'VERIFICADO' | 'ANULADO';
@@ -25,6 +26,9 @@ export interface Ingreso {
   observaciones: string | null;
   estado: EstadoIngreso;
   valorTotal: number;
+  /** US20 (FR-110): base gravable en `valorTotal`, impuesto aquí. El total que se paga es la
+   *  suma de los dos y NO viaja como campo propio — se deriva donde se muestra. */
+  valorIva: number;
   usuarioRegistraId: number;
   motivoAnulacion: string | null;
 }
@@ -36,6 +40,11 @@ export interface DetalleIngreso {
   cantidad: number;
   precioUnitario: number;
   valorTotal: number;
+  /** US20 (FR-109): tasa aplicada a esta línea y el impuesto que resulta. Es la MISMA unión
+   *  que valida el esquema —y que restringe el `CHECK` de la base—, así que el formulario puede
+   *  recargar la línea tal cual sin volver a estrecharla. */
+  tasaIva: TasaIva;
+  valorIva: number;
 }
 
 /** `GET /api/ingresos/:id` — cabecera + líneas (forma de `IngresoConDetalles` del backend). */

@@ -397,6 +397,46 @@ exportable:
   en una clasificación previa de todo el catálogo; el sitio donde esos productos se completan es
   su ficha, de uno en uno.
 
+## IVA en las líneas (US20, FR-109…FR-111)
+
+Los bodies de ingresos, salidas, órdenes de compra y cotizaciones aceptan `tasaIva` en CADA
+línea: `0`, `5` o `19`. Omitirla equivale a `0`, así que un cliente anterior a US20 sigue
+funcionando sin cambios.
+
+Las respuestas de esos cuatro documentos exponen **tres cifras**, tanto por línea como en la
+cabecera:
+
+| Campo | Qué es |
+|---|---|
+| `valorTotal` | base gravable — cantidad × precio unitario. **No cambia de significado**: es lo que ya devolvía antes de US20 |
+| `valorIva` | impuesto calculado sobre esa base, línea a línea |
+| `valorConIva` | `valorTotal + valorIva`. Derivado, nunca almacenado |
+
+El costo con el que se actualiza el producto al recibir un ingreso es `precioUnitario` SIN IVA
+(FR-111), así que el historial de costos y los reportes de valorización no cambian de escala.
+
+## Cotizaciones (`/api/cotizaciones`) — US21, FR-112…FR-117
+
+| Método y ruta | Roles | Body/Query | Respuesta OK | Errores |
+|---|---|---|---|---|
+| `GET /api/cotizaciones` | A,G,O (`cotizaciones.ver`) | `pagina`, `porPagina`, `buscar`, `clienteId`, `estado`, `desde`, `hasta` | `200` `{ datos: CotizacionListada[], paginacion }` — cada fila trae `vencida` calculada contra la fecha de hoy | — |
+| `GET /api/cotizaciones/:id` | A,G,O (`cotizaciones.ver`) | — | `200` `CotizacionDetalle` con sus líneas | `404` |
+| `POST /api/cotizaciones` | A,G,O (`cotizaciones.crear`) | `esquemaCrearCotizacion` {clienteId, proyectoId, fecha, fechaValidez, observaciones?, lineas[]} | `201` `{ id, numero }` | `400` cliente/proyecto inexistente o inactivo; `400` líneas vacías o producto repetido |
+| `PUT /api/cotizaciones/:id` | A,G,O (`cotizaciones.editar`) | igual que crear | `204` | `404`; `409` si NO está en BORRADOR (FR-114) |
+| `PUT /api/cotizaciones/:id/enviar` | A,G (`cotizaciones.enviar`) | — | `204` | `409` si no está en BORRADOR |
+| `PUT /api/cotizaciones/:id/aceptar` | A,G (`cotizaciones.cerrar`) | — | `200` `{ salidaId }` — genera la salida PENDIENTE enlazada (FR-115) | `409` si no está ENVIADA |
+| `PUT /api/cotizaciones/:id/rechazar` | A,G (`cotizaciones.cerrar`) | — | `204` | `409` si no está ENVIADA |
+| `PUT /api/cotizaciones/:id/anular` | A,G (`cotizaciones.anular`) | `{ motivo }` | `204` | `409` si ya está ACEPTADA (la salida ya existe: se anula esa) |
+| `GET /api/cotizaciones/:id/export` | A,G,O (`cotizaciones.ver`) | `formato=pdf\|excel` | `200` stream con el logo institucional (FR-116) | `404` |
+
+Reglas del contrato:
+
+- **Aceptar es la única acción que crea algo fuera del módulo**: devuelve `salidaId` para que la
+  UI pueda llevar al usuario a la salida recién creada. Esa salida nace PENDIENTE y no ha movido
+  stock (FR-113/FR-115).
+- **`vencida` NO es un estado** sino un derivado de `fechaValidez < hoy`: un estado exigiría que
+  alguien —o un proceso— lo marcara, y una cotización no deja de estar enviada por caducar.
+
 ## Carga masiva de inventario (`/api/productos/importar*`) — solo A,G (US8, FR-048…FR-051)
 
 | Método y ruta | Roles | Body/Query | Respuesta OK | Errores |

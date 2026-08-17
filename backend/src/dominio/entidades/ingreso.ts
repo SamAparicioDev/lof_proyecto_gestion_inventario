@@ -41,6 +41,9 @@ export interface Ingreso {
   readonly observaciones: string | null;
   readonly estado: EstadoIngreso;
   readonly valorTotal: number;
+  /** US20 (FR-110): suma del IVA de las líneas. `valorTotal` sigue siendo la base gravable y el
+   *  total con impuesto se deriva sumando los dos — nunca se almacena. */
+  readonly valorIva: number;
   readonly usuarioRegistraId: number;
   readonly motivoAnulacion: string | null;
   /** Orden de compra que este ingreso surte (US16, FR-099), o `null` si se registró sin orden
@@ -55,6 +58,10 @@ export interface DetalleIngreso {
   readonly cantidad: number;
   readonly precioUnitario: number;
   readonly valorTotal: number;
+  /** US20 (FR-109): tasa aplicada a ESTA línea y el impuesto que resulta. `0` en todo lo
+   *  registrado antes de la historia. */
+  readonly tasaIva: number;
+  readonly valorIva: number;
 }
 
 /**

@@ -19,6 +19,7 @@
  * con la misma función interna para no duplicar las reglas (patrón de `esquemas/ingresos.ts`).
  */
 import { z } from 'zod';
+import { esquemaTasaIva } from './impuestos';
 import { esquemaIdFiltro, esquemaPaginacion } from './comunes';
 
 /** `true` si `valor` tiene, como máximo, 2 cifras decimales (columnas `DECIMAL(12,2)` — FR-016). */
@@ -43,6 +44,9 @@ const esquemaLineaSalida = z.object({
       invalid_type_error: 'El precio unitario debe ser un número',
     })
     .min(0, 'El precio unitario no puede ser negativo'),
+  /** US20 (FR-109): tasa de IVA de ESTA línea. Opcional con defecto 0 — un documento anterior
+   *  a US20, o un cliente que no la envíe, vale exactamente lo que valía. */
+  tasaIva: esquemaTasaIva,
 });
 export type LineaSalida = z.infer<typeof esquemaLineaSalida>;
 

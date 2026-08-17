@@ -13,6 +13,7 @@ import { Suspense } from 'react';
 import { LogoLof } from '@/componentes/comunes/logo-lof';
 import type { Metadata } from 'next';
 import { FormularioLogin } from '@/componentes/auth/formulario-login';
+import { BotonTema } from '@/componentes/layout/boton-tema';
 
 export const metadata: Metadata = {
   title: 'Iniciar sesión — LOF',
@@ -21,9 +22,15 @@ export const metadata: Metadata = {
 export default function PaginaLogin() {
   return (
     <main
-      className="grid min-h-screen place-items-center p-6"
+      className="relative grid min-h-screen place-items-center p-6"
       style={{ background: 'radial-gradient(80% 60% at 50% 0%, var(--color-bg-glow) 0%, var(--color-bg) 70%)' }}
     >
+      {/* US19: el control también aquí — quien prefiere claro no debería tener que iniciar
+          sesión en oscuro para poder cambiarlo después. */}
+      <div className="absolute right-4 top-4">
+        <BotonTema soloIcono />
+      </div>
+
       <div className="flex w-full max-w-[380px] flex-col gap-5">
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center gap-2.5">

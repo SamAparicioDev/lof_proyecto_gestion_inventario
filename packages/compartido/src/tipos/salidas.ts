@@ -8,6 +8,7 @@
  *
  * Implementa: FR-025…FR-033 (forma de lectura de salidas y sus líneas).
  */
+import type { TasaIva } from '../esquemas/impuestos';
 
 /** Máquina de estados de una salida (data-model.md — FR-029/FR-032). */
 export type EstadoSalida = 'PENDIENTE' | 'CONFIRMADA' | 'COMPLETADA' | 'ANULADA';
@@ -21,6 +22,9 @@ export interface Salida {
   observaciones: string | null;
   estado: EstadoSalida;
   valorTotal: number;
+  /** US20 (FR-110): base gravable en `valorTotal`, impuesto aquí. El total que se paga es la
+   *  suma de los dos y NO viaja como campo propio — se deriva donde se muestra. */
+  valorIva: number;
   usuarioAutorizaId: number | null;
   fechaConfirmacion: string | null;
   motivoAnulacion: string | null;
@@ -33,6 +37,11 @@ export interface DetalleSalida {
   cantidad: number;
   precioUnitario: number;
   valorTotal: number;
+  /** US20 (FR-109): tasa aplicada a esta línea y el impuesto que resulta. Es la MISMA unión
+   *  que valida el esquema —y que restringe el `CHECK` de la base—, así que el formulario puede
+   *  recargar la línea tal cual sin volver a estrecharla. */
+  tasaIva: TasaIva;
+  valorIva: number;
 }
 
 /** `GET /api/salidas/:id` — cabecera + líneas (forma de `SalidaConDetalles` del backend). */

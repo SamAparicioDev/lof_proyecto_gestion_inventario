@@ -324,6 +324,68 @@ Dar de alta un producto que YA está físicamente en la bodega son hoy dos gesti
 
 ---
 
+### User Story 19 - Modo claro (Priority: P3)
+
+Nocturne es un sistema de diseño oscuro y la aplicación se ve así desde el primer día. Quien trabaja junto a una ventana, imprime desde pantalla o simplemente lee mejor sobre blanco no tiene alternativa. Un control siempre visible alterna entre claro y oscuro.
+
+**Why this priority**: no cambia lo que el sistema hace, solo cómo se ve. Va al final de la cola por eso mismo, pero es de las cosas que se miran todos los días.
+
+**Los tokens vendorizados NO se editan**: `globals.css` advierte que la paleta de Nocturne viene del proyecto de diseño y que tocarla a mano desincroniza el origen. El modo claro se añade como una capa propia que REDEFINE esos tokens cuando el tema claro está activo, sin alterar el bloque vendorizado — así un `DesignSync` futuro sigue entrando limpio.
+
+**Independent Test**: Se prueba pulsando el control, viendo la interfaz completa en claro, recargando y comprobando que sigue en claro. Entrega valor por sí sola.
+
+**Acceptance Scenarios**:
+
+1. **Given** la aplicación en oscuro, **When** el usuario pulsa el control de tema, **Then** toda la interfaz pasa a claro sin recargar la página.
+2. **Given** un usuario que ya eligió claro, **When** vuelve a entrar más tarde, **Then** la aplicación abre en claro: la elección se recuerda en su navegador.
+3. **Given** un usuario que nunca ha elegido tema, **When** entra por primera vez, **Then** la aplicación respeta la preferencia de su sistema operativo.
+4. **Given** cualquier tema guardado, **When** se carga una página, **Then** NO se ve un destello del tema contrario antes de pintar el elegido.
+
+---
+
+### User Story 20 - IVA en las líneas de los documentos (Priority: P2)
+
+Los documentos del sistema mueven dinero sin decir nada del impuesto: una factura de compra por $1.000.000 no distingue base de IVA, y el total que se le muestra a un proveedor o a un cliente no es el que se va a pagar. Cada línea gana su tasa de IVA y cada documento muestra base, IVA y total.
+
+**Why this priority**: es lo que separa un total informativo de uno que se puede poner en un documento y enviar. Y hace falta ANTES que las cotizaciones (US21), que nacen ya con impuesto.
+
+**Los documentos que ya existen no cambian de valor**: la tasa nace en 0% para todo lo registrado hasta hoy, así que ningún total histórico se mueve. El IVA aparece a partir de que alguien lo elija.
+
+**La valorización del inventario NO lleva IVA**: el costo del producto y el valor del inventario siguen siendo la base gravable. El IVA es un impuesto que se recupera, no lo que vale la mercancía en la bodega — meterlo en el costo inflaría un 19% todos los reportes de valorización frente a la contabilidad.
+
+**Independent Test**: Se prueba registrando un ingreso con una línea al 19% y comprobando que el documento muestra base, IVA y total, y que el costo con el que queda el producto es la base, no el total.
+
+**Acceptance Scenarios**:
+
+1. **Given** una línea de cualquier documento con cantidad y precio, **When** el usuario elige 19% en el cuadro de IVA, **Then** la línea muestra su IVA calculado y el total del documento lo suma, sin teclear nada más.
+2. **Given** un documento con líneas a distintas tasas, **When** se consulta su total, **Then** el IVA se calcula línea a línea sobre su propia base y se totaliza — nunca aplicando una tasa única al total.
+3. **Given** una línea al 0%, **When** se guarda, **Then** el documento se comporta exactamente como antes de esta historia: base igual a total.
+4. **Given** un ingreso recibido con IVA, **When** se consulta el costo del producto, **Then** el costo registrado es el precio SIN IVA, y el historial de costos guarda ese mismo valor.
+5. **Given** un documento con IVA, **When** se exporta a PDF o Excel, **Then** el documento exportado muestra las tres cifras: base gravable, IVA y total.
+
+---
+
+### User Story 21 - Cotizaciones a clientes (Priority: P2)
+
+Antes de que exista una salida hay una oferta: al cliente se le pasa un documento con productos, cantidades, precios e impuestos, y él decide. Hoy eso se hace fuera del sistema, así que el precio ofrecido no queda registrado en ninguna parte y, cuando el cliente acepta, la salida se teclea otra vez desde cero.
+
+**Why this priority**: cierra el ciclo comercial por el lado de la venta, igual que US16 lo cerró por el de la compra. Es el mismo documento-compromiso que una orden de compra, mirando hacia el otro lado.
+
+**Una cotización NO es una salida**: no mueve inventario ni compromete stock en ninguno de sus estados. Es una oferta; la mercancía se compromete cuando la salida que nace de ella se confirma, con el flujo de stock que ya existe (FR-025).
+
+**Independent Test**: Se prueba creando una cotización para un cliente, exportándola a PDF y aceptándola, y comprobando que aparece una salida pendiente con las mismas líneas. Entrega valor por sí sola: la oferta queda registrada aunque nunca se acepte.
+
+**Acceptance Scenarios**:
+
+1. **Given** un usuario con permiso para cotizar, **When** crea una cotización con cliente, proyecto y líneas, **Then** el sistema le asigna un número correlativo propio y la deja en BORRADOR.
+2. **Given** una cotización en BORRADOR, **When** el usuario la exporta, **Then** obtiene un PDF con el logo institucional, sus líneas y las tres cifras del documento, listo para enviárselo al cliente.
+3. **Given** una cotización ENVIADA, **When** el cliente la acepta y el usuario la marca como aceptada, **Then** el sistema genera una SALIDA pendiente con las mismas líneas, enlazada a la cotización, y no mueve stock todavía.
+4. **Given** una cotización ENVIADA, **When** el cliente la rechaza, **Then** queda RECHAZADA y no genera nada.
+5. **Given** una cotización que ya no está en BORRADOR, **When** alguien intenta editar sus líneas, **Then** el sistema lo impide: lo que se le mostró al cliente no se reescribe.
+6. **Given** una cotización cuya fecha de validez ya pasó, **When** se consulta el listado, **Then** se muestra como vencida sin que nadie tenga que marcarla a mano.
+
+---
+
 ### Edge Cases
 
 - **Salida mayor al disponible**: debe rechazarse siempre, incluida la carrera entre dos usuarios simultáneos sobre el mismo producto (solo una confirmación puede ganar).
@@ -507,6 +569,17 @@ que recordar por separado.
 - **FR-106**: El alta de un producto desde el catálogo DEBE aceptar existencias iniciales (proveedor, cantidad y valor unitario) y registrarlas como un INGRESO real con la misma trazabilidad que uno manual (usuario, fecha, documento, movimiento de entrada) — nunca como una escritura directa de stock. Los tres campos son opcionales en conjunto y obligatorios entre sí: sin cantidad no se genera nada; con cantidad, el proveedor y el valor unitario son exigibles.
 - **FR-107**: El alta rápida invocada DESDE un ingreso NO DEBE pedir existencias iniciales: la cantidad y el precio los aporta la línea del ingreso que se está registrando, y pedirlos también en el alta duplicaría la entrada de stock.
 
+- **FR-108**: La interfaz DEBE ofrecer modo CLARO y OSCURO alternables desde un control siempre visible. La elección DEBE recordarse en el navegador del usuario; mientras nadie elija, DEBE respetarse la preferencia del sistema operativo. Al cargar una página NO DEBE verse un destello del tema contrario. La paleta clara DEBE añadirse como una capa que redefine los tokens, sin editar el bloque vendorizado de Nocturne.
+- **FR-109**: Cada línea de ingreso, orden de compra, salida y cotización DEBE llevar su propia TASA DE IVA, elegible entre las vigentes en Colombia (0%, 5% y 19%). Las líneas nuevas se proponen al 19% —la tasa general, y la que aplica a la mayoría de la mercancía— y las ya registradas conservan el 0% con el que se capturaron, para que ningún documento histórico cambie de valor.
+- **FR-110**: El IVA DEBE calcularse LÍNEA A LÍNEA sobre su propia base (cantidad × precio unitario) y totalizarse en el documento, que DEBE exponer y mostrar tres cifras: base gravable, IVA y total. Aplicar una tasa única sobre el total del documento daría un número distinto en cuanto conviven dos tasas.
+- **FR-111**: El IVA NO DEBE entrar en el costo del producto ni en la valorización del inventario: el costo que se registra al recibir un ingreso, el historial de costos y los reportes de valorización siguen siendo la BASE GRAVABLE. El IVA es un impuesto recuperable, no lo que vale la mercancía.
+- **FR-112**: El sistema DEBE permitir registrar COTIZACIONES a un cliente y proyecto del catálogo, con número correlativo propio, fecha, fecha de validez, líneas de producto (cantidad, precio unitario y tasa de IVA) y estado BORRADOR/ENVIADA/ACEPTADA/RECHAZADA/ANULADA.
+- **FR-113**: Una cotización NO DEBE mover inventario ni comprometer stock en ninguno de sus estados: es una oferta, no una entrega. El stock se compromete cuando la salida que nace de ella se confirma (FR-025).
+- **FR-114**: Solo las cotizaciones en BORRADOR DEBEN ser editables. Una vez enviada, lo que se le mostró al cliente no se reescribe; para cambiarla se anula y se hace otra.
+- **FR-115**: Al marcar una cotización como ACEPTADA, el sistema DEBE generar una SALIDA pendiente con las mismas líneas —producto, cantidad, precio e IVA— enlazada a la cotización que la originó, sin mover stock en ese momento. Es el espejo de la relación orden de compra → ingreso (FR-099).
+- **FR-116**: Las cotizaciones DEBEN poder exportarse a PDF con el logo institucional y las tres cifras del documento, en el formato que se le envía al cliente.
+- **FR-117**: Ver, crear y editar borradores de cotización DEBEN estar disponibles para los tres roles; enviarla, cerrarla (aceptar/rechazar) y anularla DEBEN quedar restringidos, porque comprometen un precio frente a un tercero o generan una salida.
+
 
 **Auditoría y trazabilidad (transversal)**
 
@@ -522,6 +595,7 @@ que recordar por separado.
 - **Proveedor**: empresa o persona a la que se compra la mercancía, administrada como catálogo (US15, FR-091); nombre único ignorando mayúsculas y espacios, datos de contacto opcionales (NIT, teléfono, email), estado activo/inactivo, y una marca de "del sistema" para el proveedor que usa la carga masiva (FR-093). Referenciado de forma OBLIGATORIA por cada ingreso.
 - **Unidad de medida**: en qué se mide un producto (US17, FR-101); nombre y abreviatura únicos ignorando mayúsculas y espacios, estado activa/inactiva. Referenciada de forma OBLIGATORIA por todo producto creado desde US17, y OPCIONAL en los anteriores (FR-103).
 - **Orden de compra**: pedido formal de mercancía a un proveedor (US16, FR-094); número correlativo propio, proveedor obligatorio, fecha, líneas con producto/cantidad/precio estimado, valor total calculado, estado (borrador, enviada, recibida, anulada) y motivo de anulación. NO mueve inventario: es un compromiso de compra, y el stock solo se mueve cuando el ingreso correspondiente se recibe.
+- **Cotización**: oferta formal de mercancía a un cliente (US21, FR-112); número correlativo propio, cliente y proyecto obligatorios, fecha y fecha de validez, líneas con producto/cantidad/precio/tasa de IVA, las tres cifras del documento (base, IVA y total) y estado (borrador, enviada, aceptada, rechazada, anulada). NO mueve inventario: al aceptarse genera una salida pendiente enlazada, y el stock se compromete cuando esa salida se confirma.
 - **Cliente**: empresa o persona a la que se destinan salidas; nombre, NIT único, contacto (teléfono, email), dirección, ciudad, estado, fecha de registro. Tiene uno o más proyectos.
 - **Proyecto**: trabajo específico de un cliente; nombre, descripción, fechas de inicio y cierre estimada, responsable, presupuesto estimado, estado (Activo/Completado/Suspendido). Destino obligatorio de las salidas.
 - **Ingreso (factura)**: documento de entrada de mercancía; número de factura único, proveedor (texto), fechas de factura y recepción, observaciones, estado (Pendiente/Recibido/Verificado), usuario que registra, valor total. Compuesto por líneas de detalle.

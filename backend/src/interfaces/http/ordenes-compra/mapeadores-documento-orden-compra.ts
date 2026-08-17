@@ -16,6 +16,7 @@
  * Implementa: FR-097 (documento completo exportable) y FR-064/SC-007 (el listado exportado es
  * exactamente lo filtrado en pantalla).
  */
+import { totalesConIva } from '../comunes/totales-con-iva';
 import { formatoNumeroOrdenCompra, type FiltroOrdenesCompra } from '@trazo/compartido';
 import type {
   ColumnaDocumentoReporte,
@@ -28,7 +29,6 @@ import type { Producto } from '../../../dominio/entidades/producto';
 import type { Proveedor } from '../../../dominio/entidades/proveedor';
 import {
   formatoFechaSoloDia,
-  formatoMonedaCop,
   textoFechaFiltro,
   textoFiltroOpcional,
   soloFiltrosAplicados,
@@ -145,6 +145,6 @@ export function mapearOrdenCompraADocumento(
       precioUnitario: detalle.precioUnitario,
       valorLinea: detalle.valorTotal,
     })),
-    totales: [{ etiqueta: 'Valor total estimado', valor: formatoMonedaCop(orden.valorTotal) }],
+    totales: totalesConIva(orden),
   };
 }

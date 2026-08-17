@@ -18,6 +18,7 @@
  * en dos líneas" (que coincide con el `UNIQUE(orden_compra_id, producto_id)` de data-model.md).
  */
 import { z } from 'zod';
+import { esquemaTasaIva } from './impuestos';
 import { esquemaIdFiltro, esquemaPaginacion } from './comunes';
 
 /** Estados de una orden (data-model.md — FR-096). */
@@ -46,6 +47,9 @@ const esquemaLineaOrdenCompra = z.object({
       invalid_type_error: 'El precio unitario debe ser un número',
     })
     .positive('El precio unitario debe ser mayor a 0'),
+  /** US20 (FR-109): tasa de IVA de ESTA línea. Opcional con defecto 0 — un documento anterior
+   *  a US20, o un cliente que no la envíe, vale exactamente lo que valía. */
+  tasaIva: esquemaTasaIva,
 });
 export type LineaOrdenCompra = z.infer<typeof esquemaLineaOrdenCompra>;
 

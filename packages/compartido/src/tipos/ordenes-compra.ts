@@ -6,6 +6,7 @@
  *
  * Implementa: FR-094…FR-099 (forma de lectura de una orden, sus líneas y sus sugerencias).
  */
+import type { TasaIva } from '../esquemas/impuestos';
 import type { EstadoOrdenCompra } from '../esquemas/ordenes-compra';
 
 export interface OrdenCompra {
@@ -19,6 +20,9 @@ export interface OrdenCompra {
   observaciones: string | null;
   estado: EstadoOrdenCompra;
   valorTotal: number;
+  /** US20 (FR-110): base gravable en `valorTotal`, impuesto aquí. El total que se paga es la
+   *  suma de los dos y NO viaja como campo propio — se deriva donde se muestra. */
+  valorIva: number;
   motivoAnulacion: string | null;
 }
 
@@ -29,6 +33,11 @@ export interface DetalleOrdenCompra {
   cantidad: number;
   precioUnitario: number;
   valorTotal: number;
+  /** US20 (FR-109): tasa aplicada a esta línea y el impuesto que resulta. Es la MISMA unión
+   *  que valida el esquema —y que restringe el `CHECK` de la base—, así que el formulario puede
+   *  recargar la línea tal cual sin volver a estrecharla. */
+  tasaIva: TasaIva;
+  valorIva: number;
 }
 
 /** `GET /api/ordenes-compra/:id` — cabecera + líneas. */

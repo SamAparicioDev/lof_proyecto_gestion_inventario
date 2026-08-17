@@ -41,6 +41,9 @@ function aValoresFormulario(orden: OrdenCompraConDetalles): DatosCrearOrdenCompr
       productoId: detalle.productoId,
       cantidad: detalle.cantidad,
       precioUnitario: detalle.precioUnitario,
+      // US20: la tasa con la que se guardó cada línea vuelve al formulario tal cual — editar
+      // otra cosa del documento no puede cambiarle el impuesto.
+      tasaIva: detalle.tasaIva,
     })),
   };
 }

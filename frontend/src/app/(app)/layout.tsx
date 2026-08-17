@@ -35,6 +35,7 @@ import { LogoLof } from '@/componentes/comunes/logo-lof';
 import { iniciales } from '@/lib/formato';
 import { NavegacionLateral } from '@/componentes/layout/navegacion-lateral';
 import { BotonCerrarSesion } from '@/componentes/layout/boton-cerrar-sesion';
+import { BotonTema } from '@/componentes/layout/boton-tema';
 
 const RUTA_CAMBIAR_PASSWORD = '/cambiar-password';
 
@@ -88,6 +89,9 @@ export default async function LayoutApp({ children }: { children: React.ReactNod
                 <div className="text-muted text-[11px]">{perfil.rol.nombre}</div>
               </div>
             </Link>
+            {/* US19 (FR-108): el tema se cambia desde donde ya están los controles de la
+                sesión, que es el sitio del que el usuario se acuerda cuando lo busca. */}
+            <BotonTema />
             <BotonCerrarSesion />
           </div>
 

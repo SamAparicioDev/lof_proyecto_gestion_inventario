@@ -34,6 +34,9 @@ export interface OrdenCompra {
   readonly observaciones: string | null;
   readonly estado: EstadoOrdenCompra;
   readonly valorTotal: number;
+  /** US20 (FR-110): suma del IVA de las líneas. `valorTotal` sigue siendo la base gravable y el
+   *  total con impuesto se deriva sumando los dos — nunca se almacena. */
+  readonly valorIva: number;
   readonly motivoAnulacion: string | null;
 }
 
@@ -46,6 +49,10 @@ export interface DetalleOrdenCompra {
    *  el del ingreso —no este— el que alimenta el costo del inventario (FR-071). */
   readonly precioUnitario: number;
   readonly valorTotal: number;
+  /** US20 (FR-109): tasa aplicada a ESTA línea y el impuesto que resulta. `0` en todo lo
+   *  registrado antes de la historia. */
+  readonly tasaIva: number;
+  readonly valorIva: number;
 }
 
 /**

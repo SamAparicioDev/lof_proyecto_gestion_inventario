@@ -330,6 +330,8 @@ class RepositorioIngresosFalso implements RepositorioIngresos {
       observaciones: datos.observaciones,
       estado: 'PENDIENTE',
       valorTotal: datos.lineas.reduce((acumulado, linea) => acumulado + linea.cantidad * linea.precioUnitario, 0),
+      // US20: la carga masiva no captura impuestos, así que su ingreso sintético va sin IVA.
+      valorIva: 0,
       usuarioRegistraId: datos.usuarioId,
       motivoAnulacion: null,
       ordenCompraId: datos.ordenCompraId,

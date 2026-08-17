@@ -385,3 +385,63 @@ select.input option { background: #232532; color: #e9e9ed; }
     display: none !important;
   }
 }
+
+/* ============================================================================
+   MODO CLARO (US19, FR-108) — capa PROPIA, nunca dentro del bloque VENDORED.
+   ============================================================================
+
+   La cabecera de este archivo prohíbe editar los tokens de Nocturne a mano: vienen del
+   proyecto de diseño y tocarlos desincroniza el origen. Por eso el tema claro no reescribe
+   `:root`, sino que REDEFINE los tokens bajo `[data-tema='claro']`, que gana por
+   especificidad. Un `DesignSync` futuro sigue entrando limpio sobre `:root` y este bloque
+   se mantiene encima sin conflicto.
+
+   Solo hacen falta OCHO tokens porque Nocturne está construido casi entero con `color-mix`
+   sobre `--color-text`, `--color-bg`, `--color-surface`, `--color-divider` y `--color-accent`:
+   cambiando esos cinco se voltean botones, campos, tablas, tarjetas y diálogos de una vez.
+   Los tres restantes son los que NO se derivan y se romperían al invertir el fondo.
+
+   Lo que deliberadamente NO se toca:
+    - `--color-accent-800`/`--color-accent-100` y sus equivalentes neutrales: son el par de
+      relleno de los `.tag`, un chip oscuro con texto claro. Sobre blanco sigue leyéndose
+      perfecto, y voltearlo los convertiría en manchas pálidas sin contraste.
+    - `--color-neutral-900`: es el velo de `.dialog-backdrop`. Un diálogo atenúa la página
+      también en claro, así que el velo tiene que seguir siendo oscuro. */
+[data-tema='claro'] {
+  --color-bg: #f5f6fb;
+  --color-surface: #ffffff;
+  --color-text: #1b1d2a;
+
+  /* El acento del tema oscuro (#9184d9) sobre blanco da ~2.9:1 — por debajo del mínimo
+     legible. Se baja al escalón 700 de la MISMA rampa: mismo color de marca, 5.9:1. */
+  --color-accent: #5d5294;
+  --color-accent-2: #5c5783;
+
+  --color-divider: color-mix(in srgb, #1b1d2a 16%, transparent);
+
+  /* `--color-accent-300` no se usa aquí como "acento claro" sino como el color del TEXTO DE
+     ERROR de todos los formularios (127 usos). En oscuro es un lila claro; en claro tiene
+     que ser oscuro o el mensaje desaparece sobre blanco. Se le da un tono rojizo de la misma
+     familia: un error se lee antes si no es del color de la marca. */
+  --color-accent-300: #a3324b;
+
+  /* El resplandor de /login, que en oscuro es un azul más claro que el fondo: aquí tiene que
+     ir al revés (más oscuro que el blanco) para que el degradado siga viéndose. */
+  --color-bg-glow: #e6e8f6;
+
+  /* Las sombras de Nocturne son anillos de gris oscuro pensados sobre fondo negro; sobre
+     blanco quedan como bordes sucios. Se rebajan a anillos suaves + sombra difusa. */
+  --shadow-sm: 0 0 0 1px color-mix(in srgb, #1b1d2a 12%, transparent);
+  --shadow-md: 0 0 0 1px color-mix(in srgb, #1b1d2a 12%, transparent), 0 6px 18px rgba(27, 29, 42, 0.1);
+  --shadow-lg: 0 0 0 1px color-mix(in srgb, #1b1d2a 14%, transparent), 0 16px 40px rgba(27, 29, 42, 0.16);
+
+  /* Le dice al navegador que pinte en claro sus propios controles: scrollbars, el calendario
+     nativo de `<input type="date">` y el desplegable de los `<select>`. Sin esto quedan en
+     oscuro sobre una página clara. */
+  color-scheme: light;
+}
+
+/* Los dos ajustes manuales que el bloque de arriba no puede cubrir, porque son valores
+   literales escritos fuera de los tokens (ver las reglas originales unas líneas más arriba). */
+[data-tema='claro'] input[type='date']::-webkit-calendar-picker-indicator { filter: none; }
+[data-tema='claro'] select.input option { background: #ffffff; color: #1b1d2a; }
