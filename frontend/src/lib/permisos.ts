@@ -90,6 +90,16 @@ export const PERMISOS = {
   ORDENES_COMPRA_EDITAR: 'ordenes_compra.editar',
   ORDENES_COMPRA_ENVIAR: 'ordenes_compra.enviar',
   ORDENES_COMPRA_ANULAR: 'ordenes_compra.anular',
+
+  // US21 — cotizaciones. Mismo reparto que las órdenes de compra mirando al cliente: ver, crear
+  // y editar borradores lo tienen los tres roles; enviar, cerrar y anular quedan restringidos
+  // porque comprometen un precio frente a un tercero o generan una salida (FR-117).
+  COTIZACIONES_VER: 'cotizaciones.ver',
+  COTIZACIONES_CREAR: 'cotizaciones.crear',
+  COTIZACIONES_EDITAR: 'cotizaciones.editar',
+  COTIZACIONES_ENVIAR: 'cotizaciones.enviar',
+  COTIZACIONES_CERRAR: 'cotizaciones.cerrar',
+  COTIZACIONES_ANULAR: 'cotizaciones.anular',
 } as const;
 
 /**

@@ -139,6 +139,13 @@ const PERMISOS_DEL_SISTEMA = [
   { clave: 'ordenes_compra.editar', modulo: 'ordenes_compra', descripcion: 'Editar una orden de compra mientras sigue en borrador.' },
   { clave: 'ordenes_compra.enviar', modulo: 'ordenes_compra', descripcion: 'Marcar una orden como enviada al proveedor: compromete el gasto.' },
   { clave: 'ordenes_compra.anular', modulo: 'ordenes_compra', descripcion: 'Anular una orden de compra indicando el motivo.' },
+  // US21 (FR-117) — cotizaciones: el espejo de las órdenes de compra mirando al cliente.
+  { clave: 'cotizaciones.ver', modulo: 'cotizaciones', descripcion: 'Consultar las cotizaciones y su detalle.' },
+  { clave: 'cotizaciones.crear', modulo: 'cotizaciones', descripcion: 'Crear cotizaciones en borrador.' },
+  { clave: 'cotizaciones.editar', modulo: 'cotizaciones', descripcion: 'Editar una cotización mientras sigue en borrador.' },
+  { clave: 'cotizaciones.enviar', modulo: 'cotizaciones', descripcion: 'Marcar una cotización como enviada al cliente: compromete el precio ofrecido.' },
+  { clave: 'cotizaciones.cerrar', modulo: 'cotizaciones', descripcion: 'Registrar la respuesta del cliente: aceptar (genera la salida) o rechazar.' },
+  { clave: 'cotizaciones.anular', modulo: 'cotizaciones', descripcion: 'Anular una cotización indicando el motivo.' },
 ] as const;
 
 /**
@@ -156,6 +163,9 @@ const PERMISOS_OPERARIO = [
   'ordenes_compra.ver',
   'ordenes_compra.crear',
   'ordenes_compra.editar',
+  'cotizaciones.ver',
+  'cotizaciones.crear',
+  'cotizaciones.editar',
   'clientes.ver',
   'ingresos.ver',
   'ingresos.crear',
@@ -228,8 +238,14 @@ const PERMISOS_EXCLUSIVOS_ADMINISTRADOR = ['usuarios.gestionar', 'roles.gestiona
  * | ordenes_compra.editar      | ✔ | ✔ | ✔ | PUT /api/ordenes-compra/:id (US16)                                  |
  * | ordenes_compra.enviar      | ✔ | ✔ | — | POST /api/ordenes-compra/:id/enviar (US16)                          |
  * | ordenes_compra.anular      | ✔ | ✔ | — | POST /api/ordenes-compra/:id/anular (US16)                          |
+ * | cotizaciones.ver           | ✔ | ✔ | ✔ | GET /api/cotizaciones · /:id · /export (US21)                       |
+ * | cotizaciones.crear         | ✔ | ✔ | ✔ | POST /api/cotizaciones (US21)                                       |
+ * | cotizaciones.editar        | ✔ | ✔ | ✔ | PUT /api/cotizaciones/:id (US21)                                    |
+ * | cotizaciones.enviar        | ✔ | ✔ | — | POST /api/cotizaciones/:id/enviar (US21)                            |
+ * | cotizaciones.cerrar        | ✔ | ✔ | — | POST /api/cotizaciones/:id/{aceptar,rechazar} (US21)                |
+ * | cotizaciones.anular        | ✔ | ✔ | — | POST /api/cotizaciones/:id/anular (US21)                            |
  *
- * TOTALES: Administrador 42 · Gerente 40 · Operario 20 (de 42 permisos del catálogo).
+ * TOTALES: Administrador 48 · Gerente 46 · Operario 23 (de 48 permisos del catálogo).
  * (Eran 31/29/14 sobre 31 hasta US12; US15 agrega los cuatro de los catálogos, US16 los cinco
  * de órdenes de compra y US17 los dos de unidades de medida. Ninguno recorta nada de lo que ya tenía un rol — SC-013 se conserva
  * intacto, misma lectura que la nota de `inventario.ver_costos` de más abajo.)

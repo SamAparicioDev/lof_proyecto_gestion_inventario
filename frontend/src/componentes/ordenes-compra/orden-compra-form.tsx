@@ -373,6 +373,12 @@ export function OrdenCompraForm({ productos, ordenId, valoresIniciales, proveedo
                         </p>
                       )}
                     </td>
+                    <td style={{ width: 130 }}>
+                      <SelectorTasaIva
+                        indice={indice}
+                        registro={register(`lineas.${indice}.tasaIva`, { valueAsNumber: true })}
+                      />
+                    </td>
                     <td className="text-muted" style={{ whiteSpace: 'nowrap' }}>
                       {formatoMoneda(valorLinea)}
                     </td>

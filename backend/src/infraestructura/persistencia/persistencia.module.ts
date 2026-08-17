@@ -49,6 +49,7 @@ import { REPOSITORIO_PROYECTOS } from '../../dominio/puertos/repositorio-proyect
 import { REPOSITORIO_CATEGORIAS } from '../../dominio/puertos/repositorio-categorias';
 import { REPOSITORIO_PROVEEDORES } from '../../dominio/puertos/repositorio-proveedores';
 import { REPOSITORIO_UNIDADES_MEDIDA } from '../../dominio/puertos/repositorio-unidades-medida';
+import { REPOSITORIO_COTIZACIONES } from '../../dominio/puertos/repositorio-cotizaciones';
 import { REPOSITORIO_ORDENES_COMPRA } from '../../dominio/puertos/repositorio-ordenes-compra';
 import { SUGERENCIAS_COMPRA } from '../../dominio/puertos/sugerencias-compra';
 import { REPOSITORIO_ROLES } from '../../dominio/puertos/repositorio-roles';
@@ -65,6 +66,7 @@ import { RepositorioProyectosPrisma } from './repositorio-proyectos.prisma';
 import { RepositorioCategoriasPrisma } from './repositorio-categorias.prisma';
 import { RepositorioProveedoresPrisma } from './repositorio-proveedores.prisma';
 import { RepositorioUnidadesMedidaPrisma } from './repositorio-unidades-medida.prisma';
+import { RepositorioCotizacionesPrisma } from './repositorio-cotizaciones.prisma';
 import { RepositorioOrdenesCompraPrisma } from './repositorio-ordenes-compra.prisma';
 import { SugerenciasCompraPrisma } from './sugerencias-compra.prisma';
 import { RepositorioRolesPrisma } from './repositorio-roles.prisma';
@@ -89,6 +91,7 @@ import { UnidadDeTrabajo } from './unidad-de-trabajo';
     { provide: REPOSITORIO_PROVEEDORES, useClass: RepositorioProveedoresPrisma },
     { provide: REPOSITORIO_UNIDADES_MEDIDA, useClass: RepositorioUnidadesMedidaPrisma },
     { provide: REPOSITORIO_ORDENES_COMPRA, useClass: RepositorioOrdenesCompraPrisma },
+    { provide: REPOSITORIO_COTIZACIONES, useClass: RepositorioCotizacionesPrisma },
     { provide: SUGERENCIAS_COMPRA, useClass: SugerenciasCompraPrisma },
     { provide: REPOSITORIO_PERMISOS, useClass: RepositorioPermisosPrisma },
     { provide: REPOSITORIO_HISTORIAL_COSTOS, useClass: RepositorioHistorialCostosPrisma },
@@ -108,6 +111,7 @@ import { UnidadDeTrabajo } from './unidad-de-trabajo';
     REPOSITORIO_PROVEEDORES,
     REPOSITORIO_UNIDADES_MEDIDA,
     REPOSITORIO_ORDENES_COMPRA,
+    REPOSITORIO_COTIZACIONES,
     SUGERENCIAS_COMPRA,
     REPOSITORIO_PERMISOS,
     REPOSITORIO_HISTORIAL_COSTOS,

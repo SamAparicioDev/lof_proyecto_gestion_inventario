@@ -115,6 +115,16 @@ enum EstadoProveedor {
  * `RECIBIDA` significa que llegó el ingreso que la surte, no que el sistema haya sumado nada
  * por su cuenta.
  */
+enum EstadoCotizacion {
+  BORRADOR
+  ENVIADA
+  ACEPTADA
+  RECHAZADA
+  ANULADA
+
+  @@map("estado_cotizacion")
+}
+
 enum EstadoOrdenCompra {
   BORRADOR
   ENVIADA
@@ -330,6 +340,8 @@ model Usuario {
   salidasModificadas        Salida[]                 @relation("SalidaModificadoPor")
   movimientosGenerados      MovimientoInventario[]   @relation("MovimientoUsuario")
   cambiosDeCosto            HistorialCostoProducto[] @relation("CambioCostoUsuario")
+  cotizacionesCreadas       Cotizacion[]             @relation("CotizacionCreadaPor")
+  cotizacionesModificadas   Cotizacion[]             @relation("CotizacionModificadaPor")
 
   @@map("usuarios")
 }
@@ -385,6 +397,7 @@ model Producto {
   detallesOrdenesCompra DetalleOrdenCompra[]
   movimientos           MovimientoInventario[]
   historialCostos       HistorialCostoProducto[]
+  detallesCotizaciones  DetalleCotizacion[]
 
   @@index([descripcion])
   @@index([estado])
@@ -549,7 +562,8 @@ model Cliente {
   usuarioModificacionId BigInt?   @map("usuario_modificacion_id")
   usuarioModificacion   Usuario?  @relation("ClienteModificadoPor", fields: [usuarioModificacionId], references: [id])
 
-  proyectos Proyecto[]
+  proyectos    Proyecto[]
+  cotizaciones Cotizacion[]
 
   @@index([nombre])
   @@map("clientes")
@@ -579,8 +593,9 @@ model Proyecto {
   usuarioModificacionId BigInt?   @map("usuario_modificacion_id")
   usuarioModificacion   Usuario?  @relation("ProyectoModificadoPor", fields: [usuarioModificacionId], references: [id])
 
-  salidas     Salida[]
-  movimientos MovimientoInventario[]
+  salidas      Salida[]
+  movimientos  MovimientoInventario[]
+  cotizaciones Cotizacion[]
 
   @@unique([clienteId, nombre])
   @@index([clienteId, estado])
@@ -775,7 +790,12 @@ model Salida {
   usuarioModificacionId BigInt?   @map("usuario_modificacion_id")
   usuarioModificacion   Usuario?  @relation("SalidaModificadoPor", fields: [usuarioModificacionId], references: [id])
 
-  detalles DetalleSalida[]
+  detalles     DetalleSalida[]
+  /**
+   * US21 (FR-115): cotización que originó esta salida, o `null` si se registró sin oferta previa.
+   */
+  cotizacionId BigInt?         @map("cotizacion_id")
+  cotizacion   Cotizacion?     @relation(fields: [cotizacionId], references: [id])
 
   @@index([proyectoId, estado])
   @@index([fechaSalida])
@@ -869,4 +889,79 @@ model Contador {
   valor BigInt @default(0)
 
   @@map("contadores")
+}
+
+// ============================================================================
+// Cotizaciones (US21, FR-112…FR-117) — la oferta al cliente
+// ============================================================================
+
+/**
+ * Cotización: lo que se le ofrece a un cliente antes de que exista una salida. NO mueve
+ * inventario en ninguno de sus estados (FR-113); al aceptarla nace una `Salida` PENDIENTE
+ * enlazada por `salidas.cotizacion_id`, y el stock se compromete cuando esa salida se confirma.
+ * `clienteId` viaja además del `proyectoId` —a diferencia de `Salida`, que solo guarda el
+ * proyecto— porque una cotización se filtra y se lista POR CLIENTE, que es la pregunta del
+ * módulo ("¿qué le ofrecí a este cliente?"). Deducirlo por el proyecto en cada consulta
+ * obligaría a un JOIN en el índice que más se usa.
+ */
+model Cotizacion {
+  id              BigInt           @id @default(autoincrement())
+  /**
+   * Correlativo emitido por el puerto Contadores al crear (FR-112).
+   */
+  numero          BigInt           @unique
+  clienteId       BigInt           @map("cliente_id")
+  cliente         Cliente          @relation(fields: [clienteId], references: [id])
+  proyectoId      BigInt           @map("proyecto_id")
+  proyecto        Proyecto         @relation(fields: [proyectoId], references: [id])
+  fecha           DateTime         @db.Date
+  /**
+   * Hasta cuándo se sostiene el precio. "Vencida" se deriva de esta fecha, nunca es un estado.
+   */
+  fechaValidez    DateTime         @map("fecha_validez") @db.Date
+  observaciones   String?          @db.Text
+  estado          EstadoCotizacion @default(BORRADOR)
+  /**
+   * Base gravable; el IVA va aparte y el total se deriva (US20).
+   */
+  valorTotal      Decimal          @default(0) @map("valor_total") @db.Decimal(14, 2)
+  valorIva        Decimal          @default(0) @map("valor_iva") @db.Decimal(14, 2)
+  motivoAnulacion String?          @map("motivo_anulacion") @db.Text
+
+  fechaCreacion         DateTime  @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
+  usuarioCreacionId     BigInt    @map("usuario_creacion_id")
+  usuarioCreacion       Usuario   @relation("CotizacionCreadaPor", fields: [usuarioCreacionId], references: [id])
+  fechaModificacion     DateTime? @map("fecha_modificacion") @db.Timestamptz(6)
+  usuarioModificacionId BigInt?   @map("usuario_modificacion_id")
+  usuarioModificacion   Usuario?  @relation("CotizacionModificadaPor", fields: [usuarioModificacionId], references: [id])
+
+  detalles DetalleCotizacion[]
+  salidas  Salida[]
+
+  @@index([clienteId, estado])
+  @@index([proyectoId])
+  @@index([fecha])
+  @@index([estado])
+  @@map("cotizaciones")
+}
+
+/**
+ * Línea de cotización. `ON DELETE CASCADE` solo se ejerce mientras la cotización es BORRADOR
+ * (editarla reescribe sus líneas); una ENVIADA ya no se toca (FR-114).
+ */
+model DetalleCotizacion {
+  id             BigInt     @id @default(autoincrement())
+  cotizacionId   BigInt     @map("cotizacion_id")
+  cotizacion     Cotizacion @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
+  productoId     BigInt     @map("producto_id")
+  producto       Producto   @relation(fields: [productoId], references: [id])
+  cantidad       Decimal    @db.Decimal(12, 2)
+  precioUnitario Decimal    @map("precio_unitario") @db.Decimal(14, 2)
+  valorTotal     Decimal    @map("valor_total") @db.Decimal(14, 2)
+  tasaIva        Decimal    @default(0) @map("tasa_iva") @db.Decimal(5, 2)
+  valorIva       Decimal    @default(0) @map("valor_iva") @db.Decimal(14, 2)
+
+  @@unique([cotizacionId, productoId])
+  @@index([productoId])
+  @@map("detalles_cotizaciones")
 }

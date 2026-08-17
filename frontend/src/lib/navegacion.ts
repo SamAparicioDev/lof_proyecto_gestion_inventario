@@ -97,6 +97,7 @@ export const ELEMENTOS_NAVEGACION: ElementoNavegacion[] = [
   },
   { href: '/ingresos', etiqueta: 'Ingresos', icono: ArrowSquareIn, permiso: PERMISOS.INGRESOS_VER },
   { href: '/inventario', etiqueta: 'Inventario', icono: Package, permiso: PERMISOS.INVENTARIO_VER },
+  { href: '/cotizaciones', etiqueta: 'Cotizaciones', icono: Receipt, permiso: PERMISOS.COTIZACIONES_VER },
   { href: '/salidas', etiqueta: 'Salidas', icono: ArrowSquareOut, permiso: PERMISOS.SALIDAS_VER },
   {
     href: '/clientes',

@@ -523,14 +523,14 @@ Proveedores — MISMO patrón que categorías (FR-091), con dos diferencias que 
 
 **Sigue el patrón de US16**: es el mismo documento-compromiso que una orden de compra, mirando al cliente en vez de al proveedor.
 
-- [ ] T198 [US21] Migración `*_cotizaciones`: tablas `cotizaciones`/`detalles_cotizaciones`, `salidas.cotizacion_id`, contador `cotizacion`, y los permisos con su matriz rol→permiso
-- [ ] T199 [P] [US21] Permisos de cotizaciones en el seed (ver/crear/editar los tres roles; enviar/cerrar/anular restringidos — FR-117)
-- [ ] T200 [P] [US21] Esquemas `packages/compartido/src/esquemas/cotizaciones.ts` con líneas que ya nacen con `tasaIva`
-- [ ] T201 [US21] Dominio, adaptador Prisma, casos de uso y `ControladorCotizaciones` — espejo de órdenes de compra, con `vencida` derivada de la fecha de validez
-- [ ] T202 [US21] Aceptar → salida PENDIENTE con las mismas líneas, enlazada por `salidas.cotizacion_id`, sin mover stock (FR-115)
-- [ ] T203 [US21] Exportación a PDF/Excel con el logo institucional y las tres cifras (FR-116)
-- [ ] T204 [US21] Frontend `/cotizaciones` completo: listado con filtros y badge de vencida, formulario, ficha con acciones por estado y enlace a la salida generada
-- [ ] T205 [P] [US21] Pruebas de integración: correlativo; solo BORRADOR editable; aceptar genera la salida enlazada SIN mover stock; rechazar no genera nada; vencida derivada, no marcada
+- [x] T198 [US21] Migración `*_cotizaciones`: tablas `cotizaciones`/`detalles_cotizaciones`, `salidas.cotizacion_id`, contador `cotizacion`, y los permisos con su matriz rol→permiso
+- [x] T199 [P] [US21] Permisos de cotizaciones en el seed (ver/crear/editar los tres roles; enviar/cerrar/anular restringidos — FR-117)
+- [x] T200 [P] [US21] Esquemas `packages/compartido/src/esquemas/cotizaciones.ts` con líneas que ya nacen con `tasaIva`
+- [x] T201 [US21] Dominio, adaptador Prisma, casos de uso y `ControladorCotizaciones` — espejo de órdenes de compra, con `vencida` derivada de la fecha de validez
+- [x] T202 [US21] Aceptar → salida PENDIENTE con las mismas líneas, enlazada por `salidas.cotizacion_id`, sin mover stock (FR-115)
+- [x] T203 [US21] Exportación a PDF/Excel con el logo institucional y las tres cifras (FR-116)
+- [x] T204 [US21] Frontend `/cotizaciones` completo: listado con filtros y badge de vencida, formulario, ficha con acciones por estado y enlace a la salida generada
+- [x] T205 [P] [US21] Pruebas de integración: correlativo; solo BORRADOR editable; aceptar genera la salida enlazada SIN mover stock; rechazar no genera nada; vencida derivada, no marcada
 
 **Checkpoint**: Una oferta al cliente vive en el sistema desde que se hace hasta que se convierte en salida
 
