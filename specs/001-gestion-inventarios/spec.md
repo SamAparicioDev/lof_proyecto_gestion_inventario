@@ -386,6 +386,24 @@ Antes de que exista una salida hay una oferta: al cliente se le pasa un document
 
 ---
 
+### User Story 22 - Buscadores que encuentran (Priority: P2)
+
+Todos los listados tienen su caja de búsqueda, pero escribir en ella lo que uno diría en voz alta no funciona: "cemento gris" no encuentra el "Cemento gris 50 kg" porque hasta ahora la frase entera viajaba como una sola subcadena, y solo coincidía si esas dos palabras aparecían juntas, en ese orden y con ese espacio exacto. El resultado práctico es que la gente escribe una palabra, no encuentra, y deja de usar el buscador.
+
+**Why this priority**: no falta ninguna funcionalidad —los datos están y los filtros funcionan— pero la vía más rápida para llegar a ellos está rota, y se usa decenas de veces al día.
+
+**Independent Test**: Se prueba escribiendo dos palabras que están en campos distintos del mismo registro y comprobando que lo encuentra. Entrega valor por sí sola.
+
+**Acceptance Scenarios**:
+
+1. **Given** un producto "Cemento gris 50 kg", **When** el usuario busca `cemento gris`, **Then** lo encuentra; y también buscando `gris cemento`, porque el orden de las palabras no importa.
+2. **Given** varios productos que contienen "cemento", **When** el usuario añade una palabra más, **Then** el resultado se ESTRECHA — cada término que se escribe filtra más, nunca menos.
+3. **Given** un producto cuyo SKU es "CEM-001", **When** el usuario busca `cem 001` sin el guion, **Then** lo encuentra.
+4. **Given** una cotización N.º 42 del cliente Jumbo, **When** el usuario busca `42 jumbo`, `COT-000042` o `jumbo`, **Then** las tres formas llegan al mismo documento.
+5. **Given** una consulta con palabras que no están en ningún campo, **When** se busca, **Then** el listado sale vacío: el buscador sigue siendo preciso, no devuelve "lo más parecido".
+
+---
+
 ### Edge Cases
 
 - **Salida mayor al disponible**: debe rechazarse siempre, incluida la carrera entre dos usuarios simultáneos sobre el mismo producto (solo una confirmación puede ganar).
@@ -580,6 +598,7 @@ que recordar por separado.
 - **FR-116**: Las cotizaciones DEBEN poder exportarse a PDF con el logo institucional y las tres cifras del documento, en el formato que se le envía al cliente.
 - **FR-117**: Ver, crear y editar borradores de cotización DEBEN estar disponibles para los tres roles; enviarla, cerrarla (aceptar/rechazar) y anularla DEBEN quedar restringidos, porque comprometen un precio frente a un tercero o generan una salida.
 
+- **FR-118**: Los buscadores de texto de los listados DEBEN partir lo escrito en TÉRMINOS y exigir que CADA término aparezca en ALGUNO de los campos buscables de la fila (Y entre términos, O entre campos). El orden de las palabras NO DEBE importar, y cada término añadido DEBE estrechar el resultado. Los campos buscables de cada listado DEBEN incluir aquello por lo que se pregunta de verdad un registro —descripción, ubicación y categoría de un producto; NIT y ciudad de un cliente; nombre del proyecto de una cotización—, no solo su identificador. En los documentos con correlativo, los DÍGITOS de un término DEBEN cruzarse con el número, de modo que `COT-000042`, `000042` y `42` lleguen al mismo documento.
 
 **Auditoría y trazabilidad (transversal)**
 

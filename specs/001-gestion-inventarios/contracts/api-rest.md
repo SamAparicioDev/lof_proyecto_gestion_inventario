@@ -397,6 +397,35 @@ exportable:
   en una clasificación previa de todo el catálogo; el sitio donde esos productos se completan es
   su ficha, de uno en uno.
 
+## El parámetro `buscar` de los listados (US22, FR-118)
+
+Todos los listados con búsqueda de texto (`/api/inventario`, `/api/productos`, `/api/clientes`,
+`/api/ingresos`, `/api/ordenes-compra`, `/api/cotizaciones`, `/api/categorias`,
+`/api/proveedores`, `/api/unidades-medida`, `/api/reportes/inventario`) interpretan `buscar` de
+la MISMA forma:
+
+- Lo escrito se parte por espacios en **términos** (máximo 10; los sobrantes se ignoran).
+- Una fila coincide si **cada término** aparece en **alguno** de los campos buscables de ese
+  listado — Y entre términos, O entre campos.
+- La comparación es por SUBCADENA e ignora mayúsculas. **No ignora tildes**: `ferreteria` no
+  encuentra "Ferretería" (haría falta la extensión `unaccent` de PostgreSQL).
+- Una consulta vacía o de solo espacios NO filtra: devuelve el listado completo.
+- No hay ranking ni orden por relevancia: cada listado conserva su orden propio (fecha, número,
+  nombre), que es el que el usuario ya conoce.
+
+Campos buscables por listado:
+
+| Listado | Campos |
+|---|---|
+| inventario / productos | SKU, descripción, ubicación, nombre de la categoría |
+| clientes | nombre, NIT, ciudad, email, teléfono |
+| ingresos | número de factura, nombre del proveedor, observaciones |
+| órdenes de compra | nombre del proveedor, observaciones, **número** (dígitos del término) |
+| cotizaciones | nombre del cliente, nombre del proyecto, observaciones, **número** |
+| categorías | nombre, descripción |
+| proveedores | nombre, NIT, email, teléfono |
+| unidades de medida | nombre, abreviatura |
+
 ## IVA en las líneas (US20, FR-109…FR-111)
 
 Los bodies de ingresos, salidas, órdenes de compra y cotizaciones aceptan `tasaIva` en CADA

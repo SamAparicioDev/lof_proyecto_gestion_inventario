@@ -138,7 +138,7 @@ export default async function PaginaIngresos({
             id="buscar"
             name="buscar"
             className="input"
-            placeholder="Factura o proveedor"
+            placeholder="Factura o proveedor — ej. formex 0001"
             defaultValue={parametros.buscar}
           />
         </CampoFiltro>

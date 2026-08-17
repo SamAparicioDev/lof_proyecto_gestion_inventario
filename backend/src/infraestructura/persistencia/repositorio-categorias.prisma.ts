@@ -13,6 +13,7 @@
  *
  * Implementa: FR-084…FR-088.
  */
+import { construirBusquedaPorTerminos } from './busqueda-por-terminos';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Duplicado, EstadoInvalido, NoEncontrado } from '../../dominio/comunes/errores';
@@ -39,7 +40,13 @@ export class RepositorioCategoriasPrisma implements RepositorioCategorias {
   async listar(filtros: FiltrosListarCategorias): Promise<CategoriaConUso[]> {
     const where: Prisma.CategoriaWhereInput = {};
     if (filtros.estado) where.estado = filtros.estado;
-    if (filtros.buscar) where.nombre = { contains: filtros.buscar, mode: 'insensitive' };
+    // US22 (FR-118): por términos y también sobre la descripción, que es donde el usuario
+    // escribió de qué trata la categoría.
+    const busqueda = construirBusquedaPorTerminos<Prisma.CategoriaWhereInput>(filtros.buscar, [
+      (termino) => ({ nombre: { contains: termino, mode: 'insensitive' } }),
+      (termino) => ({ descripcion: { contains: termino, mode: 'insensitive' } }),
+    ]);
+    if (busqueda) Object.assign(where, busqueda);
 
     const [categorias, usos] = await Promise.all([
       this.prisma.categoria.findMany({ where, orderBy: { nombre: 'asc' } }),

@@ -214,7 +214,7 @@ export default async function PaginaInventario({
             id="buscar"
             name="buscar"
             className="input"
-            placeholder="SKU o descripción"
+            placeholder="SKU, descripción, ubicación o categoría — ej. cemento gris"
             defaultValue={parametros.buscar}
           />
         </CampoFiltro>

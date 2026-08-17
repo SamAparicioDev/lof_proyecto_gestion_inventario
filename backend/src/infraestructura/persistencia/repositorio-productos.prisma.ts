@@ -27,6 +27,7 @@
  * Implementa: FR-010 (alta/edición), FR-011 (alta rápida), FR-012 (baja lógica), FR-071/
  * FR-072/FR-074 (costo corregible con registro atómico, solo si cambió).
  */
+import { construirBusquedaPorTerminos } from './busqueda-por-terminos';
 import { Injectable } from '@nestjs/common';
 import { Prisma, type EstadoProducto as EstadoProductoPrisma } from '@prisma/client';
 
@@ -263,14 +264,18 @@ function soloTextosPresentes(valores: readonly (string | null)[]): string[] {
 
 /** Filtro `buscar` de SKU/descripción (búsqueda insensible a mayúsculas — FR-023). */
 function construirWhereBusqueda(buscar: string | undefined): Prisma.ProductoWhereInput {
-  const termino = buscar?.trim();
-  if (!termino) return {};
-  return {
-    OR: [
-      { sku: { contains: termino, mode: 'insensitive' } },
-      { descripcion: { contains: termino, mode: 'insensitive' } },
-    ],
-  };
+  // US22 (FR-118): "cemento gris" encuentra "Cemento gris 50 kg", y "cem 001" encuentra
+  // "CEM-001" aunque no se escriba el guion. Se añaden ubicación y categoría a los campos
+  // buscables: son los dos datos por los que se pregunta un producto cuando no se recuerda su
+  // SKU ("lo que está en la bodega A").
+  return (
+    construirBusquedaPorTerminos<Prisma.ProductoWhereInput>(buscar, [
+      (termino) => ({ sku: { contains: termino, mode: 'insensitive' } }),
+      (termino) => ({ descripcion: { contains: termino, mode: 'insensitive' } }),
+      (termino) => ({ ubicacion: { contains: termino, mode: 'insensitive' } }),
+      (termino) => ({ categoria: { nombre: { contains: termino, mode: 'insensitive' } } }),
+    ]) ?? {}
+  );
 }
 
 /**

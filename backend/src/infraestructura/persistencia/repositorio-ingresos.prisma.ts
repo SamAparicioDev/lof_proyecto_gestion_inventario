@@ -20,6 +20,7 @@
  * distinto del vigente deja su registro en `historial_costos_producto` con
  * `origen: RECEPCION_INGRESO`, dentro de la misma transacción — ver TSDoc de `recibir`).
  */
+import { construirBusquedaPorTerminos } from './busqueda-por-terminos';
 import {
   impuestosDeDocumento,
   impuestosDeLinea,
@@ -427,15 +428,14 @@ const ORDEN_LISTADO_INGRESOS: Prisma.IngresoOrderByWithRelationInput[] = [
 /** Filtro `buscar` (factura/proveedor) + estado + rango de `fechaRecepcion` (FR-018). */
 function construirWhereListarIngresos(filtros: CriteriosIngresos): Prisma.IngresoWhereInput {
   const condiciones: Prisma.IngresoWhereInput[] = [];
-  const termino = filtros.buscar?.trim();
-  if (termino) {
-    condiciones.push({
-      OR: [
-        { numeroFactura: { contains: termino, mode: 'insensitive' } },
-        { proveedor: { nombre: { contains: termino, mode: 'insensitive' } } },
-      ],
-    });
-  }
+  // US22 (FR-118): "formex 0001" encuentra la factura de ese proveedor sin tener que escribir
+  // el número completo ni acertar el orden.
+  const busqueda = construirBusquedaPorTerminos<Prisma.IngresoWhereInput>(filtros.buscar, [
+    (termino) => ({ numeroFactura: { contains: termino, mode: 'insensitive' } }),
+    (termino) => ({ proveedor: { nombre: { contains: termino, mode: 'insensitive' } } }),
+    (termino) => ({ observaciones: { contains: termino, mode: 'insensitive' } }),
+  ]);
+  if (busqueda) condiciones.push(busqueda);
   // US13 (FR-075), reescrito en US15 (FR-091): el filtro nació como subcadena sobre la columna
   // de texto y ahora es una igualdad por id del catálogo — se elige de un selector, así que ya no
   // hay nada que "escribir parecido". Sigue sin ser redundante con el `buscar` de arriba, que

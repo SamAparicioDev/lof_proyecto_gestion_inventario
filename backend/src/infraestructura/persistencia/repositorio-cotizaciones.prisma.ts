@@ -22,6 +22,7 @@
  *
  * Implementa: FR-112, FR-114, FR-115, FR-116.
  */
+import { construirBusquedaPorTerminos, digitosDelTermino } from './busqueda-por-terminos';
 import { Injectable } from '@nestjs/common';
 import {
   Prisma,
@@ -295,17 +296,16 @@ function aLineaPrisma(linea: LineaNuevaCotizacion) {
 function construirWhere(filtros: CriteriosCotizaciones): Prisma.CotizacionWhereInput {
   const condiciones: Prisma.CotizacionWhereInput[] = [];
 
-  const termino = filtros.buscar?.trim();
-  if (termino) {
-    const alternativas: Prisma.CotizacionWhereInput[] = [
-      { cliente: { nombre: { contains: termino, mode: 'insensitive' } } },
-    ];
-    // El número es un entero, así que solo se cruza cuando lo escrito ES un número — buscar
-    // "3M" no debe reventar la consulta ni devolver un resultado arbitrario.
-    const soloDigitos = termino.replace(/\D/g, '');
-    if (soloDigitos !== '') alternativas.push({ numero: BigInt(soloDigitos) });
-    condiciones.push({ OR: alternativas });
-  }
+  // US22 (FR-118) — mismo criterio que las órdenes de compra, mirando al cliente: "cot 42",
+  // "jumbo torre" o "000042" llegan al mismo documento. También se busca por el nombre del
+  // PROYECTO, que es como se identifica una oferta cuando el cliente tiene varias obras.
+  const busqueda = construirBusquedaPorTerminos<Prisma.CotizacionWhereInput>(filtros.buscar, [
+    (termino) => ({ cliente: { nombre: { contains: termino, mode: 'insensitive' } } }),
+    (termino) => ({ proyecto: { nombre: { contains: termino, mode: 'insensitive' } } }),
+    (termino) => ({ observaciones: { contains: termino, mode: 'insensitive' } }),
+    (termino) => ({ numero: digitosDelTermino(termino) ?? BigInt(-1) }),
+  ]);
+  if (busqueda) condiciones.push(busqueda);
 
   if (filtros.clienteId) condiciones.push({ clienteId: BigInt(filtros.clienteId) });
   if (filtros.estado) condiciones.push({ estado: filtros.estado });

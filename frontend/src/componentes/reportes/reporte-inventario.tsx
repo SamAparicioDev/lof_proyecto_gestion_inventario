@@ -139,7 +139,7 @@ export function PanelReporteInventario() {
           <input
             id="buscar"
             className="input"
-            placeholder="SKU o descripción"
+            placeholder="SKU, descripción, ubicación o categoría — ej. cemento gris"
             {...register('buscar', { setValueAs: vacioComoTextoIndefinido })}
           />
         </CampoFiltro>

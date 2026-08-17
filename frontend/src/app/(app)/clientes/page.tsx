@@ -121,7 +121,7 @@ export default async function PaginaClientes({
             id="buscar"
             name="buscar"
             className="input"
-            placeholder="Nombre o NIT"
+            placeholder="Nombre, NIT o ciudad — ej. constructora medellín"
             defaultValue={parametros.buscar}
           />
         </CampoFiltro>

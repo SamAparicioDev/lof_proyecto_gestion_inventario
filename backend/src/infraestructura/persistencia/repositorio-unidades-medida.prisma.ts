@@ -9,6 +9,7 @@
  *
  * Implementa: FR-101 (dos unicidades), FR-104 (búsqueda por nombre o abreviatura).
  */
+import { construirBusquedaPorTerminos } from './busqueda-por-terminos';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Duplicado, EstadoInvalido, NoEncontrado } from '../../dominio/comunes/errores';
@@ -40,14 +41,13 @@ export class RepositorioUnidadesMedidaPrisma implements RepositorioUnidadesMedid
   async listar(filtros: FiltrosListarUnidadesMedida): Promise<UnidadMedidaConUso[]> {
     const where: Prisma.UnidadMedidaWhereInput = {};
     if (filtros.estado) where.estado = filtros.estado;
-    if (filtros.buscar) {
-      // Se busca en los DOS textos: quien escribe "kg" en el buscador espera encontrar
-      // "Kilogramo", y quien escribe "kilo" también.
-      where.OR = [
-        { nombre: { contains: filtros.buscar, mode: 'insensitive' } },
-        { abreviatura: { contains: filtros.buscar, mode: 'insensitive' } },
-      ];
-    }
+    // Se busca en los DOS textos: quien escribe "kg" espera encontrar "Kilogramo", y quien
+    // escribe "kilo" también. Desde US22 (FR-118), además, por términos.
+    const busqueda = construirBusquedaPorTerminos<Prisma.UnidadMedidaWhereInput>(filtros.buscar, [
+      (termino) => ({ nombre: { contains: termino, mode: 'insensitive' } }),
+      (termino) => ({ abreviatura: { contains: termino, mode: 'insensitive' } }),
+    ]);
+    if (busqueda) Object.assign(where, busqueda);
 
     const [unidades, usos] = await Promise.all([
       this.prisma.unidadMedida.findMany({ where, orderBy: { nombre: 'asc' } }),

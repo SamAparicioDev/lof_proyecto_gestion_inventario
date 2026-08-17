@@ -16,6 +16,7 @@
  *
  * Implementa: FR-034 (alta/edición de cliente), FR-035 (unicidad de NIT).
  */
+import { construirBusquedaPorTerminos } from './busqueda-por-terminos';
 import { Injectable } from '@nestjs/common';
 import { Prisma, type EstadoCliente as EstadoClientePrisma } from '@prisma/client';
 import { Duplicado, NoEncontrado } from '../../dominio/comunes/errores';
@@ -157,15 +158,17 @@ export class RepositorioClientesPrisma implements RepositorioClientes {
 /** Filtro `buscar` (nombre/NIT, insensible a mayúsculas) + estado (`GET /api/clientes`). */
 function construirWhereListarClientes(filtros: FiltrosListarClientes): Prisma.ClienteWhereInput {
   const condiciones: Prisma.ClienteWhereInput[] = [];
-  const termino = filtros.buscar?.trim();
-  if (termino) {
-    condiciones.push({
-      OR: [
-        { nombre: { contains: termino, mode: 'insensitive' } },
-        { nit: { contains: termino, mode: 'insensitive' } },
-      ],
-    });
-  }
+  // US22 (FR-118): por términos y sobre todo lo que identifica a un cliente. La ciudad y el
+  // contacto entran como campos buscables porque son la forma natural de dar con uno cuando no
+  // se recuerda el nombre exacto ("el de Medellín").
+  const busqueda = construirBusquedaPorTerminos<Prisma.ClienteWhereInput>(filtros.buscar, [
+    (termino) => ({ nombre: { contains: termino, mode: 'insensitive' } }),
+    (termino) => ({ nit: { contains: termino, mode: 'insensitive' } }),
+    (termino) => ({ ciudad: { contains: termino, mode: 'insensitive' } }),
+    (termino) => ({ email: { contains: termino, mode: 'insensitive' } }),
+    (termino) => ({ telefono: { contains: termino, mode: 'insensitive' } }),
+  ]);
+  if (busqueda) condiciones.push(busqueda);
   if (filtros.estado) condiciones.push({ estado: mapearEstadoClienteAPrisma(filtros.estado) });
   // US13 (FR-075/FR-076): igualdad exacta — el valor sale del selector de `ciudades()`, no de
   // que el usuario acierte la ortografía de un texto libre que capturó otra persona.

@@ -128,7 +128,7 @@ export default async function PaginaOrdenesCompra({
             id="buscar"
             name="buscar"
             className="input"
-            placeholder="Número o proveedor"
+            placeholder="Número o proveedor — ej. 42 formex"
             defaultValue={parametros.buscar}
           />
         </CampoFiltro>

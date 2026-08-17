@@ -141,7 +141,7 @@ export default async function PaginaCotizaciones({
             id="buscar"
             name="buscar"
             className="input"
-            placeholder="Número o cliente"
+            placeholder="Número, cliente o proyecto — ej. 42 jumbo"
             defaultValue={parametros.buscar}
           />
         </CampoFiltro>

@@ -17,6 +17,7 @@
  *
  * Implementa: FR-094…FR-097 y FR-099 (`marcarRecibida`, que invoca el flujo del ingreso).
  */
+import { construirBusquedaPorTerminos, digitosDelTermino } from './busqueda-por-terminos';
 import {
   impuestosDeDocumento,
   impuestosDeLinea,
@@ -255,17 +256,20 @@ function aLineaPrisma(linea: LineaNuevaOrdenCompra) {
 function construirWhere(filtros: CriteriosOrdenesCompra): Prisma.OrdenCompraWhereInput {
   const condiciones: Prisma.OrdenCompraWhereInput[] = [];
 
-  const termino = filtros.buscar?.trim();
-  if (termino) {
-    const alternativas: Prisma.OrdenCompraWhereInput[] = [
-      { proveedor: { nombre: { contains: termino, mode: 'insensitive' } } },
-    ];
-    // El número es un entero, así que solo se cruza cuando lo escrito ES un número — buscar
-    // "3M" no debe reventar la consulta ni devolver un resultado arbitrario.
-    const soloDigitos = termino.replace(/\D/g, '');
-    if (soloDigitos !== '') alternativas.push({ numero: BigInt(soloDigitos) });
-    condiciones.push({ OR: alternativas });
-  }
+  // US22 (FR-118): "oc 42 formex" encuentra la orden 42 de ese proveedor. De cada término se
+  // extraen sus dígitos para cruzarlos con el correlativo, así que "OC-000042", "42" y "oc 42"
+  // llegan al mismo sitio.
+  const busqueda = construirBusquedaPorTerminos<Prisma.OrdenCompraWhereInput>(filtros.buscar, [
+    (termino) => ({ proveedor: { nombre: { contains: termino, mode: 'insensitive' } } }),
+    (termino) => ({ observaciones: { contains: termino, mode: 'insensitive' } }),
+    (termino) => {
+      const numero = digitosDelTermino(termino);
+      // Un término sin dígitos no puede coincidir con el correlativo: `numero: -1` es una
+      // alternativa que nunca acierta y deja que decidan los otros campos.
+      return { numero: numero ?? BigInt(-1) };
+    },
+  ]);
+  if (busqueda) condiciones.push(busqueda);
 
   if (filtros.proveedorId) condiciones.push({ proveedorId: BigInt(filtros.proveedorId) });
   if (filtros.estado) condiciones.push({ estado: filtros.estado });

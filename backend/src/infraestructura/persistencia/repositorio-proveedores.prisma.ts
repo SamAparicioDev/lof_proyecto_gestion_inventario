@@ -9,6 +9,7 @@
  *
  * Implementa: FR-091…FR-093.
  */
+import { construirBusquedaPorTerminos } from './busqueda-por-terminos';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Duplicado, EstadoInvalido, NoEncontrado } from '../../dominio/comunes/errores';
@@ -38,7 +39,15 @@ export class RepositorioProveedoresPrisma implements RepositorioProveedores {
   async listar(filtros: FiltrosListarProveedores): Promise<ProveedorConUso[]> {
     const where: Prisma.ProveedorWhereInput = {};
     if (filtros.estado) where.estado = filtros.estado;
-    if (filtros.buscar) where.nombre = { contains: filtros.buscar, mode: 'insensitive' };
+    // US22 (FR-118): un proveedor se busca por su nombre, pero también por su NIT o su
+    // contacto cuando es lo único que se tiene a mano.
+    const busqueda = construirBusquedaPorTerminos<Prisma.ProveedorWhereInput>(filtros.buscar, [
+      (termino) => ({ nombre: { contains: termino, mode: 'insensitive' } }),
+      (termino) => ({ nit: { contains: termino, mode: 'insensitive' } }),
+      (termino) => ({ email: { contains: termino, mode: 'insensitive' } }),
+      (termino) => ({ telefono: { contains: termino, mode: 'insensitive' } }),
+    ]);
+    if (busqueda) Object.assign(where, busqueda);
 
     const [proveedores, usos] = await Promise.all([
       this.prisma.proveedor.findMany({ where, orderBy: { nombre: 'asc' } }),
