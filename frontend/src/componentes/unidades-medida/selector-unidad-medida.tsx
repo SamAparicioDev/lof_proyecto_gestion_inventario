@@ -20,7 +20,8 @@
  * una desactivada, esa se añade a la lista. Sin eso, abrir la ficha de un producto viejo
  * mostraría el campo vacío y guardarlo obligaría a cambiarle la unidad sin quererlo.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { SelectorBuscable } from '@/componentes/comunes/selector-buscable';
 import { ErrorApi } from '@/lib/api/cliente';
 import { listarUnidadesMedida, type UnidadMedidaListada } from '@/lib/api/unidades-medida';
 
@@ -71,25 +72,29 @@ export function SelectorUnidadMedida({
     opciones.unshift({ ...unidadActual, estado: 'INACTIVA', cantidadProductos: 0 });
   }
 
+  const opcionesBuscables = useMemo(
+    () =>
+      opciones.map((unidad) => ({
+        valor: unidad.id,
+        etiqueta: `${unidad.nombre} (${unidad.abreviatura})${unidad.estado === 'INACTIVA' ? ' — inactiva' : ''}`,
+        textosBuscables: [unidad.nombre, unidad.abreviatura],
+      })),
+    [opciones],
+  );
+
   return (
     <>
-      <select
+      {/* US23 (FR-119): lista escribible — se busca por nombre o por abreviatura, que es como
+          la gente la tiene en la cabeza ("kg" o "kilo"). Sin opción vacía: es obligatoria. */}
+      <SelectorBuscable
         id={id}
-        className="input"
-        aria-invalid={ariaInvalid}
+        opciones={opcionesBuscables}
+        value={value}
+        onChange={onChange}
         disabled={disabled || cargando}
-        value={value && value > 0 ? value : ''}
-        onChange={(evento) => onChange(Number(evento.target.value))}
-      >
-        <option value="" disabled>
-          {cargando ? 'Cargando unidades…' : 'Selecciona una unidad…'}
-        </option>
-        {opciones.map((unidad) => (
-          <option key={unidad.id} value={unidad.id}>
-            {unidad.nombre} ({unidad.abreviatura}){unidad.estado === 'INACTIVA' ? ' — inactiva' : ''}
-          </option>
-        ))}
-      </select>
+        ariaInvalid={ariaInvalid}
+        placeholder={cargando ? 'Cargando unidades…' : 'Escribe para buscar una unidad…'}
+      />
       {error && (
         <p role="alert" style={{ fontSize: 12, color: 'var(--color-accent-300)', marginTop: 5 }}>
           {error}

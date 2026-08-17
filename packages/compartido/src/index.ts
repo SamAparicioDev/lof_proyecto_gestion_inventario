@@ -41,6 +41,7 @@ export * from './tipos/cotizaciones';
 export * from './esquemas/autenticacion';
 export * from './esquemas/comunes';
 export * from './esquemas/impuestos';
+export * from './esquemas/busqueda';
 export * from './esquemas/categorias';
 export * from './esquemas/proveedores';
 export * from './esquemas/unidades-medida';

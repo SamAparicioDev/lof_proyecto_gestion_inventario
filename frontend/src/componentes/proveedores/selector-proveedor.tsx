@@ -21,7 +21,8 @@
  * apunta a uno desactivado, ese se añade a la lista. Sin eso, al abrir la factura el campo
  * aparecería vacío y guardar sin tocarlo fallaría por un cambio de catálogo ajeno a ella.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { SelectorBuscable } from '@/componentes/comunes/selector-buscable';
 import { ErrorApi } from '@/lib/api/cliente';
 import { listarProveedores, type ProveedorListado } from '@/lib/api/proveedores';
 
@@ -80,26 +81,28 @@ export function SelectorProveedor({
     });
   }
 
+  const opcionesBuscables = useMemo(
+    () =>
+      opciones.map((proveedor) => ({
+        valor: proveedor.id,
+        etiqueta: `${proveedor.nombre}${proveedor.estado === 'INACTIVO' ? ' (inactivo)' : ''}`,
+        textosBuscables: [proveedor.nombre],
+      })),
+    [opciones],
+  );
+
   return (
     <>
-      <select
+      {/* US23 (FR-119): lista escribible, sin opción vacía — el proveedor es obligatorio. */}
+      <SelectorBuscable
         id={id}
-        className="input"
-        aria-invalid={ariaInvalid}
+        opciones={opcionesBuscables}
+        value={value}
+        onChange={onChange}
         disabled={disabled || cargando}
-        value={value && value > 0 ? value : ''}
-        onChange={(evento) => onChange(Number(evento.target.value))}
-      >
-        <option value="" disabled>
-          {cargando ? 'Cargando proveedores…' : 'Selecciona un proveedor…'}
-        </option>
-        {opciones.map((proveedor) => (
-          <option key={proveedor.id} value={proveedor.id}>
-            {proveedor.nombre}
-            {proveedor.estado === 'INACTIVO' ? ' (inactivo)' : ''}
-          </option>
-        ))}
-      </select>
+        ariaInvalid={ariaInvalid}
+        placeholder={cargando ? 'Cargando proveedores…' : 'Escribe para buscar un proveedor…'}
+      />
       {error && (
         <p role="alert" style={{ fontSize: 12, color: 'var(--color-accent-300)', marginTop: 5 }}>
           {error}

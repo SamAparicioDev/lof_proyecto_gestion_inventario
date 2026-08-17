@@ -404,6 +404,24 @@ Todos los listados tienen su caja de búsqueda, pero escribir en ella lo que uno
 
 ---
 
+### User Story 23 - Listas escribibles (Priority: P2)
+
+Elegir un producto en una línea de documento significa hoy abrir un desplegable con cientos de opciones y recorrerlo a ojo. No se puede escribir, no se puede filtrar, y el teclado solo salta a la siguiente opción que empiece por la letra pulsada. En un catálogo real es la parte más lenta de registrar cualquier documento.
+
+**Why this priority**: es el mismo problema que US22 resolvió en los listados, en el sitio donde más se repite — cada línea de cada ingreso, salida, orden y cotización.
+
+**Independent Test**: Se prueba escribiendo dos palabras en el selector de producto de una línea y comprobando que la lista se reduce a lo que coincide. Entrega valor por sí sola.
+
+**Acceptance Scenarios**:
+
+1. **Given** el selector de producto de una línea, **When** el usuario escribe `compresor tornillo`, **Then** la lista se reduce a los productos que contienen ambas palabras, en cualquier orden.
+2. **Given** la lista abierta, **When** el usuario usa ↑/↓ y Enter, **Then** elige sin tocar el ratón; con Esc cierra sin cambiar lo que ya estaba.
+3. **Given** un dato con tilde ("Compresor odontológico"), **When** se escribe sin tilde, **Then** igual lo encuentra.
+4. **Given** una lista con más coincidencias de las que caben, **When** se muestra, **Then** dice cuántas hay en total y sugiere afinar — nunca da a entender que no hay más.
+5. **Given** un campo OPCIONAL como la categoría de un producto, **When** se usa la lista, **Then** sigue existiendo la forma de dejarlo vacío.
+
+---
+
 ### Edge Cases
 
 - **Salida mayor al disponible**: debe rechazarse siempre, incluida la carrera entre dos usuarios simultáneos sobre el mismo producto (solo una confirmación puede ganar).
@@ -599,6 +617,7 @@ que recordar por separado.
 - **FR-117**: Ver, crear y editar borradores de cotización DEBEN estar disponibles para los tres roles; enviarla, cerrarla (aceptar/rechazar) y anularla DEBEN quedar restringidos, porque comprometen un precio frente a un tercero o generan una salida.
 
 - **FR-118**: Los buscadores de texto de los listados DEBEN partir lo escrito en TÉRMINOS y exigir que CADA término aparezca en ALGUNO de los campos buscables de la fila (Y entre términos, O entre campos). El orden de las palabras NO DEBE importar, y cada término añadido DEBE estrechar el resultado. Los campos buscables de cada listado DEBEN incluir aquello por lo que se pregunta de verdad un registro —descripción, ubicación y categoría de un producto; NIT y ciudad de un cliente; nombre del proyecto de una cotización—, no solo su identificador. En los documentos con correlativo, los DÍGITOS de un término DEBEN cruzarse con el número, de modo que `COT-000042`, `000042` y `42` lleguen al mismo documento.
+- **FR-119**: Toda lista de selección que pueda CRECER (productos, clientes, proyectos, proveedores, categorías, unidades de medida) DEBE permitir escribir para filtrar sus opciones en vivo, con el mismo criterio por términos de FR-118 y además ignorando tildes. DEBE ser usable solo con teclado (↑/↓, Enter, Esc) y anunciarse como `combobox` para lectores de pantalla. Las listas CERRADAS y cortas —estado, formato de exportación, tasa de IVA— DEBEN seguir siendo desplegables nativos: un buscador sobre cuatro opciones fijas estorba más de lo que ayuda.
 
 **Auditoría y trazabilidad (transversal)**
 

@@ -22,7 +22,7 @@
  * de validez: es el plazo con el que se trabaja habitualmente y evita que alguien envíe una
  * oferta sin caducidad por no haber pensado en ella.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Controller, useFieldArray, useForm, useWatch, type Control, type Path } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
@@ -41,6 +41,7 @@ import { obtenerProyectosDestino } from '@/lib/api/clientes';
 import { ErrorApi } from '@/lib/api/cliente';
 import { formatoMoneda } from '@/lib/formato';
 import { ResumenTotales, SelectorTasaIva, calcularTotales } from '@/componentes/comunes/campos-iva';
+import { SelectorBuscable } from '@/componentes/comunes/selector-buscable';
 import { CampoFecha as CampoFechaBase } from '@/componentes/comunes/campo-fecha';
 
 const MENSAJE_ERROR_RED = 'No fue posible comunicarse con el servidor. Intenta de nuevo.';
@@ -114,6 +115,36 @@ export function CotizacionForm({
   const { fields, append, remove } = useFieldArray({ control, name: 'lineas' });
   const lineasEnVivo = useWatch({ control, name: 'lineas' });
   const clienteSeleccionado = useWatch({ control, name: 'clienteId' });
+
+  /** Opciones del selector de producto (US23, FR-119): además del SKU y la descripción, se
+   *  busca por la ubicación, que es como se pregunta por algo cuyo nombre no se recuerda. */
+  /** US23 (FR-119): cliente y proyecto también son listas que crecen. El cliente se busca
+   *  además por su NIT y su ciudad, igual que en el buscador del listado de clientes. */
+  const opcionesCliente = useMemo(
+    () =>
+      clientes.map((cliente) => ({
+        valor: cliente.id,
+        etiqueta: cliente.nombre,
+        detalle: [cliente.nit, cliente.ciudad].filter(Boolean).join(' · ') || undefined,
+        textosBuscables: [cliente.nombre, cliente.nit, cliente.ciudad],
+      })),
+    [clientes],
+  );
+  const opcionesProyecto = useMemo(
+    () => proyectosDelCliente.map((proyecto) => ({ valor: proyecto.id, etiqueta: proyecto.nombre })),
+    [proyectosDelCliente],
+  );
+
+  const opcionesProducto = useMemo(
+    () =>
+      productos.map((producto) => ({
+        valor: producto.id,
+        etiqueta: `${producto.sku} — ${producto.descripcion}`,
+        textosBuscables: [producto.sku, producto.descripcion],
+      })),
+    [productos],
+  );
+
   const totales = calcularTotales(lineasEnVivo);
 
   // Carga (y recarga al cambiar de cliente) los proyectos-destino del cliente elegido. Mismo
@@ -210,22 +241,24 @@ export function CotizacionForm({
         <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
           <div className="field">
             <label htmlFor="clienteId">Cliente</label>
-            <select
-              id="clienteId"
-              className="input"
-              aria-invalid={!!errors.clienteId}
-              {...register('clienteId', {
-                valueAsNumber: true,
-                onChange: () => setValue('proyectoId', 0),
-              })}
-            >
-              <option value={0}>Selecciona un cliente…</option>
-              {clientes.map((cliente) => (
-                <option key={cliente.id} value={cliente.id}>
-                  {cliente.nombre}
-                </option>
-              ))}
-            </select>
+            <Controller
+              name="clienteId"
+              control={control}
+              render={({ field }) => (
+                <SelectorBuscable
+                  id="clienteId"
+                  opciones={opcionesCliente}
+                  value={field.value}
+                  onChange={(clienteId) => {
+                    field.onChange(clienteId);
+                    // Cambiar de cliente invalida el proyecto elegido: son de otro.
+                    setValue('proyectoId', 0);
+                  }}
+                  ariaInvalid={!!errors.clienteId}
+                  placeholder="Escribe para buscar un cliente…"
+                />
+              )}
+            />
             {errors.clienteId && (
               <p role="alert" style={{ fontSize: 12, color: 'var(--color-accent-300)', marginTop: 5 }}>
                 {errors.clienteId.message}
@@ -235,20 +268,21 @@ export function CotizacionForm({
 
           <div className="field">
             <label htmlFor="proyectoId">Proyecto</label>
-            <select
-              id="proyectoId"
-              className="input"
-              aria-invalid={!!errors.proyectoId}
-              disabled={!clienteSeleccionado || cargandoProyectos || proyectosDelCliente.length === 0}
-              {...register('proyectoId', { valueAsNumber: true })}
-            >
-              <option value={0}>{cargandoProyectos ? 'Cargando…' : 'Selecciona un proyecto…'}</option>
-              {proyectosDelCliente.map((proyecto) => (
-                <option key={proyecto.id} value={proyecto.id}>
-                  {proyecto.nombre}
-                </option>
-              ))}
-            </select>
+            <Controller
+              name="proyectoId"
+              control={control}
+              render={({ field }) => (
+                <SelectorBuscable
+                  id="proyectoId"
+                  opciones={opcionesProyecto}
+                  value={field.value}
+                  onChange={field.onChange}
+                  disabled={!clienteSeleccionado || cargandoProyectos || proyectosDelCliente.length === 0}
+                  ariaInvalid={!!errors.proyectoId}
+                  placeholder={cargandoProyectos ? 'Cargando…' : 'Escribe para buscar un proyecto…'}
+                />
+              )}
+            />
             {sinProyectosActivos && (
               <p className="text-muted" style={{ fontSize: 12, marginTop: 5 }}>
                 Este cliente no tiene proyectos activos.
@@ -311,23 +345,23 @@ export function CotizacionForm({
                 return (
                   <tr key={campo.id}>
                     <td style={{ minWidth: 240 }}>
-                      <select
-                        className="input"
-                        aria-label={`Producto de la línea ${indice + 1}`}
-                        aria-invalid={!!lineaErrores?.productoId}
-                        {...registroProducto}
-                        onChange={(evento) => {
-                          void registroProducto.onChange(evento);
-                          alCambiarProducto(indice, Number(evento.target.value));
-                        }}
-                      >
-                        <option value={0}>Selecciona un producto…</option>
-                        {productos.map((productoOpcion) => (
-                          <option key={productoOpcion.id} value={productoOpcion.id}>
-                            {productoOpcion.sku} — {productoOpcion.descripcion}
-                          </option>
-                        ))}
-                      </select>
+                      <Controller
+                        name={`lineas.${indice}.productoId`}
+                        control={control}
+                        render={({ field }) => (
+                          <SelectorBuscable
+                            id={`linea-${indice}-producto`}
+                            ariaLabel={`Producto de la línea ${indice + 1}`}
+                            opciones={opcionesProducto}
+                            value={field.value}
+                            onChange={(productoId) => {
+                              field.onChange(productoId);
+                              alCambiarProducto(indice, productoId);
+                            }}
+                            ariaInvalid={!!lineaErrores?.productoId}
+                          />
+                        )}
+                      />
                       {lineaErrores?.productoId && (
                         <p role="alert" style={{ fontSize: 12, color: 'var(--color-accent-300)', marginTop: 5 }}>
                           {lineaErrores.productoId.message}

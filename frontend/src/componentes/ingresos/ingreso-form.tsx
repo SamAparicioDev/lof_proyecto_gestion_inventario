@@ -26,7 +26,7 @@
  * arma `PipeValidacionZod` con la ruta del esquema Zod); cualquier ruta desconocida cae al
  * mensaje general (frontend/CLAUDE.md).
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import {
   Controller,
   useFieldArray,
@@ -51,6 +51,7 @@ import { actualizarIngreso, crearIngreso } from '@/lib/api/ingresos';
 import { ErrorApi } from '@/lib/api/cliente';
 import { formatoMoneda } from '@/lib/formato';
 import { ResumenTotales, SelectorTasaIva, calcularTotales } from '@/componentes/comunes/campos-iva';
+import { SelectorBuscable } from '@/componentes/comunes/selector-buscable';
 import { DialogoProductoNuevo } from '@/componentes/inventario/dialogo-producto-nuevo';
 import { SelectorProveedor } from '@/componentes/proveedores/selector-proveedor';
 import { formatoNumeroOrdenCompra } from '@trazo/compartido';
@@ -138,6 +139,19 @@ export function IngresoForm({
     setValue(`lineas.${asignacionPendiente.indice}.productoId`, asignacionPendiente.productoId);
     setAsignacionPendiente(null);
   }, [asignacionPendiente, productosDisponibles, setValue]);
+
+
+  /** Opciones del selector de producto (US23, FR-119): además del SKU y la descripción, se
+   *  busca por la ubicación, que es como se pregunta por algo cuyo nombre no se recuerda. */
+  const opcionesProducto = useMemo(
+    () =>
+      productos.map((producto) => ({
+        valor: producto.id,
+        etiqueta: `${producto.sku} — ${producto.descripcion}`,
+        textosBuscables: [producto.sku, producto.descripcion],
+      })),
+    [productos],
+  );
 
   const totales = calcularTotales(lineasEnVivo);
 
@@ -276,19 +290,23 @@ export function IngresoForm({
                     <tr key={campo.id}>
                       <td style={{ minWidth: 240 }}>
                         <div className="flex items-center gap-1.5">
-                          <select
-                            className="input"
-                            aria-label={`Producto de la línea ${indice + 1}`}
-                            aria-invalid={!!lineaErrores?.productoId}
-                            {...register(`lineas.${indice}.productoId`, { valueAsNumber: true })}
-                          >
-                            <option value={0}>Selecciona un producto…</option>
-                            {productosDisponibles.map((producto) => (
-                              <option key={producto.id} value={producto.id}>
-                                {producto.sku} — {producto.descripcion}
-                              </option>
-                            ))}
-                          </select>
+                          <Controller
+                            name={`lineas.${indice}.productoId`}
+                            control={control}
+                            render={({ field }) => (
+                              <SelectorBuscable
+                                id={`linea-${indice}-producto`}
+                                ariaLabel={`Producto de la línea ${indice + 1}`}
+                                opciones={opcionesProducto}
+                                value={field.value}
+                                onChange={(productoId) => {
+                                  field.onChange(productoId);
+                                  
+                                }}
+                                ariaInvalid={!!lineaErrores?.productoId}
+                              />
+                            )}
+                          />
                           <button
                             type="button"
                             className="btn btn-ghost btn-icon"

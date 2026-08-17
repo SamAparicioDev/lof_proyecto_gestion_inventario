@@ -15,7 +15,8 @@
  * abrir la ficha el campo aparecería vacío y guardar sin tocarlo DESCLASIFICARÍA el producto en
  * silencio, que es justo lo contrario de lo que promete FR-086.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { SelectorBuscable } from '@/componentes/comunes/selector-buscable';
 import { listarCategorias, type CategoriaListada } from '@/lib/api/categorias';
 
 interface SelectorCategoriaProps {
@@ -65,21 +66,27 @@ export function SelectorCategoria({
     });
   }
 
+  const opcionesBuscables = useMemo(
+    () =>
+      opciones.map((categoria) => ({
+        valor: categoria.id,
+        etiqueta: `${categoria.nombre}${categoria.estado === 'INACTIVA' ? ' (inactiva)' : ''}`,
+        textosBuscables: [categoria.nombre],
+      })),
+    [opciones],
+  );
+
   return (
-    <select
+    // US23 (FR-119): lista escribible. `etiquetaVacia` es lo que mantiene viva la opción
+    // "sin categoría" — el campo es OPCIONAL (FR-086) y quitarla lo convertiría en obligatorio.
+    <SelectorBuscable
       id={id}
-      className="input"
+      opciones={opcionesBuscables}
+      value={value ?? 0}
+      onChange={(categoriaId) => onChange(categoriaId === 0 ? null : categoriaId)}
       disabled={disabled || cargando}
-      value={value ?? ''}
-      onChange={(evento) => onChange(evento.target.value === '' ? null : Number(evento.target.value))}
-    >
-      <option value="">{cargando ? 'Cargando categorías…' : 'Sin categoría'}</option>
-      {opciones.map((categoria) => (
-        <option key={categoria.id} value={categoria.id}>
-          {categoria.nombre}
-          {categoria.estado === 'INACTIVA' ? ' (inactiva)' : ''}
-        </option>
-      ))}
-    </select>
+      etiquetaVacia="Sin categoría"
+      placeholder={cargando ? 'Cargando categorías…' : 'Sin categoría — escribe para buscar'}
+    />
   );
 }

@@ -551,6 +551,21 @@ Proveedores — MISMO patrón que categorías (FR-091), con dos diferencias que 
 
 ---
 
+## Phase 26: User Story 23 - Listas escribibles (Priority: P2)
+
+**Goal**: Que elegir en una lista larga sea escribir, no recorrer (FR-119)
+
+**Independent Test**: Escribir `compresor tornillo` en el selector de producto de una línea y ver la lista reducida a dos opciones (US23-AS1)
+
+- [x] T211 [US23] `coincideConTerminos` en `@trazo/compartido`: el MISMO criterio que el buscador del servidor, aplicado en memoria y sin tildes — para que la lista y el listado no puedan discrepar
+- [x] T212 [US23] `SelectorBuscable`: combobox accesible con teclado, tope de opciones visibles con su aviso, y la lista en un PORTAL (dentro de la tabla con scroll quedaba recortada)
+- [x] T213 [US23] Sustituirlo en las listas que crecen: producto en las cuatro tablas de líneas, cliente y proyecto en salidas y cotizaciones, y los selectores de categoría, proveedor y unidad de medida
+- [x] T214 [P] [US23] Pruebas del criterio compartido y verificación en el navegador de las tres formas de uso (escribir, teclado, tildes)
+
+**Checkpoint**: Ninguna lista larga de la aplicación obliga ya a recorrer opciones a ojo
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -642,7 +657,7 @@ persona: orden estricto de fases 1→10.
 
 ## Notes
 
-- Total: **163 tareas** (Setup 7, Foundational 20, US1 11, US2 8, US3 12, US5 8, US4 8, US6 5, US7 5, US8 8, Polish 6, US9 11, Experiencia de uso 4, US10 4, US11 6, US12 6, US13 10); **MVP = 66 tareas** (T001–T066). Siete bloques se agregaron fuera del plan original, a pedido directo del dueño del proyecto: US8/carga masiva (T091-T098, ver research R15), US9/roles y permisos (T099-T109, ver research R16), la Phase 13 de experiencia de uso (T110-T113, cierra huecos detectados usando el sistema en vivo), US10/panel (T114-T117), US11/exportación universal (T118-T123), US12/costo con historial (T124-T129) y US13/filtrado de listados (T130-T139, 2026-08-12).
+- Total: **167 tareas** (Setup 7, Foundational 20, US1 11, US2 8, US3 12, US5 8, US4 8, US6 5, US7 5, US8 8, Polish 6, US9 11, Experiencia de uso 4, US10 4, US11 6, US12 6, US13 10); **MVP = 66 tareas** (T001–T066). Siete bloques se agregaron fuera del plan original, a pedido directo del dueño del proyecto: US8/carga masiva (T091-T098, ver research R15), US9/roles y permisos (T099-T109, ver research R16), la Phase 13 de experiencia de uso (T110-T113, cierra huecos detectados usando el sistema en vivo), US10/panel (T114-T117), US11/exportación universal (T118-T123), US12/costo con historial (T124-T129) y US13/filtrado de listados (T130-T139, 2026-08-12).
 - [P] = archivos distintos sin dependencias pendientes dentro de su fase
 - Cada checkpoint de historia es un incremento demostrable e independientemente testeable
 - Toda tarea de backend respeta la regla de dependencia y las convenciones de [docs/arquitectura.md](../../docs/arquitectura.md); TSDoc con `FR-###` obligatorio en casos de uso, puertos y controladores

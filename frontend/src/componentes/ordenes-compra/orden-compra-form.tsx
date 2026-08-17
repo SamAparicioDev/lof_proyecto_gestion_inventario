@@ -19,7 +19,7 @@
  * Agregar una sugerencia que ya está en las líneas no la duplica (el esquema lo rechazaría, y
  * además el usuario perdería la cantidad que ya hubiera ajustado): se deja la línea como está.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import {
   Controller,
   useFieldArray,
@@ -43,6 +43,7 @@ import { actualizarOrdenCompra, crearOrdenCompra, sugerenciasDeCompra } from '@/
 import { ErrorApi } from '@/lib/api/cliente';
 import { formatoMoneda } from '@/lib/formato';
 import { ResumenTotales, SelectorTasaIva, calcularTotales } from '@/componentes/comunes/campos-iva';
+import { SelectorBuscable } from '@/componentes/comunes/selector-buscable';
 import { CampoFecha as CampoFechaBase } from '@/componentes/comunes/campo-fecha';
 import { SelectorProveedor } from '@/componentes/proveedores/selector-proveedor';
 
@@ -99,6 +100,19 @@ export function OrdenCompraForm({ productos, ordenId, valoresIniciales, proveedo
   const { fields, append, remove } = useFieldArray({ control, name: 'lineas' });
   const lineasEnVivo = useWatch({ control, name: 'lineas' });
   const proveedorSeleccionado = useWatch({ control, name: 'proveedorId' });
+
+
+  /** Opciones del selector de producto (US23, FR-119): además del SKU y la descripción, se
+   *  busca por la ubicación, que es como se pregunta por algo cuyo nombre no se recuerda. */
+  const opcionesProducto = useMemo(
+    () =>
+      productos.map((producto) => ({
+        valor: producto.id,
+        etiqueta: `${producto.sku} — ${producto.descripcion}`,
+        textosBuscables: [producto.sku, producto.descripcion],
+      })),
+    [productos],
+  );
 
   const totales = calcularTotales(lineasEnVivo);
 
@@ -322,19 +336,20 @@ export function OrdenCompraForm({ productos, ordenId, valoresIniciales, proveedo
                 return (
                   <tr key={campo.id}>
                     <td style={{ minWidth: 240 }}>
-                      <select
-                        className="input"
-                        aria-label={`Producto de la línea ${indice + 1}`}
-                        aria-invalid={!!lineaErrores?.productoId}
-                        {...register(`lineas.${indice}.productoId`, { valueAsNumber: true })}
-                      >
-                        <option value={0}>Selecciona un producto…</option>
-                        {productos.map((producto) => (
-                          <option key={producto.id} value={producto.id}>
-                            {producto.sku} — {producto.descripcion}
-                          </option>
-                        ))}
-                      </select>
+                      <Controller
+                        name={`lineas.${indice}.productoId`}
+                        control={control}
+                        render={({ field }) => (
+                          <SelectorBuscable
+                            id={`linea-${indice}-producto`}
+                            ariaLabel={`Producto de la línea ${indice + 1}`}
+                            opciones={opcionesProducto}
+                            value={field.value}
+                            onChange={field.onChange}
+                            ariaInvalid={!!lineaErrores?.productoId}
+                          />
+                        )}
+                      />
                       {lineaErrores?.productoId && (
                         <p role="alert" style={{ fontSize: 12, color: 'var(--color-accent-300)', marginTop: 5 }}>
                           {lineaErrores.productoId.message}
