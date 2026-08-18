@@ -94,6 +94,9 @@ export interface ReporteMovimientos {
     readonly hasta: string | null;
     readonly tipo: TipoMovimientoInventario | null;
     readonly usuarioId: number | null;
+    /** US25 (FR-121): nombre de la persona filtrada, ya resuelto, para que el documento
+     *  exportado la nombre en vez de mostrar "N.º 7". `null` si no se filtró por persona. */
+    readonly usuarioNombre: string | null;
     readonly clienteId: number | null;
     readonly proyectoId: number | null;
   };
@@ -137,6 +140,14 @@ export class ReporteMovimientosCasoUso implements CasoDeUso<ReporteMovimientosEn
         hasta: entrada.hasta ? entrada.hasta.toISOString() : null,
         tipo: entrada.tipo ?? null,
         usuarioId: entrada.usuarioId ?? null,
+        // Se resuelve del mapa que ya se cargó para pintar las filas: si el filtro devolvió
+        // movimientos, esa persona está ahí y no hace falta otra consulta. Con cero resultados
+        // se pregunta al repositorio, porque el nombre sigue haciendo falta en el encabezado.
+        usuarioNombre: entrada.usuarioId
+          ? (usuarios.get(entrada.usuarioId) ??
+            (await this.repositorioUsuarios.buscarPorId(entrada.usuarioId))?.nombreCompleto ??
+            null)
+          : null,
         clienteId: entrada.clienteId ?? null,
         proyectoId: entrada.proyectoId ?? null,
       },

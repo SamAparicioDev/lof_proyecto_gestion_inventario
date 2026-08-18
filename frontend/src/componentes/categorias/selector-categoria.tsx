@@ -27,6 +27,13 @@ interface SelectorCategoriaProps {
   /** Categoría que el producto ya tiene, para conservarla aunque esté inactiva (ver TSDoc). */
   categoriaActual?: { id: number; nombre: string } | null;
   disabled?: boolean;
+  /**
+   * Qué significa "no elegir nada" en ESTE sitio. En el formulario de un producto es "sin
+   * categoría" (el producto queda sin clasificar); en el filtro de un reporte es "todas" (no se
+   * acota nada). Es la misma opción vacía con dos lecturas opuestas, así que el texto lo pone
+   * quien usa el selector — US24 (FR-120).
+   */
+  etiquetaVacia?: string;
 }
 
 export function SelectorCategoria({
@@ -35,6 +42,7 @@ export function SelectorCategoria({
   onChange,
   categoriaActual,
   disabled,
+  etiquetaVacia = 'Sin categoría',
 }: SelectorCategoriaProps): React.JSX.Element {
   const [categorias, setCategorias] = useState<CategoriaListada[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -85,8 +93,8 @@ export function SelectorCategoria({
       value={value ?? 0}
       onChange={(categoriaId) => onChange(categoriaId === 0 ? null : categoriaId)}
       disabled={disabled || cargando}
-      etiquetaVacia="Sin categoría"
-      placeholder={cargando ? 'Cargando categorías…' : 'Sin categoría — escribe para buscar'}
+      etiquetaVacia={etiquetaVacia}
+      placeholder={cargando ? 'Cargando categorías…' : `${etiquetaVacia} — escribe para buscar`}
     />
   );
 }

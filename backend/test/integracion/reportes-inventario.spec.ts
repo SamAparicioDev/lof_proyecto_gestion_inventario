@@ -219,7 +219,9 @@ describe('Reportes de inventario y movimientos — /api/reportes (T083, US7, FR-
       // 30.000 + 500.000 + 100.000 — suma EXACTA de los 3 valorLinea, ninguno recalculado aparte.
       expect(cuerpo.valorTotalInventario).toBe(630_000);
       expect(cuerpo.cantidadBajoUmbral).toBe(1); // solo productoBajo
-      expect(cuerpo.filtros).toEqual({ buscar: null, cantidadMin: null, cantidadMax: null });
+      // `categoria: null` desde US24 (FR-120): sin filtro de categoría, el reporte cubre el
+      // catálogo entero, que es como se comportaba antes de esa historia.
+      expect(cuerpo.filtros).toEqual({ buscar: null, categoria: null, cantidadMin: null, cantidadMax: null });
     });
 
     it('cantidadMin/cantidadMax filtran sobre DISPONIBLE (nunca stockActual crudo) y los totales reflejan el conjunto YA FILTRADO', async () => {
@@ -240,7 +242,7 @@ describe('Reportes de inventario y movimientos — /api/reportes (T083, US7, FR-
       expect(cuerpo.productos[0]?.producto.sku).toBe(escenario.productoAlto.sku);
       expect(cuerpo.valorTotalInventario).toBe(500_000); // solo el valorLinea de productoAlto
       expect(cuerpo.cantidadBajoUmbral).toBe(0); // productoAlto no está bajo umbral
-      expect(cuerpo.filtros).toEqual({ buscar: null, cantidadMin: 60, cantidadMax: 80 });
+      expect(cuerpo.filtros).toEqual({ buscar: null, categoria: null, cantidadMin: 60, cantidadMax: 80 });
     });
 
     it('buscar filtra por SKU (parcial, insensible a mayúsculas — mismo criterio que FR-023)', async () => {

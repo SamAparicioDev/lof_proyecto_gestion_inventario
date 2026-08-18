@@ -219,7 +219,12 @@ export class RepositorioProductosPrisma implements RepositorioProductos {
    *  puerto: reutiliza el mismo filtro `buscar` que `listar`, sin `soloStockBajo` ni
    *  `skip`/`take`. */
   async listarTodos(filtros?: FiltrosListarTodosProductos): Promise<Producto[]> {
-    const where = construirWhereBusqueda(filtros?.buscar);
+    const busqueda = construirWhereBusqueda(filtros?.buscar);
+    // US24 (FR-120): la categoría se combina con Y sobre la búsqueda — filtrar por familia y
+    // escribir un término a la vez es una pregunta legítima ("los tornillos de construcción").
+    const where: Prisma.ProductoWhereInput = filtros?.categoriaId
+      ? { AND: [busqueda, { categoriaId: BigInt(filtros.categoriaId) }] }
+      : busqueda;
     const registros = await this.prisma.producto.findMany({ where, orderBy: { id: 'asc' }, include: INCLUIR_CATEGORIA });
     return registros.map(aProductoDominio);
   }

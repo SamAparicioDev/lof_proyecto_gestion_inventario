@@ -66,6 +66,17 @@ export interface RepositorioMovimientos {
    * SIN paginar (reporte, no listado de UI — FR-042). Alimenta `GET /api/reportes/movimientos`.
    */
   listar(filtros: FiltrosListarMovimientosGeneral): Promise<MovimientoInventario[]>;
+
+  /**
+   * Quiénes han movido inventario alguna vez, por nombre (US25, FR-121).
+   *
+   * Alimenta el filtro por persona del reporte de movimientos. Devuelve SOLO quienes tienen
+   * movimientos —no el listado de usuarios del sistema— por dos motivos que van juntos: son las
+   * únicas respuestas que el reporte puede dar (ofrecer a alguien sin movimientos es ofrecer un
+   * filtro que siempre sale vacío), y así el filtro no necesita el permiso de administrar
+   * usuarios, que el Gerente no tiene aunque sí vea el reporte.
+   */
+  usuariosConMovimientos(): Promise<{ id: number; nombre: string }[]>;
 }
 
 /** Token de inyección de NestJS para el puerto `RepositorioMovimientos`. */

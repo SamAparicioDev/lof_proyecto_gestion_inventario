@@ -61,6 +61,26 @@ export class RepositorioMovimientosPrisma implements RepositorioMovimientos {
     return { datos: registros.map(aMovimientoDominio), total };
   }
 
+  /**
+   * Quiénes han movido inventario, ordenados por nombre (US25, FR-121).
+   *
+   * `groupBy` sobre `usuario_id` y una segunda consulta con los nombres: deduplica en PostgreSQL
+   * —no trayendo un movimiento por fila para descartarlos en memoria— y el `IN` posterior es
+   * sobre un puñado de ids. Con `movimientos_usuario_id_idx` (FR-042) el agrupamiento no
+   * recorre la tabla entera.
+   */
+  async usuariosConMovimientos(): Promise<{ id: number; nombre: string }[]> {
+    const grupos = await this.prisma.movimientoInventario.groupBy({ by: ['usuarioId'] });
+    if (grupos.length === 0) return [];
+
+    const usuarios = await this.prisma.usuario.findMany({
+      where: { id: { in: grupos.map((grupo) => grupo.usuarioId) } },
+      select: { id: true, nombreCompleto: true },
+      orderBy: { nombreCompleto: 'asc' },
+    });
+    return usuarios.map((usuario) => ({ id: Number(usuario.id), nombre: usuario.nombreCompleto }));
+  }
+
   async listar(filtros: FiltrosListarMovimientosGeneral): Promise<MovimientoInventario[]> {
     const registros = await this.prisma.movimientoInventario.findMany({
       where: construirWhereListarMovimientosGeneral(filtros),

@@ -94,6 +94,13 @@ export type FormatoExport = z.infer<typeof esquemaFormatoExport>;
  */
 export const esquemaFiltroReporteInventario = z.object({
   buscar: z.string().trim().optional(),
+  /** US24 (FR-120): acota el reporte a una familia de productos. Se elige del catálogo, así que
+   *  viaja como id y no como texto — el nombre lo resuelve quien pinta el documento. */
+  categoriaId: z.coerce
+    .number({ invalid_type_error: 'La categoría no es válida' })
+    .int('La categoría no es válida')
+    .positive('La categoría no es válida')
+    .optional(),
   cantidadMin: z.coerce
     .number({ invalid_type_error: 'La cantidad mínima debe ser un número' })
     .min(0, 'La cantidad mínima no puede ser negativa')

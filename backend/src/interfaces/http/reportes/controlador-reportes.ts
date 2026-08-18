@@ -42,6 +42,10 @@ import {
 } from '@trazo/compartido';
 import type { DocumentoReporte, ExportadorReporte } from '../../../aplicacion/reportes/puertos/exportador-reporte';
 import {
+  REPOSITORIO_MOVIMIENTOS,
+  type RepositorioMovimientos,
+} from '../../../dominio/puertos/repositorio-movimientos';
+import {
   ReporteConsumoClienteCasoUso,
   type ReporteConsumoCliente,
   type ReporteConsumoClienteEntrada,
@@ -78,6 +82,10 @@ export class ControladorReportes {
     private readonly reporteConsumoProyecto: ReporteConsumoProyectoCasoUso,
     private readonly reporteInventarioActual: ReporteInventarioActualCasoUso,
     private readonly reporteMovimientos: ReporteMovimientosCasoUso,
+    /** Solo para la lista de personas del filtro (US25, FR-121): es una consulta de apoyo a la
+     *  pantalla, no un reporte con su propio caso de uso — mismo criterio con el que los
+     *  controladores de ingresos y órdenes inyectan su repositorio para el listado exportado. */
+    @Inject(REPOSITORIO_MOVIMIENTOS) private readonly repositorioMovimientos: RepositorioMovimientos,
     @Inject(EXPORTADOR_EXCEL) private readonly exportadorExcel: ExportadorReporte,
     @Inject(EXPORTADOR_PDF) private readonly exportadorPdf: ExportadorReporte,
   ) {}
@@ -153,6 +161,23 @@ export class ControladorReportes {
     const reporte = await this.reporteInventarioActual.ejecutar(filtros);
     const documento = mapearInventarioADocumento(reporte);
     return this.exportar(documento, filtros.formato, 'inventario', respuesta);
+  }
+
+  /**
+   * `GET /api/reportes/movimientos/usuarios` — quiénes han movido inventario (US25, FR-121).
+   *
+   * Alimenta el filtro por persona del propio reporte, y por eso exige `reportes.ver` y no
+   * `usuarios.gestionar`: el Gerente ve este reporte pero no administra usuarios, así que
+   * reutilizar `GET /api/usuarios` habría dejado su filtro vacío. Devuelve solo a quienes
+   * TIENEN movimientos —las únicas respuestas posibles del reporte—, no el directorio del
+   * sistema.
+   *
+   * Va ANTES de `@Get('movimientos')`… no hace falta: son rutas distintas, no un parámetro.
+   */
+  @Get('movimientos/usuarios')
+  @RequierePermiso('reportes.ver')
+  async usuariosConMovimientos(): Promise<{ id: number; nombre: string }[]> {
+    return this.repositorioMovimientos.usuariosConMovimientos();
   }
 
   /** `GET /api/reportes/movimientos?desde=&hasta=&tipo=&usuarioId=&clienteId=&proyectoId=` —

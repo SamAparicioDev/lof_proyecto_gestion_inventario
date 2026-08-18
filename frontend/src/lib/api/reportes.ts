@@ -141,3 +141,13 @@ async function descargarArchivo(ruta: string, nombrePorDefecto: string): Promise
   document.body.removeChild(enlace);
   URL.revokeObjectURL(url);
 }
+
+/**
+ * `GET /api/reportes/movimientos/usuarios` — quiénes han movido inventario (US25, FR-121).
+ *
+ * Alimenta el filtro por persona del reporte. NO es el listado de usuarios del sistema: ese
+ * exige `usuarios.gestionar`, que el Gerente no tiene aunque sí vea este reporte.
+ */
+export function usuariosConMovimientos(): Promise<{ id: number; nombre: string }[]> {
+  return api<{ id: number; nombre: string }[]>('/api/reportes/movimientos/usuarios');
+}

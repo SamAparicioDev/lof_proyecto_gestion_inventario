@@ -40,6 +40,8 @@ import { construirFilaInventario, disponibleEnRango, type FilaInventario } from 
 
 export interface ReporteInventarioActualEntrada {
   readonly buscar?: string;
+  /** US24 (FR-120): familia de productos a la que se acota el reporte. */
+  readonly categoriaId?: number;
   readonly cantidadMin?: number;
   readonly cantidadMax?: number;
 }
@@ -55,6 +57,9 @@ export interface ReporteInventarioActual {
   readonly cantidadBajoUmbral: number;
   readonly filtros: {
     readonly buscar: string | null;
+    /** US24: viaja RESUELTA —id y nombre— para que el documento exportado pueda nombrar la
+     *  categoría en vez de mostrar un número que no le dice nada a quien lo abre (FR-120). */
+    readonly categoria: { readonly id: number; readonly nombre: string } | null;
     readonly cantidadMin: number | null;
     readonly cantidadMax: number | null;
   };
@@ -70,7 +75,10 @@ export class ReporteInventarioActualCasoUso
   ) {}
 
   async ejecutar(entrada: ReporteInventarioActualEntrada): Promise<ReporteInventarioActual> {
-    const productos = await this.repositorioProductos.listarTodos({ buscar: entrada.buscar });
+    const productos = await this.repositorioProductos.listarTodos({
+      buscar: entrada.buscar,
+      categoriaId: entrada.categoriaId,
+    });
     const filas = await this.construirFilas(productos);
     const filasFiltradas = filas.filter((fila) =>
       disponibleEnRango(fila.disponible, entrada.cantidadMin, entrada.cantidadMax),
@@ -82,6 +90,10 @@ export class ReporteInventarioActualCasoUso
       cantidadBajoUmbral: filasFiltradas.filter((fila) => fila.stockBajo).length,
       filtros: {
         buscar: entrada.buscar ?? null,
+        // La categoría se resuelve de las propias filas: si el filtro trajo productos, todos son
+        // de esa categoría, así que no hace falta una consulta aparte al catálogo. Con cero
+        // resultados queda `null`, que es exactamente lo que el documento debe decir.
+        categoria: categoriaDeLasFilas(filasFiltradas, entrada.categoriaId),
         cantidadMin: entrada.cantidadMin ?? null,
         cantidadMax: entrada.cantidadMax ?? null,
       },
@@ -97,4 +109,20 @@ export class ReporteInventarioActualCasoUso
       return { ...fila, valorLinea: producto.stockActual * producto.ultimoCosto };
     });
   }
+}
+
+/**
+ * Categoría por la que se filtró, resuelta a partir de las filas ya obtenidas (US24, FR-120).
+ *
+ * Se lee de la primera fila en vez de consultar el catálogo: si el filtro devolvió productos,
+ * todos comparten esa categoría por construcción. Ahorra una consulta y no puede desincronizarse
+ * de lo que realmente se está mostrando.
+ */
+function categoriaDeLasFilas(
+  filas: readonly FilaReporteInventario[],
+  categoriaId: number | undefined,
+): { id: number; nombre: string } | null {
+  if (!categoriaId) return null;
+  const conCategoria = filas.find((fila) => fila.producto.categoria?.id === categoriaId);
+  return conCategoria?.producto.categoria ?? null;
 }

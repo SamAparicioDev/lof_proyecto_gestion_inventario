@@ -422,6 +422,42 @@ Elegir un producto en una línea de documento significa hoy abrir un desplegable
 
 ---
 
+### User Story 24 - Inventario actual por categoría (Priority: P2)
+
+El reporte de inventario actual se filtra por producto y por rango de cantidad, pero no por CATEGORÍA — que es como se mira el inventario cuando se quiere una cifra por familia: "cuánto tengo en herramienta", "cuánto vale lo de construcción". Hoy hay que exportar todo y filtrar en Excel.
+
+**Why this priority**: el dato ya existe (los productos tienen categoría desde US15) y el reporte ya calcula valorización; solo falta poder acotarlo. Es la diferencia entre un reporte que se usa y uno que se posprocesa a mano.
+
+**Independent Test**: Se prueba eligiendo una categoría y comprobando que el reporte y su exportación traen solo esos productos, con su propio valor total.
+
+**Acceptance Scenarios**:
+
+1. **Given** el reporte de inventario actual, **When** el usuario elige una categoría, **Then** la tabla, el valor total y el conteo bajo umbral se recalculan SOLO con los productos de esa categoría.
+2. **Given** una categoría elegida, **When** el usuario exporta, **Then** el archivo trae exactamente esas filas y su encabezado dice de qué categoría es (SC-007: lo exportado es lo que se ve).
+3. **Given** ninguna categoría elegida, **When** se consulta el reporte, **Then** se comporta como hasta ahora: todo el catálogo.
+4. **Given** productos SIN categoría, **When** se filtra por una categoría concreta, **Then** quedan fuera; y siguen apareciendo cuando no hay filtro.
+
+---
+
+### User Story 25 - El filtro de usuario deja de pedir un id (Priority: P2)
+
+El reporte de movimientos pide "Usuario (ID)" y espera un número. Nadie sabe qué id tiene cada persona: el filtro es inservible salvo que alguien vaya a la base de datos a mirarlo.
+
+**Why this priority**: es un filtro que hoy simplemente no se puede usar. Y es el último sitio de la aplicación donde se le pide al usuario un identificador interno.
+
+**El listado de usuarios NO se puede reutilizar tal cual**: `GET /api/usuarios` exige `usuarios.gestionar`, que solo tiene el Administrador, mientras que el reporte lo ve también el Gerente. Hace falta una lista propia, con el permiso del reporte.
+
+**Independent Test**: Se prueba abriendo el filtro y eligiendo una persona por su nombre, sin escribir ningún número.
+
+**Acceptance Scenarios**:
+
+1. **Given** el reporte de movimientos, **When** el usuario abre el filtro de persona, **Then** ve NOMBRES, no un campo numérico, y puede escribir para buscar.
+2. **Given** un Gerente (que no administra usuarios), **When** abre el reporte, **Then** el filtro funciona igual: la lista no depende del permiso de administración.
+3. **Given** una persona que nunca ha movido inventario, **When** se abre el filtro, **Then** NO aparece: la lista ofrece a quienes tienen movimientos, que son las únicas respuestas posibles del reporte.
+4. **Given** una persona elegida, **When** se exporta el reporte, **Then** el encabezado del archivo la nombra, en vez de mostrar su id.
+
+---
+
 ### Edge Cases
 
 - **Salida mayor al disponible**: debe rechazarse siempre, incluida la carrera entre dos usuarios simultáneos sobre el mismo producto (solo una confirmación puede ganar).
@@ -618,6 +654,8 @@ que recordar por separado.
 
 - **FR-118**: Los buscadores de texto de los listados DEBEN partir lo escrito en TÉRMINOS y exigir que CADA término aparezca en ALGUNO de los campos buscables de la fila (Y entre términos, O entre campos). El orden de las palabras NO DEBE importar, y cada término añadido DEBE estrechar el resultado. Los campos buscables de cada listado DEBEN incluir aquello por lo que se pregunta de verdad un registro —descripción, ubicación y categoría de un producto; NIT y ciudad de un cliente; nombre del proyecto de una cotización—, no solo su identificador. En los documentos con correlativo, los DÍGITOS de un término DEBEN cruzarse con el número, de modo que `COT-000042`, `000042` y `42` lleguen al mismo documento.
 - **FR-119**: Toda lista de selección que pueda CRECER (productos, clientes, proyectos, proveedores, categorías, unidades de medida) DEBE permitir escribir para filtrar sus opciones en vivo, con el mismo criterio por términos de FR-118 y además ignorando tildes. DEBE ser usable solo con teclado (↑/↓, Enter, Esc) y anunciarse como `combobox` para lectores de pantalla. Las listas CERRADAS y cortas —estado, formato de exportación, tasa de IVA— DEBEN seguir siendo desplegables nativos: un buscador sobre cuatro opciones fijas estorba más de lo que ayuda.
+- **FR-120**: El reporte de inventario actual DEBE poder filtrarse por CATEGORÍA, y ese filtro DEBE aplicarse por igual a lo que se muestra y a lo que se exporta, incluidas sus cifras agregadas (valor total y conteo bajo umbral). El documento exportado DEBE nombrar la categoría filtrada, no su id.
+- **FR-121**: El filtro por persona del reporte de movimientos NO DEBE pedir un identificador interno: DEBE ofrecer una lista de personas por su nombre, alimentada por un endpoint con el MISMO permiso que el reporte (`reportes.ver`) y limitada a quienes tienen movimientos registrados. El documento exportado DEBE nombrar a la persona filtrada.
 
 **Auditoría y trazabilidad (transversal)**
 

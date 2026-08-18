@@ -33,7 +33,7 @@
  * primera línea de defensa — esa es siempre el guard del backend.
  */
 import { useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { FilePdf, FileXls, Printer } from '@phosphor-icons/react/dist/ssr';
 import Link from 'next/link';
@@ -47,6 +47,7 @@ import { ErrorApi } from '@/lib/api/cliente';
 import { formatoMoneda } from '@/lib/formato';
 import { AlertaStockBajo } from '@/componentes/inventario/alerta-stock-bajo';
 import { BarraFiltros, CampoFiltro } from '@/componentes/comunes/barra-filtros';
+import { SelectorCategoria } from '@/componentes/categorias/selector-categoria';
 
 const MENSAJE_ERROR_RED = 'No fue posible comunicarse con el servidor. Intenta de nuevo.';
 const MENSAJE_SIN_PERMISO = 'No tienes permiso para ver este reporte. Contacta a un administrador o gerente.';
@@ -77,6 +78,7 @@ export function PanelReporteInventario() {
 
   const {
     register,
+    control,
     handleSubmit,
     formState: { errors },
   } = useForm<FiltroReporteInventario>({
@@ -141,6 +143,24 @@ export function PanelReporteInventario() {
             className="input"
             placeholder="SKU, descripción, ubicación o categoría — ej. cemento gris"
             {...register('buscar', { setValueAs: vacioComoTextoIndefinido })}
+          />
+        </CampoFiltro>
+        <CampoFiltro ancho="largo">
+          <label htmlFor="categoriaId">Categoría</label>
+          {/* US24 (FR-120): se reutiliza el selector del catálogo, que ya se trae las
+              categorías y desde US23 es escribible. `null` = todas, que es como el reporte se
+              comportaba antes de esta historia. */}
+          <Controller
+            name="categoriaId"
+            control={control}
+            render={({ field }) => (
+              <SelectorCategoria
+                id="categoriaId"
+                value={field.value ?? null}
+                onChange={(categoriaId) => field.onChange(categoriaId ?? undefined)}
+                etiquetaVacia="Todas las categorías"
+              />
+            )}
           />
         </CampoFiltro>
         <CampoFiltro>

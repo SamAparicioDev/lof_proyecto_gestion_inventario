@@ -134,6 +134,10 @@ export interface PaginaProductos {
  */
 export interface FiltrosListarTodosProductos {
   readonly buscar?: string;
+  /** US24 (FR-120): restringe el universo del reporte a una categoría. Se aplica en la CONSULTA
+   *  —no filtrando después en memoria— para que el reporte no traiga todo el catálogo para
+   *  descartarlo, que es lo que ocurriría con un catálogo grande. */
+  readonly categoriaId?: number;
 }
 
 export interface RepositorioProductos {

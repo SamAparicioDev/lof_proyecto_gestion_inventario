@@ -51,7 +51,7 @@
  * `app/(app)/usuarios/page.tsx`); el manejo de `403` aquí es una segunda capa defensiva, nunca
  * la primera línea — esa es siempre el guard del backend.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { FilePdf, FileXls, Printer } from '@phosphor-icons/react/dist/ssr';
@@ -64,11 +64,16 @@ import {
   type TipoMovimientoInventario,
 } from '@trazo/compartido';
 import { obtenerCliente } from '@/lib/api/clientes';
-import { exportarReporteMovimientos, obtenerReporteMovimientos } from '@/lib/api/reportes';
+import {
+  exportarReporteMovimientos,
+  obtenerReporteMovimientos,
+  usuariosConMovimientos,
+} from '@/lib/api/reportes';
 import { ErrorApi } from '@/lib/api/cliente';
 import { formatoFecha } from '@/lib/formato';
 import { ETIQUETA_TIPO_MOVIMIENTO, TipoMovimientoTag } from '@/componentes/inventario/tipo-movimiento-tag';
 import { BarraFiltros, CampoFiltro } from '@/componentes/comunes/barra-filtros';
+import { SelectorBuscable } from '@/componentes/comunes/selector-buscable';
 import { CampoFecha } from '@/componentes/comunes/campo-fecha';
 
 const MENSAJE_ERROR_RED = 'No fue posible comunicarse con el servidor. Intenta de nuevo.';
@@ -107,6 +112,9 @@ export function PanelReporteMovimientos({ clientes }: { clientes: Cliente[] }) {
   const [exportando, setExportando] = useState(false);
   const [errorGeneral, setErrorGeneral] = useState<string | null>(null);
   const [sinPermiso, setSinPermiso] = useState(false);
+  /** Personas que han movido inventario (US25, FR-121) — ver el comentario del campo. */
+  const [usuarios, setUsuarios] = useState<{ id: number; nombre: string }[]>([]);
+  const [cargandoUsuarios, setCargandoUsuarios] = useState(true);
 
   const {
     register,
@@ -121,6 +129,30 @@ export function PanelReporteMovimientos({ clientes }: { clientes: Cliente[] }) {
 
   // Carga (y recarga al cambiar de cliente) TODOS los proyectos del cliente elegido — mismo
   // criterio que `PanelConsumoProyecto` (ver TSDoc de cabecera).
+  // La lista de personas se pide UNA vez al abrir el reporte: no cambia mientras se filtra, y
+  // un fallo aquí no puede impedir usar el resto de filtros — el desplegable queda vacío y ya.
+  useEffect(() => {
+    let vigente = true;
+    usuariosConMovimientos()
+      .then((lista) => {
+        if (vigente) setUsuarios(lista);
+      })
+      .catch(() => {
+        if (vigente) setUsuarios([]);
+      })
+      .finally(() => {
+        if (vigente) setCargandoUsuarios(false);
+      });
+    return () => {
+      vigente = false;
+    };
+  }, []);
+
+  const opcionesUsuario = useMemo(
+    () => usuarios.map((usuario) => ({ valor: usuario.id, etiqueta: usuario.nombre })),
+    [usuarios],
+  );
+
   useEffect(() => {
     if (clienteSeleccionado === null) {
       setProyectosDelCliente([]);
@@ -258,20 +290,29 @@ export function PanelReporteMovimientos({ clientes }: { clientes: Cliente[] }) {
             ))}
           </select>
         </CampoFiltro>
-        <CampoFiltro ancho="corto">
-          <label htmlFor="usuarioId">Usuario (ID)</label>
-          <input
-            id="usuarioId"
-            type="number"
-            className="input"
-            aria-invalid={!!errors.usuarioId}
-            {...register('usuarioId', { setValueAs: vacioComoNumeroIndefinido })}
+        <CampoFiltro ancho="largo">
+          <label htmlFor="usuarioId">Persona</label>
+          {/* US25 (FR-121): antes pedía el ID del usuario, un número que nadie sabe. La lista la
+              alimenta `GET /api/reportes/movimientos/usuarios`, con el permiso de ESTE reporte y
+              limitada a quienes tienen movimientos: ofrecer a alguien sin ellos sería ofrecer un
+              filtro que siempre sale vacío. */}
+          <Controller
+            name="usuarioId"
+            control={control}
+            render={({ field }) => (
+              <SelectorBuscable
+                id="usuarioId"
+                opciones={opcionesUsuario}
+                value={field.value ?? 0}
+                onChange={(usuarioId) => field.onChange(usuarioId === 0 ? undefined : usuarioId)}
+                etiquetaVacia="Todas las personas"
+                placeholder={
+                  cargandoUsuarios ? 'Cargando…' : 'Todas las personas — escribe para buscar'
+                }
+                ariaInvalid={!!errors.usuarioId}
+              />
+            )}
           />
-          {errors.usuarioId && (
-            <p role="alert" style={{ fontSize: 12, color: 'var(--color-accent-300)', marginTop: 5 }}>
-              {errors.usuarioId.message}
-            </p>
-          )}
         </CampoFiltro>
         <CampoFiltro ancho="largo">
           <label htmlFor="clienteId">Cliente</label>

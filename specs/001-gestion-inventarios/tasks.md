@@ -566,6 +566,29 @@ Proveedores — MISMO patrón que categorías (FR-091), con dos diferencias que 
 
 ---
 
+## Phase 27: User Story 24 - Inventario actual por categoría (Priority: P2)
+
+**Goal**: Poder mirar y exportar el inventario de una familia de productos (FR-120)
+
+**Independent Test**: Elegir una categoría y ver que la tabla, el valor total y la exportación traen solo esos productos (US24-AS1/AS2)
+
+- [x] T215 [US24] `categoriaId` en el filtro del reporte: esquema compartido, `listarTodos` del puerto de productos y el caso de uso (las cifras agregadas se recalculan sobre lo filtrado)
+- [x] T216 [US24] Frontend: selector de categoría en el panel del reporte y en la query del export; el documento nombra la categoría, no su id
+
+## Phase 28: User Story 25 - El filtro de usuario deja de pedir un id (Priority: P2)
+
+**Goal**: Filtrar los movimientos eligiendo a una persona por su nombre (FR-121)
+
+**Independent Test**: Abrir el filtro y elegir a alguien sin escribir ningún número (US25-AS1)
+
+- [x] T217 [US25] `GET /api/reportes/movimientos/usuarios` con permiso `reportes.ver`: quienes tienen movimientos registrados, por nombre
+- [x] T218 [US25] Frontend: el campo numérico pasa a lista escribible (US23) y el documento exportado nombra a la persona
+- [x] T219 [P] [US24/US25] Pruebas de integración: el reporte por categoría cuadra sus agregados; la lista de personas la ve un Gerente y solo trae a quienes movieron inventario
+
+**Checkpoint**: Los dos reportes se filtran con lo que el usuario sabe (una categoría, un nombre), no con identificadores internos
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -657,7 +680,7 @@ persona: orden estricto de fases 1→10.
 
 ## Notes
 
-- Total: **167 tareas** (Setup 7, Foundational 20, US1 11, US2 8, US3 12, US5 8, US4 8, US6 5, US7 5, US8 8, Polish 6, US9 11, Experiencia de uso 4, US10 4, US11 6, US12 6, US13 10); **MVP = 66 tareas** (T001–T066). Siete bloques se agregaron fuera del plan original, a pedido directo del dueño del proyecto: US8/carga masiva (T091-T098, ver research R15), US9/roles y permisos (T099-T109, ver research R16), la Phase 13 de experiencia de uso (T110-T113, cierra huecos detectados usando el sistema en vivo), US10/panel (T114-T117), US11/exportación universal (T118-T123), US12/costo con historial (T124-T129) y US13/filtrado de listados (T130-T139, 2026-08-12).
+- Total: **172 tareas** (Setup 7, Foundational 20, US1 11, US2 8, US3 12, US5 8, US4 8, US6 5, US7 5, US8 8, Polish 6, US9 11, Experiencia de uso 4, US10 4, US11 6, US12 6, US13 10); **MVP = 66 tareas** (T001–T066). Siete bloques se agregaron fuera del plan original, a pedido directo del dueño del proyecto: US8/carga masiva (T091-T098, ver research R15), US9/roles y permisos (T099-T109, ver research R16), la Phase 13 de experiencia de uso (T110-T113, cierra huecos detectados usando el sistema en vivo), US10/panel (T114-T117), US11/exportación universal (T118-T123), US12/costo con historial (T124-T129) y US13/filtrado de listados (T130-T139, 2026-08-12).
 - [P] = archivos distintos sin dependencias pendientes dentro de su fase
 - Cada checkpoint de historia es un incremento demostrable e independientemente testeable
 - Toda tarea de backend respeta la regla de dependencia y las convenciones de [docs/arquitectura.md](../../docs/arquitectura.md); TSDoc con `FR-###` obligatorio en casos de uso, puertos y controladores

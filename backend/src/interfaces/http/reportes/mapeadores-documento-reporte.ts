@@ -172,6 +172,8 @@ export function mapearInventarioADocumento(reporte: ReporteInventarioActual): Do
     generadoEn: new Date(),
     filtrosAplicados: soloFiltrosAplicados({
       Buscar: reporte.filtros.buscar ?? 'Sin filtro',
+      // US24 (FR-120): el NOMBRE, no el id — quien abre el archivo no sabe qué es la categoría 7.
+      Categoría: reporte.filtros.categoria?.nombre ?? 'Sin filtro',
       'Cantidad mínima': reporte.filtros.cantidadMin === null ? 'Sin filtro' : String(reporte.filtros.cantidadMin),
       'Cantidad máxima': reporte.filtros.cantidadMax === null ? 'Sin filtro' : String(reporte.filtros.cantidadMax),
     }),
@@ -237,7 +239,9 @@ export function mapearMovimientosADocumento(reporte: ReporteMovimientos): Docume
       Desde: textoFechaFiltro(reporte.filtros.desde),
       Hasta: textoFechaFiltro(reporte.filtros.hasta),
       Tipo: reporte.filtros.tipo ? (ETIQUETA_TIPO_MOVIMIENTO[reporte.filtros.tipo] ?? reporte.filtros.tipo) : 'Sin filtro',
-      Usuario: reporte.filtros.usuarioId === null ? 'Sin filtro' : `N.º ${reporte.filtros.usuarioId}`,
+      // US25 (FR-121): el NOMBRE. "N.º 7" no le dice nada a quien abre el archivo — y era el
+      // mismo número que el filtro de la pantalla pedía escribir a ciegas.
+      Persona: reporte.filtros.usuarioNombre ?? 'Sin filtro',
       Cliente: reporte.filtros.clienteId === null ? 'Sin filtro' : `N.º ${reporte.filtros.clienteId}`,
       Proyecto: reporte.filtros.proyectoId === null ? 'Sin filtro' : `N.º ${reporte.filtros.proyectoId}`,
     }),
