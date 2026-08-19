@@ -49,6 +49,14 @@ const POR_PAGINA_EN_PANTALLA = 20;
  *  y "todas las filas del filtro" den resultados distintos y la prueba pueda fallar de verdad. */
 const FILAS_MAS_QUE_UNA_PAGINA = 25;
 
+/**
+ * Parámetros que `GET /api/salidas/:id/export` exige desde US27 (FR-123): con o sin valores, y
+ * el nombre de quien recibe. Esta suite no comprueba QUÉ hacen —de eso se ocupa
+ * `entradas-y-salidas-flexibles.spec.ts`—; los necesita para que la ruta responda y poder
+ * seguir vigilando lo suyo: el logotipo y el nombre del archivo.
+ */
+const PARAMETROS_DOCUMENTO_SALIDA = { valores: 'con', recibe: 'Quien recibe en obra' } as const;
+
 describe('US11 — logo del cliente y exportación de procesos (T123)', () => {
   let contexto: AppDePrueba;
 
@@ -103,22 +111,25 @@ describe('US11 — logo del cliente y exportación de procesos (T123)', () => {
 
       // Los listados abarcan varios clientes o ninguno, y los ingresos ni siquiera tienen
       // cliente: antes de este cambio TODOS estos salían sin ninguna identidad.
-      const rutas = [
-        '/api/ingresos/export',
-        '/api/salidas/export',
-        `/api/ingresos/${ingreso.id}/export`,
-        `/api/salidas/${salida.id}/export`,
-        '/api/reportes/inventario/export',
+      // El documento de una salida es el ÚNICO export con parámetros propios (US27, FR-123): no
+      // es un informe, es el soporte de una entrega, y no se genera sin decir si lleva valores y
+      // quién lo firma. El logotipo, que es lo que esta prueba vigila, no depende de eso.
+      const rutas: { ruta: string; extra?: Record<string, string> }[] = [
+        { ruta: '/api/ingresos/export' },
+        { ruta: '/api/salidas/export' },
+        { ruta: `/api/ingresos/${ingreso.id}/export` },
+        { ruta: `/api/salidas/${salida.id}/export`, extra: PARAMETROS_DOCUMENTO_SALIDA },
+        { ruta: '/api/reportes/inventario/export' },
       ];
 
-      for (const ruta of rutas) {
-        const xlsx = await pedirBinario(servidor(), ruta, { formato: 'xlsx' }).set('Cookie', cookie);
+      for (const { ruta, extra } of rutas) {
+        const xlsx = await pedirBinario(servidor(), ruta, { formato: 'xlsx', ...extra }).set('Cookie', cookie);
         expect(xlsx.status).toBe(200);
         expect({ ruta, imagenes: await imagenesDelXlsx(xlsx.body as Buffer) }).toEqual({ ruta, imagenes: 1 });
 
         // En el PDF no se cuentan imágenes con exceljs; basta con que el archivo salga válido
         // por el mismo camino (la maqueta del PDF tiene su propia suite: `maqueta-pdf.spec.ts`).
-        const pdf = await pedirBinario(servidor(), ruta, { formato: 'pdf' }).set('Cookie', cookie);
+        const pdf = await pedirBinario(servidor(), ruta, { formato: 'pdf', ...extra }).set('Cookie', cookie);
         expect(pdf.status).toBe(200);
         verificarPdfValido(pdf.body as Buffer);
       }
@@ -405,15 +416,19 @@ describe('US11 — logo del cliente y exportación de procesos (T123)', () => {
       lineas: [{ productoId: producto.id, cantidad: 1, precioUnitario: 1_000 }],
     });
 
-    const casos: { ruta: string; nombreEsperado: string }[] = [
+    const casos: { ruta: string; nombreEsperado: string; extra?: Record<string, string> }[] = [
       { ruta: '/api/ingresos/export', nombreEsperado: `ingresos-${fechaHoyIso()}.pdf` },
       { ruta: '/api/salidas/export', nombreEsperado: `salidas-${fechaHoyIso()}.pdf` },
       { ruta: `/api/ingresos/${ingreso.id}/export`, nombreEsperado: 'ingreso-FAC-PDF-0001.pdf' },
-      { ruta: `/api/salidas/${salida.id}/export`, nombreEsperado: `salida-${salida.numero}.pdf` },
+      {
+        ruta: `/api/salidas/${salida.id}/export`,
+        nombreEsperado: `salida-${salida.numero}.pdf`,
+        extra: PARAMETROS_DOCUMENTO_SALIDA,
+      },
     ];
 
     for (const caso of casos) {
-      const respuesta = await pedirBinario(servidor(), caso.ruta, { formato: 'pdf' }).set('Cookie', cookie);
+      const respuesta = await pedirBinario(servidor(), caso.ruta, { formato: 'pdf', ...caso.extra }).set('Cookie', cookie);
       expect(respuesta.status).toBe(200);
       expect(respuesta.headers['content-type']).toBe('application/pdf');
       expect(respuesta.headers['content-disposition']).toBe(`attachment; filename="${caso.nombreEsperado}"`);
@@ -436,7 +451,16 @@ describe('US11 — logo del cliente y exportación de procesos (T123)', () => {
     const cookie = await iniciarSesion(servidor(), gerente.login, gerente.password);
 
     expect((await request(servidor()).get('/api/ingresos/999999/export?formato=pdf').set('Cookie', cookie)).status).toBe(404);
-    expect((await request(servidor()).get('/api/salidas/999999/export?formato=pdf').set('Cookie', cookie)).status).toBe(404);
+    // Con los parámetros de US27 completos, para que el 404 sea por el documento y no un 400 de
+    // validación: el pipe de query corre ANTES del handler, así que sin ellos nunca se llegaría a
+    // buscar la salida.
+    expect(
+      (
+        await request(servidor())
+          .get('/api/salidas/999999/export?formato=pdf&valores=con&recibe=Quien%20recibe')
+          .set('Cookie', cookie)
+      ).status,
+    ).toBe(404);
     // Formato inválido → 400 del mismo esquema Zod que usan los reportes.
     expect((await request(servidor()).get('/api/ingresos/export?formato=csv').set('Cookie', cookie)).status).toBe(400);
   });

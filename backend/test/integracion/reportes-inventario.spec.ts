@@ -126,10 +126,11 @@ describe('Reportes de inventario y movimientos — /api/reportes (T083, US7, FR-
 
   /** Cuerpo mínimo válido de `POST /api/salidas` (esquemaCrearSalida) — mismo patrón que `inventario.spec.ts`. */
   function cuerpoSalida(
-    proyectoId: number,
+    destino: { clienteId: number; proyectoId?: number },
     lineas: { productoId: number; cantidad: number; precioUnitario: number }[],
   ): Record<string, unknown> {
-    return { proyectoId, fechaSalida: '2026-01-10', lineas };
+    // US28 (FR-124): el destino obligatorio es el cliente.
+    return { ...destino, fechaSalida: '2026-01-10', lineas };
   }
 
   describe('GET /api/reportes/inventario (FR-041)', () => {
@@ -175,7 +176,7 @@ describe('Reportes de inventario y movimientos — /api/reportes (T083, US7, FR-
       const respuestaSalida = await request(servidor())
         .post('/api/salidas')
         .set('Cookie', cookieOperario)
-        .send(cuerpoSalida(proyecto.id, [{ productoId: productoAlto.id, cantidad: 30, precioUnitario: 100 }]));
+        .send(cuerpoSalida({ clienteId: cliente.id, proyectoId: proyecto.id }, [{ productoId: productoAlto.id, cantidad: 30, precioUnitario: 100 }]));
       expect(respuestaSalida.status).toBe(201);
 
       return {
@@ -314,7 +315,7 @@ describe('Reportes de inventario y movimientos — /api/reportes (T083, US7, FR-
       const crearSalidaA1 = await request(servidor())
         .post('/api/salidas')
         .set('Cookie', cookie1)
-        .send(cuerpoSalida(proyectoA1.id, [{ productoId: producto.id, cantidad: 40, precioUnitario: 1_000 }]));
+        .send(cuerpoSalida({ clienteId: clienteA.id, proyectoId: proyectoA1.id }, [{ productoId: producto.id, cantidad: 40, precioUnitario: 1_000 }]));
       expect(crearSalidaA1.status).toBe(201);
       const confirmarA1 = await request(servidor())
         .post(`/api/salidas/${crearSalidaA1.body.id}/confirmar`)
@@ -325,7 +326,7 @@ describe('Reportes de inventario y movimientos — /api/reportes (T083, US7, FR-
       const crearSalidaA2 = await request(servidor())
         .post('/api/salidas')
         .set('Cookie', cookie1)
-        .send(cuerpoSalida(proyectoA2.id, [{ productoId: producto.id, cantidad: 15, precioUnitario: 1_000 }]));
+        .send(cuerpoSalida({ clienteId: clienteA.id, proyectoId: proyectoA2.id }, [{ productoId: producto.id, cantidad: 15, precioUnitario: 1_000 }]));
       expect(crearSalidaA2.status).toBe(201);
       const confirmarA2 = await request(servidor())
         .post(`/api/salidas/${crearSalidaA2.body.id}/confirmar`)
@@ -336,7 +337,7 @@ describe('Reportes de inventario y movimientos — /api/reportes (T083, US7, FR-
       const crearSalidaB1 = await request(servidor())
         .post('/api/salidas')
         .set('Cookie', cookie2)
-        .send(cuerpoSalida(proyectoB1.id, [{ productoId: producto.id, cantidad: 25, precioUnitario: 1_000 }]));
+        .send(cuerpoSalida({ clienteId: clienteB.id, proyectoId: proyectoB1.id }, [{ productoId: producto.id, cantidad: 25, precioUnitario: 1_000 }]));
       expect(crearSalidaB1.status).toBe(201);
       const confirmarB1 = await request(servidor())
         .post(`/api/salidas/${crearSalidaB1.body.id}/confirmar`)

@@ -123,11 +123,12 @@ describe('Panel de control — GET /api/panel (T117, US10, FR-060…FR-063)', ()
 
   /** Cuerpo mínimo válido de `POST /api/salidas` (`esquemaCrearSalida`). */
   function cuerpoSalida(
-    proyectoId: number,
+    destino: { clienteId: number; proyectoId?: number },
     fechaSalida: string,
     lineas: { productoId: number; cantidad: number; precioUnitario: number }[],
   ): Record<string, unknown> {
-    return { proyectoId, fechaSalida, lineas };
+    // US28 (FR-124): el cliente es el destino obligatorio; el proyecto acompaña si lo hay.
+    return { ...destino, fechaSalida, lineas };
   }
 
   /**
@@ -195,7 +196,7 @@ describe('Panel de control — GET /api/panel (T117, US10, FR-060…FR-063)', ()
     const salidaDelMes = await request(servidor())
       .post('/api/salidas')
       .set('Cookie', cookieAdmin)
-      .send(cuerpoSalida(proyecto.id, fechaDeHoyEnBogota(), [
+      .send(cuerpoSalida({ clienteId: cliente.id, proyectoId: proyecto.id }, fechaDeHoyEnBogota(), [
         { productoId: productoA.id, cantidad: 10, precioUnitario: 5_000 },
       ]));
     expect(salidaDelMes.status).toBe(201);
@@ -205,7 +206,7 @@ describe('Panel de control — GET /api/panel (T117, US10, FR-060…FR-063)', ()
     const salidaMesAnterior = await request(servidor())
       .post('/api/salidas')
       .set('Cookie', cookieAdmin)
-      .send(cuerpoSalida(proyecto.id, ultimoDiaDelMesAnterior(), [
+      .send(cuerpoSalida({ clienteId: cliente.id, proyectoId: proyecto.id }, ultimoDiaDelMesAnterior(), [
         { productoId: productoA.id, cantidad: 2, precioUnitario: 7_000 },
       ]));
     expect(salidaMesAnterior.status).toBe(201);
@@ -215,7 +216,7 @@ describe('Panel de control — GET /api/panel (T117, US10, FR-060…FR-063)', ()
     const salidaPendiente = await request(servidor())
       .post('/api/salidas')
       .set('Cookie', cookieAdmin)
-      .send(cuerpoSalida(proyecto.id, fechaDeHoyEnBogota(), [
+      .send(cuerpoSalida({ clienteId: cliente.id, proyectoId: proyecto.id }, fechaDeHoyEnBogota(), [
         { productoId: productoA.id, cantidad: 4, precioUnitario: 5_000 },
       ]));
     expect(salidaPendiente.status).toBe(201);

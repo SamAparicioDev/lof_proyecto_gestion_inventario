@@ -223,7 +223,7 @@ describe('Proveedores — /api/proveedores (T163, US15)', () => {
    * importa es que la estructura resultante haga IMPOSIBLE un ingreso sin proveedor, que es la
    * garantía que el `SET NOT NULL` posterior al relleno vino a dar.
    */
-  it('la migración dejó `ingresos.proveedor_id` NOT NULL y sin rastro de la columna de texto', async () => {
+  it('la migración retiró la columna de texto y la exigencia de proveedor vive ahora en el CHECK por tipo', async () => {
     const columnas = await contexto.prisma.$queryRaw<Array<{ column_name: string; is_nullable: string }>>`
       SELECT column_name, is_nullable
       FROM information_schema.columns
@@ -231,8 +231,23 @@ describe('Proveedores — /api/proveedores (T163, US15)', () => {
     `;
 
     const porNombre = new Map(columnas.map((columna) => [columna.column_name, columna.is_nullable]));
-    expect(porNombre.get('proveedor_id')).toBe('NO'); // NOT NULL: ningún ingreso queda huérfano
     expect(porNombre.has('proveedor')).toBe(false); // el texto libre se retiró (FR-092)
+
+    // US29 (FR-126) cambió DÓNDE vive la garantía, no la garantía: la columna admite NULL porque
+    // un AJUSTE de inventario no se le compra a nadie, y quien exige el proveedor en los ingresos
+    // de FACTURA es `ingresos_tipo_check`. Antes esta prueba comprobaba el NOT NULL de la
+    // columna; comprobarlo hoy sería exigir que un ajuste tuviera proveedor de relleno, que es
+    // exactamente lo que la historia vino a quitar.
+    expect(porNombre.get('proveedor_id')).toBe('YES');
+
+    const restricciones = await contexto.prisma.$queryRaw<Array<{ definicion: string }>>`
+      SELECT pg_get_constraintdef(oid) AS definicion
+      FROM pg_constraint
+      WHERE conrelid = 'ingresos'::regclass AND conname = 'ingresos_tipo_check'
+    `;
+    expect(restricciones).toHaveLength(1);
+    expect(restricciones[0]?.definicion).toContain('proveedor_id');
+    // La garantía de fondo la sigue demostrando la prueba de abajo, insertando el NULL a mano.
   });
 
   it('un ingreso no puede quedarse sin proveedor: la base rechaza el NULL', async () => {

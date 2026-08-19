@@ -186,7 +186,7 @@ export async function truncarTablas(prisma: PrismaService): Promise<void> {
   }
 
   await prisma.$executeRawUnsafe(`TRUNCATE TABLE ${TABLAS_DE_NEGOCIO.join(', ')} RESTART IDENTITY CASCADE;`);
-  await prisma.$executeRaw`UPDATE contadores SET valor = 0 WHERE clave IN ('salida', 'orden_compra', 'cotizacion');`;
+  await prisma.$executeRaw`UPDATE contadores SET valor = 0 WHERE clave IN ('salida', 'orden_compra', 'cotizacion', 'ajuste');`;
   await borrarRolesPropios(prisma);
 }
 

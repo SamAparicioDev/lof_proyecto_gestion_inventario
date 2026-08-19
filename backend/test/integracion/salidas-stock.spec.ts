@@ -163,6 +163,9 @@ describe('Salidas — invariante crítico de stock (T056)', () => {
       const cookie = await iniciarSesion(servidor(), usuario.login, usuario.password);
 
       const respuesta = await request(servidor()).post('/api/salidas').set('Cookie', cookie).send({
+        // US28 (FR-124): el cliente está ACTIVO; lo que invalida el destino es el proyecto, que
+        // es justo lo que esta prueba quiere aislar.
+        clienteId: cliente.id,
         proyectoId: proyectoSuspendido.id,
         fechaSalida: '2026-01-10',
         lineas: [{ productoId: producto.id, cantidad: 5, precioUnitario: 100 }],

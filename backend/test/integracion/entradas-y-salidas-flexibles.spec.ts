@@ -270,8 +270,11 @@ describe('Entradas y salidas flexibles — US26…US29 (T236)', () => {
       expect(detalle.body.tipo).toBe('AJUSTE');
       expect(detalle.body.numeroFactura).toBeNull();
       expect(detalle.body.proveedor).toBeNull();
-      // El correlativo lo pone el servidor, formateado como el resto de documentos del sistema.
-      expect(detalle.body.numeroAjuste).toBe('AJU-000001');
+      // El correlativo lo pone el SERVIDOR (nunca el cliente) y viaja como número, igual que el
+      // de órdenes y cotizaciones: `AJU-000001` es cómo se LEE, y ese formato lo aplica quien
+      // pinta con `formatoNumeroAjuste` de `@trazo/compartido`. Vale 1 porque el truncado de
+      // `setup.ts` reinicia también `contadores['ajuste']`.
+      expect(detalle.body.numeroAjuste).toBe(1);
 
       const recibido = await request(servidor())
         .post(`/api/ingresos/${creado.body.id}/recibir`)

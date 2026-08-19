@@ -90,6 +90,7 @@ describe('Conciliación de inventario (T058)', () => {
         .post('/api/salidas')
         .set('Cookie', cookieOperario)
         .send({
+          clienteId: cliente.id,
           proyectoId: proyecto.id,
           fechaSalida: '2026-01-06',
           lineas: [{ productoId: producto.id, cantidad: 20, precioUnitario: 1500 }],
@@ -113,6 +114,7 @@ describe('Conciliación de inventario (T058)', () => {
         .post('/api/salidas')
         .set('Cookie', cookieOperario)
         .send({
+          clienteId: cliente.id,
           proyectoId: proyecto.id,
           fechaSalida: '2026-01-07',
           lineas: [{ productoId: producto.id, cantidad: 15, precioUnitario: 1500 }],
@@ -159,6 +161,7 @@ describe('Conciliación de inventario (T058)', () => {
       .post('/api/salidas')
       .set('Cookie', cookie)
       .send({
+        clienteId: cliente.id,
         proyectoId: proyecto.id,
         fechaSalida: '2026-01-08',
         lineas: [{ productoId: producto.id, cantidad: 5, precioUnitario: 100 }],

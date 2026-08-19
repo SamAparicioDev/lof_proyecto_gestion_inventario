@@ -102,10 +102,12 @@ describe('Inventario — /api/inventario (T064)', () => {
 
   /** Cuerpo mínimo válido de `POST /api/salidas` (esquemaCrearSalida) — mismo patrón que `salidas.spec.ts`. */
   function cuerpoSalida(
-    proyectoId: number,
+    destino: { clienteId: number; proyectoId?: number },
     lineas: { productoId: number; cantidad: number; precioUnitario: number }[],
   ): Record<string, unknown> {
-    return { proyectoId, fechaSalida: '2026-01-10', lineas };
+    // US28 (FR-124): el destino obligatorio es el CLIENTE y el proyecto es opcional, así que el
+    // cuerpo mínimo válido dejó de ser "un proyecto" para pasar a ser "un destino".
+    return { ...destino, fechaSalida: '2026-01-10', lineas };
   }
 
   it('un producto sin salidas aparece en GET /api/inventario con comprometido 0 y disponible igual al stock físico', async () => {
@@ -135,7 +137,7 @@ describe('Inventario — /api/inventario (T064)', () => {
     const respuestaCrearSalida = await request(servidor())
       .post('/api/salidas')
       .set('Cookie', cookie)
-      .send(cuerpoSalida(proyecto.id, [{ productoId: producto.id, cantidad: 20, precioUnitario: 100 }]));
+      .send(cuerpoSalida({ clienteId: cliente.id, proyectoId: proyecto.id }, [{ productoId: producto.id, cantidad: 20, precioUnitario: 100 }]));
     expect(respuestaCrearSalida.status).toBe(201); // PENDIENTE: no toca stock físico, solo compromete
 
     const respuestaFicha = await request(servidor()).get(`/api/inventario/${producto.id}`).set('Cookie', cookie);
@@ -160,7 +162,7 @@ describe('Inventario — /api/inventario (T064)', () => {
     const respuestaSalidaBajo = await request(servidor())
       .post('/api/salidas')
       .set('Cookie', cookie)
-      .send(cuerpoSalida(proyecto.id, [{ productoId: productoBajo.id, cantidad: 10, precioUnitario: 100 }]));
+      .send(cuerpoSalida({ clienteId: cliente.id, proyectoId: proyecto.id }, [{ productoId: productoBajo.id, cantidad: 10, precioUnitario: 100 }]));
     expect(respuestaSalidaBajo.status).toBe(201);
 
     // stock 100, umbral 10, sin salidas -> disponible 100, muy por encima del umbral.
@@ -247,7 +249,7 @@ describe('Inventario — /api/inventario (T064)', () => {
       const respuestaCrearSalida = await request(servidor())
         .post('/api/salidas')
         .set('Cookie', cookie)
-        .send(cuerpoSalida(proyecto.id, [{ productoId: producto.id, cantidad: 5, precioUnitario: 1000 }]));
+        .send(cuerpoSalida({ clienteId: cliente.id, proyectoId: proyecto.id }, [{ productoId: producto.id, cantidad: 5, precioUnitario: 1000 }]));
       expect(respuestaCrearSalida.status).toBe(201);
       const salidaId: number = respuestaCrearSalida.body.id;
       const salidaNumero: number = respuestaCrearSalida.body.numero;

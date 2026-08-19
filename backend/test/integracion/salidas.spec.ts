@@ -52,10 +52,12 @@ describe('Salidas — /api/salidas (T057)', () => {
   /** Cuerpo mínimo válido de `POST /api/salidas` (esquemaCrearSalida) — solo varía el
    *  proyecto y las líneas, que es lo que cada prueba necesita controlar. */
   function cuerpoSalida(
-    proyectoId: number,
+    destino: { clienteId: number; proyectoId?: number },
     lineas: { productoId: number; cantidad: number; precioUnitario: number }[],
   ): Record<string, unknown> {
-    return { proyectoId, fechaSalida: '2026-01-10', lineas };
+    // US28 (FR-124): el destino obligatorio es el CLIENTE y el proyecto es opcional, así que el
+    // cuerpo mínimo válido dejó de ser "un proyecto" para pasar a ser "un destino".
+    return { ...destino, fechaSalida: '2026-01-10', lineas };
   }
 
   async function disponibleDelProducto(cookie: string, productoId: number): Promise<number> {
@@ -81,7 +83,7 @@ describe('Salidas — /api/salidas (T057)', () => {
         request(servidor())
           .post('/api/salidas')
           .set('Cookie', cookie)
-          .send(cuerpoSalida(proyecto.id, [{ productoId: producto.id, cantidad: 1, precioUnitario: 100 }])),
+          .send(cuerpoSalida({ clienteId: cliente.id, proyectoId: proyecto.id }, [{ productoId: producto.id, cantidad: 1, precioUnitario: 100 }])),
       ),
     );
 
@@ -105,7 +107,7 @@ describe('Salidas — /api/salidas (T057)', () => {
     expect(numerosEnBd.sort((a, b) => a - b)).toEqual(Array.from({ length: CANTIDAD_SALIDAS }, (_, i) => i + 1));
   });
 
-  it('POST /api/salidas sin proyectoId responde 400 con el mensaje "El cliente/proyecto es obligatorio" (FR-027, US3-AS3)', async () => {
+  it('POST /api/salidas sin clienteId responde 400 con el mensaje "El cliente es obligatorio" (FR-124, US3-AS3)', async () => {
     const producto = await crearProductoDePrueba(contexto.prisma, { stockActual: 10 });
     const usuario = await crearUsuarioDePrueba(contexto, { rol: 'OPERARIO' });
     const cookie = await iniciarSesion(servidor(), usuario.login, usuario.password);
@@ -119,8 +121,11 @@ describe('Salidas — /api/salidas (T057)', () => {
       });
 
     expect(respuesta.status).toBe(400);
+    // US28 (FR-124) movió la obligatoriedad del proyecto al cliente, y con ella el mensaje. Sigue
+    // siendo UNO solo y reconocible para cualquier forma de dato inválido, que es lo que pedía
+    // US3-AS3; lo que cambió es cuál de los dos campos no se puede omitir.
     expect(respuesta.body.error.campos).toEqual(
-      expect.objectContaining({ proyectoId: 'El cliente/proyecto es obligatorio' }),
+      expect.objectContaining({ clienteId: 'El cliente es obligatorio' }),
     );
 
     const totalSalidas = await contexto.prisma.salida.count();
@@ -139,7 +144,7 @@ describe('Salidas — /api/salidas (T057)', () => {
     const respuestaCrear = await request(servidor())
       .post('/api/salidas')
       .set('Cookie', cookie)
-      .send(cuerpoSalida(proyecto.id, [{ productoId: producto.id, cantidad: 30, precioUnitario: 100 }]));
+      .send(cuerpoSalida({ clienteId: cliente.id, proyectoId: proyecto.id }, [{ productoId: producto.id, cantidad: 30, precioUnitario: 100 }]));
     expect(respuestaCrear.status).toBe(201);
 
     expect(await disponibleDelProducto(cookie, producto.id)).toBe(70); // 100 - 30 comprometido
@@ -161,7 +166,7 @@ describe('Salidas — /api/salidas (T057)', () => {
     const respuestaCrear = await request(servidor())
       .post('/api/salidas')
       .set('Cookie', cookieOperario)
-      .send(cuerpoSalida(proyecto.id, [{ productoId: producto.id, cantidad: 20, precioUnitario: 1500 }]));
+      .send(cuerpoSalida({ clienteId: cliente.id, proyectoId: proyecto.id }, [{ productoId: producto.id, cantidad: 20, precioUnitario: 1500 }]));
     expect(respuestaCrear.status).toBe(201);
     const salidaId: number = respuestaCrear.body.id;
 
@@ -216,7 +221,7 @@ describe('Salidas — /api/salidas (T057)', () => {
     const respuestaCrear = await request(servidor())
       .post('/api/salidas')
       .set('Cookie', cookie)
-      .send(cuerpoSalida(proyecto.id, [{ productoId: producto.id, cantidad: 40, precioUnitario: 100 }]));
+      .send(cuerpoSalida({ clienteId: cliente.id, proyectoId: proyecto.id }, [{ productoId: producto.id, cantidad: 40, precioUnitario: 100 }]));
     const salidaId: number = respuestaCrear.body.id;
 
     expect(await disponibleDelProducto(cookie, producto.id)).toBe(60); // 100 - 40 comprometido
@@ -254,7 +259,7 @@ describe('Salidas — /api/salidas (T057)', () => {
     const respuestaCrear = await request(servidor())
       .post('/api/salidas')
       .set('Cookie', cookie)
-      .send(cuerpoSalida(proyecto.id, [{ productoId: producto.id, cantidad: 90, precioUnitario: 100 }]));
+      .send(cuerpoSalida({ clienteId: cliente.id, proyectoId: proyecto.id }, [{ productoId: producto.id, cantidad: 90, precioUnitario: 100 }]));
     expect(respuestaCrear.status).toBe(201);
     const salidaId: number = respuestaCrear.body.id;
     expect(await disponibleDelProducto(cookie, producto.id)).toBe(10);
@@ -265,7 +270,7 @@ describe('Salidas — /api/salidas (T057)', () => {
     const respuestaEditar = await request(servidor())
       .put(`/api/salidas/${salidaId}`)
       .set('Cookie', cookie)
-      .send(cuerpoSalida(proyecto.id, [{ productoId: producto.id, cantidad: 95, precioUnitario: 100 }]));
+      .send(cuerpoSalida({ clienteId: cliente.id, proyectoId: proyecto.id }, [{ productoId: producto.id, cantidad: 95, precioUnitario: 100 }]));
     expect(respuestaEditar.status).toBe(204);
     expect(await disponibleDelProducto(cookie, producto.id)).toBe(5); // 100 - 95
 
@@ -274,7 +279,7 @@ describe('Salidas — /api/salidas (T057)', () => {
     const respuestaExcede = await request(servidor())
       .put(`/api/salidas/${salidaId}`)
       .set('Cookie', cookie)
-      .send(cuerpoSalida(proyecto.id, [{ productoId: producto.id, cantidad: 101, precioUnitario: 100 }]));
+      .send(cuerpoSalida({ clienteId: cliente.id, proyectoId: proyecto.id }, [{ productoId: producto.id, cantidad: 101, precioUnitario: 100 }]));
     expect(respuestaExcede.status).toBe(409);
   });
 
@@ -288,7 +293,7 @@ describe('Salidas — /api/salidas (T057)', () => {
     const respuestaCrear = await request(servidor())
       .post('/api/salidas')
       .set('Cookie', cookie)
-      .send(cuerpoSalida(proyecto.id, [{ productoId: producto.id, cantidad: 10, precioUnitario: 100 }]));
+      .send(cuerpoSalida({ clienteId: cliente.id, proyectoId: proyecto.id }, [{ productoId: producto.id, cantidad: 10, precioUnitario: 100 }]));
     const salidaId: number = respuestaCrear.body.id;
 
     const respuestaConfirmar = await request(servidor())
@@ -299,7 +304,7 @@ describe('Salidas — /api/salidas (T057)', () => {
     const respuestaEditar = await request(servidor())
       .put(`/api/salidas/${salidaId}`)
       .set('Cookie', cookie)
-      .send(cuerpoSalida(proyecto.id, [{ productoId: producto.id, cantidad: 20, precioUnitario: 100 }]));
+      .send(cuerpoSalida({ clienteId: cliente.id, proyectoId: proyecto.id }, [{ productoId: producto.id, cantidad: 20, precioUnitario: 100 }]));
     expect(respuestaEditar.status).toBe(409);
 
     // La salida no cambió: sigue con su línea original de 10.

@@ -669,8 +669,10 @@ Se rechazan explícitamente (`400`) los campos prohibidos en vez de ignorarlos e
 cliente que envía `proveedorId` con `tipo: 'AJUSTE'` cree estar guardando algo que no se guardará.
 
 La respuesta de lectura (listado y detalle) trae `tipo`, `numeroFactura: string \| null`,
-`numeroAjuste: string \| null` ya formateado como `AJU-000042` —presentación, igual que
-`ORD-000042` y `COT-000042`— y `proveedor: { id, nombre } \| null`. El correlativo lo asigna el
+`numeroAjuste: number \| null` y `proveedor: { id, nombre } \| null`. El correlativo viaja como
+NÚMERO, no como texto: `AJU-000042` es cómo se LEE, y ese formato lo aplica quien pinta con
+`formatoNumeroAjuste` de `@trazo/compartido` — exactamente el mismo reparto que ya rige para
+`ORD-000042` (`formatoNumeroOrdenCompra`) y `COT-000042` (`formatoNumeroCotizacion`). El correlativo lo asigna el
 servidor con el mismo mecanismo transaccional que el resto de documentos (`contadores['ajuste']`,
 research R5); nunca lo envía el cliente.
 
