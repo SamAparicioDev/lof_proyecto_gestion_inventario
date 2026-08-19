@@ -167,7 +167,8 @@ export class RepositorioSalidasPrisma implements RepositorioSalidas {
         data: {
           numero: BigInt(numero),
           fechaSalida: datos.fechaSalida,
-          proyectoId: BigInt(datos.proyectoId),
+          clienteId: BigInt(datos.clienteId),
+          proyectoId: datos.proyectoId === null ? null : BigInt(datos.proyectoId),
           observaciones: datos.observaciones,
           valorTotal,
           valorIva: impuestosDeDocumento(datos.lineas).iva,
@@ -210,7 +211,8 @@ export class RepositorioSalidasPrisma implements RepositorioSalidas {
         where: { id: BigInt(id) },
         data: {
           fechaSalida: datos.fechaSalida,
-          proyectoId: BigInt(datos.proyectoId),
+          clienteId: BigInt(datos.clienteId),
+          proyectoId: datos.proyectoId === null ? null : BigInt(datos.proyectoId),
           observaciones: datos.observaciones,
           valorTotal,
           valorIva: impuestosDeDocumento(datos.lineas).iva,
@@ -300,8 +302,10 @@ export class RepositorioSalidasPrisma implements RepositorioSalidas {
             stockResultante: movimiento.stockResultante,
             documentoTipo: 'SALIDA',
             documentoId: BigInt(id),
-            // A diferencia de los movimientos de ingreso, los de salida SÍ llevan
-            // `proyectoId` (FR-042) — se deriva de la propia salida, no del body.
+            // A diferencia de los movimientos de ingreso, los de salida llevan `proyectoId`
+            // (FR-042) — se deriva de la propia salida, no del body. Desde US28 (FR-124) puede
+            // ser `null`: la entrega es del cliente y no de una obra, y el movimiento lo refleja
+            // tal cual en vez de inventarle un proyecto.
             proyectoId: salida.proyectoId,
             usuarioId: BigInt(usuarioId),
           },
@@ -474,9 +478,16 @@ async function sumarComprometidoPorProducto(
  *  excepción (ver TSDoc de `FiltrosConsumoSalidas`). */
 const ESTADOS_CONSUMO: readonly EstadoSalidaPrisma[] = ['CONFIRMADA', 'COMPLETADA'];
 
-/** Condiciones de cliente (JOIN vía relación `proyecto`)/proyecto/rango de `fechaSalida`
- *  compartidas por `listar` (FR-033) y `listarParaConsumo` (FR-044) — factoriza el JOIN
- *  implícito documentado en el TSDoc de `FiltrosListarSalidas` para no duplicarlo. */
+/**
+ * Condiciones de cliente/proyecto/rango de `fechaSalida` compartidas por `listar` (FR-033) y
+ * `listarParaConsumo` (FR-044) — para que los dos filtren igual por construcción.
+ *
+ * US28 (FR-124): `clienteId` era un JOIN implícito contra `proyectos` (`{ proyecto: { clienteId
+ * } }`) porque la columna no existía. Ahora es una igualdad directa, y no es solo más barata:
+ * el JOIN dejaba FUERA a las entregas sin proyecto: `proyecto` es `null` en ellas, así que
+ * ninguna condición anidada sobre la relación las alcanza y el cliente no vería justo las
+ * salidas que esta historia vino a permitir.
+ */
 function condicionesClienteProyectoFecha(filtros: {
   readonly clienteId?: number;
   readonly proyectoId?: number;
@@ -485,7 +496,7 @@ function condicionesClienteProyectoFecha(filtros: {
 }): Prisma.SalidaWhereInput[] {
   const condiciones: Prisma.SalidaWhereInput[] = [];
   if (filtros.proyectoId !== undefined) condiciones.push({ proyectoId: BigInt(filtros.proyectoId) });
-  if (filtros.clienteId !== undefined) condiciones.push({ proyecto: { clienteId: BigInt(filtros.clienteId) } });
+  if (filtros.clienteId !== undefined) condiciones.push({ clienteId: BigInt(filtros.clienteId) });
   if (filtros.desde) condiciones.push({ fechaSalida: { gte: filtros.desde } });
   if (filtros.hasta) condiciones.push({ fechaSalida: { lte: filtros.hasta } });
   return condiciones;
@@ -536,7 +547,8 @@ function aSalidaDominio(registro: SalidaPrisma): Salida {
     id: Number(registro.id),
     numero: Number(registro.numero),
     fechaSalida: registro.fechaSalida,
-    proyectoId: Number(registro.proyectoId),
+    clienteId: Number(registro.clienteId),
+    proyectoId: registro.proyectoId === null ? null : Number(registro.proyectoId),
     observaciones: registro.observaciones,
     estado: mapearEstadoSalidaDeDominio(registro.estado),
     valorTotal: registro.valorTotal.toNumber(),

@@ -17,8 +17,9 @@
  * precioUnitario` redondeado a 2 decimales es la MISMA regla de negocio sobre dinero en
  * ambos documentos, así que no se duplica (docs/arquitectura.md §5, DRY).
  *
- * Implementa: FR-025 (registro de salida con cabecera + líneas), FR-027 (destino
- * obligatorio — `proyectoId`), FR-029 (transición PENDIENTE→CONFIRMADA que descuenta stock,
+ * Implementa: FR-025 (registro de salida con cabecera + líneas), FR-027 y FR-124 (destino
+ * obligatorio — el CLIENTE desde US28; el proyecto es opcional), FR-029 (transición
+ * PENDIENTE→CONFIRMADA que descuenta stock,
  * research R4), FR-031 (totales) y FR-032 (transición a ANULADA, con o sin reversa de stock
  * según el estado de origen).
  */
@@ -31,7 +32,11 @@ export interface Salida {
   readonly id: number;
   readonly numero: number;
   readonly fechaSalida: Date;
-  readonly proyectoId: number;
+  /** US28 (FR-124): destino OBLIGATORIO. Antes se deducía del proyecto; con el proyecto ya
+   *  opcional, esa deducción dejaría sin destino a media tabla. */
+  readonly clienteId: number;
+  /** US28 (FR-124): `null` cuando la entrega es del cliente y no de una obra concreta. */
+  readonly proyectoId: number | null;
   readonly observaciones: string | null;
   readonly estado: EstadoSalida;
   readonly valorTotal: number;

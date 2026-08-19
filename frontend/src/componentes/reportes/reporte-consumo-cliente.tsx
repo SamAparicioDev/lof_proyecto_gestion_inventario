@@ -231,11 +231,15 @@ export function PanelConsumoCliente({ clientes }: { clientes: Cliente[] }) {
                 </div>
               )}
               {reporte.proyectos.map((proyectoConsumo) => (
-                <div key={proyectoConsumo.proyecto.id} className="card gap-3 p-4">
+                <div key={proyectoConsumo.proyecto.id ?? 'sin-proyecto'} className="card gap-3 p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <h6 style={{ margin: 0 }}>{proyectoConsumo.proyecto.nombre}</h6>
-                      <EstadoProyectoTag estado={proyectoConsumo.proyecto.estado} />
+                      {/* US28 (FR-125): el grupo "Sin proyecto" no tiene estado — no es un
+                          proyecto del catálogo, es lo entregado al cliente sin obra. */}
+                      {proyectoConsumo.proyecto.estado && (
+                        <EstadoProyectoTag estado={proyectoConsumo.proyecto.estado} />
+                      )}
                     </div>
                     <strong>{formatoMoneda(proyectoConsumo.totalProyecto)}</strong>
                   </div>

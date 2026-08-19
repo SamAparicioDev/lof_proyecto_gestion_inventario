@@ -30,6 +30,12 @@
  * el archivo se genera IGUAL sin logo — nunca un error. El contenido de datos manda sobre la
  * decoración; un PDF de entrega sin logotipo sirve, un 500 no.
  *
+ * ## US27 (T225): `firmas`
+ *
+ * Un tercer campo OPCIONAL, por el mismo motivo que los dos anteriores y con la misma garantía:
+ * ningún exportable existente lo declara, así que ninguno cambia. Lo usa el documento individual
+ * de una salida (FR-123), que se imprime para que quien recibe la mercancía firme encima.
+ *
  * Implementa: FR-043 (exportación PDF/Excel con encabezados, filtros aplicados, fecha de
  * generación y totales; reporte sin filas → archivo válido con cero filas, nunca un error),
  * FR-065 (documento individual completo), FR-067/FR-068 (logo del cliente, opcional y jamás
@@ -66,6 +72,27 @@ export interface DocumentoReporte {
    *  export corresponde a un único cliente. Su ausencia o su fallo NUNCA impiden generar el
    *  archivo (FR-068). */
   readonly logo?: LogoDocumento;
+  /** Bloques de firma al cierre del documento (US27/FR-123) — ver `BloqueFirma`. Hoy solo los
+   *  declara el documento individual de una salida; los demás exportables lo omiten y su salida
+   *  no cambia en un solo byte. */
+  readonly firmas?: BloqueFirma[];
+}
+
+/**
+ * Espacio para una firma manuscrita al cierre de un documento (US27, FR-123).
+ *
+ * Existe porque el documento de una salida no es un informe: es el soporte de una entrega que
+ * alguien recibe y firma en papel. `nombre` es quien va a firmar —lo escribe quien exporta, no
+ * el sistema, que no tiene forma de saber a quién mandarán a recoger la mercancía— y
+ * `etiqueta` dice en calidad de qué firma ("Recibe la mercancía").
+ *
+ * Ambas estrategias dibujan lo mismo: un espacio en blanco suficiente para firmar, una línea, el
+ * nombre debajo y un hueco para la fecha. Es un dato de PRESENTACIÓN —no se persiste ni altera
+ * el documento almacenado—, por eso vive en el puerto de exportación y no en la entidad.
+ */
+export interface BloqueFirma {
+  readonly etiqueta: string;
+  readonly nombre: string;
 }
 
 /** Par etiqueta→valor de la cabecera de un documento, YA formateado para mostrar (mismo

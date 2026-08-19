@@ -50,7 +50,12 @@ export async function HistorialSalidas({ clienteId, proyectos }: { clienteId: nu
                     <Link href={`/salidas/${salida.id}`}>N.º {salida.numero}</Link>
                   </td>
                   <td>{formatoFecha(salida.fechaSalida)}</td>
-                  <td>{proyectosPorId.get(salida.proyectoId)?.nombre ?? `Proyecto N.º ${salida.proyectoId}`}</td>
+                  <td className={salida.proyectoId === null ? 'text-muted' : undefined}>
+                    {/* US28 (FR-124): las entregas al cliente sin obra concreta se leen así. */}
+                    {salida.proyectoId === null
+                      ? 'Sin proyecto'
+                      : (proyectosPorId.get(salida.proyectoId)?.nombre ?? `Proyecto N.º ${salida.proyectoId}`)}
+                  </td>
                   <td>
                     <EstadoSalidaTag estado={salida.estado} />
                   </td>

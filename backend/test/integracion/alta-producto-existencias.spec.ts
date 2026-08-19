@@ -87,7 +87,10 @@ describe('Alta de producto con existencias iniciales — POST /api/productos (T1
     });
     expect(ingreso.estado).toBe('RECIBIDO');
     expect(ingreso.numeroFactura).toMatch(/^ALTA-/);
-    expect(ingreso.proveedor.nombre).toBe('Cementos del Valle');
+    // US29: el ingreso que respalda unas existencias iniciales es de tipo FACTURA, así que
+    // SÍ tiene proveedor — el `?.` documenta que la columna ya es nullable, no que dude.
+    expect(ingreso.tipo).toBe('FACTURA');
+    expect(ingreso.proveedor?.nombre).toBe('Cementos del Valle');
     expect(Number(ingreso.usuarioRegistraId)).toBe(admin.id);
     expect(ingreso.detalles).toHaveLength(1);
     expect(ingreso.detalles[0]?.cantidad.toNumber()).toBe(40);

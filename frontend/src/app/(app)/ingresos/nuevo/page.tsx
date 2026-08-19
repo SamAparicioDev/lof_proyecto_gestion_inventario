@@ -44,6 +44,8 @@ export default async function PaginaNuevoIngreso({
 
   const valoresIniciales: DatosCrearIngreso | undefined = ordenSurtible
     ? {
+        // US29: un ingreso que surte una orden es, por definición, una compra.
+        tipo: 'FACTURA' as const,
         numeroFactura: '',
         fechaFactura: '',
         proveedorId: ordenSurtible.proveedor.id,

@@ -9,6 +9,10 @@
  * `COMPLETADA`, nunca `PENDIENTE`/`ANULADA`) y `RepositorioProductos` (`buscarPorIds` en lote
  * para resolver nombres de producto sin N+1, mismo criterio que `HistorialProductoCasoUso`).
  *
+ * US28 (FR-125): al final de `proyectos` aparece el grupo "Sin proyecto" con lo entregado al
+ * cliente sin obra concreta, si lo hay. Suma en `totalCliente` como cualquier otro: omitirlo
+ * haría que el total del cliente dejara de cuadrar con lo que realmente se le entregó.
+ *
  * Agrupación: cada línea de detalle de cada salida de consumo se acumula por
  * `(proyectoId, productoId)` — sumando `cantidad` y `valorTotal` — y el resultado se ordena
  * por `valorTotal` descendente dentro de cada proyecto. `totalProyecto` es la suma de sus
@@ -53,12 +57,18 @@ export interface ProductoConsumoReporte {
   readonly valorTotal: number;
 }
 
-/** Consumo de un proyecto: sus productos consumidos (orden descendente por valor) y el total. */
+/**
+ * Consumo de un proyecto: sus productos consumidos (orden descendente por valor) y el total.
+ *
+ * US28 (FR-125): `id` y `estado` son `null` en el grupo "Sin proyecto", que reúne lo entregado
+ * al cliente sin obra concreta. No es un proyecto del catálogo —no tiene id ni estado que
+ * mostrar—, pero es consumo real del cliente y suma en su total como cualquier otro grupo.
+ */
 export interface ProyectoConsumoReporte {
   readonly proyecto: {
-    readonly id: number;
+    readonly id: number | null;
     readonly nombre: string;
-    readonly estado: EstadoProyecto;
+    readonly estado: EstadoProyecto | null;
   };
   readonly productos: ProductoConsumoReporte[];
   readonly totalProyecto: number;
@@ -77,6 +87,10 @@ export interface ReporteConsumoCliente {
   readonly proyectos: ProyectoConsumoReporte[];
   readonly totalCliente: number;
 }
+
+/** Nombre del grupo que reúne las entregas sin proyecto (US28, FR-125). Se escribe igual aquí,
+ *  en la pantalla y en el archivo exportado, para que el usuario lea siempre lo mismo. */
+export const NOMBRE_GRUPO_SIN_PROYECTO = 'Sin proyecto';
 
 /** Acumulador mutable de un producto dentro de un proyecto, mientras se recorren las líneas. */
 interface AcumuladorProducto {
@@ -112,26 +126,31 @@ export class ReporteConsumoClienteCasoUso implements CasoDeUso<ReporteConsumoCli
     const nombresPorProducto = await this.resolverNombresProducto(salidas);
     const acumuladoPorProyecto = agruparPorProyectoYProducto(salidas);
 
-    const proyectosReporte = proyectos.map((proyecto): ProyectoConsumoReporte => {
-      const acumuladoProductos = acumuladoPorProyecto.get(proyecto.id);
-      const productos = acumuladoProductos
-        ? Array.from(acumuladoProductos.values())
-            .map(
-              (acumulado): ProductoConsumoReporte => ({
-                productoId: acumulado.productoId,
-                nombre: nombresPorProducto.get(acumulado.productoId) ?? `Producto N.º ${acumulado.productoId}`,
-                cantidad: acumulado.cantidad,
-                valorTotal: acumulado.valorTotal,
-              }),
-            )
-            .sort((a, b) => b.valorTotal - a.valorTotal)
-        : [];
-      return {
-        proyecto: { id: proyecto.id, nombre: proyecto.nombre, estado: proyecto.estado },
-        productos,
-        totalProyecto: productos.reduce((acumulado, producto) => acumulado + producto.valorTotal, 0),
-      };
-    });
+    const proyectosReporte = proyectos.map(
+      (proyecto): ProyectoConsumoReporte =>
+        grupoConsumo(
+          { id: proyecto.id, nombre: proyecto.nombre, estado: proyecto.estado },
+          acumuladoPorProyecto.get(proyecto.id),
+          nombresPorProducto,
+        ),
+    );
+
+    // US28 (FR-125): lo entregado al cliente SIN proyecto va al final, en su propio grupo.
+    //
+    // Solo se emite si tiene consumo, a diferencia de los proyectos reales, que aparecen aunque
+    // estén en cero (US4-AS4): un proyecto vacío es información —"esta obra no consumió nada en
+    // el período"—, mientras que un "Sin proyecto" vacío no corresponde a nada que exista en el
+    // catálogo y solo añadiría una fila de ruido a todos los reportes.
+    const acumuladoSinProyecto = acumuladoPorProyecto.get(SIN_PROYECTO);
+    if (acumuladoSinProyecto) {
+      proyectosReporte.push(
+        grupoConsumo(
+          { id: null, nombre: NOMBRE_GRUPO_SIN_PROYECTO, estado: null },
+          acumuladoSinProyecto,
+          nombresPorProducto,
+        ),
+      );
+    }
 
     return {
       cliente: { id: cliente.id, nombre: cliente.nombre, nit: cliente.nit },
@@ -152,10 +171,49 @@ export class ReporteConsumoClienteCasoUso implements CasoDeUso<ReporteConsumoCli
   }
 }
 
-/** Agrupa las líneas de TODAS las salidas de consumo por `proyectoId` y, dentro de cada
- *  proyecto, por `productoId` — sumando `cantidad`/`valorTotal` (FR-039). */
-function agruparPorProyectoYProducto(salidas: readonly SalidaConDetalles[]): Map<number, Map<number, AcumuladorProducto>> {
-  const acumuladoPorProyecto = new Map<number, Map<number, AcumuladorProducto>>();
+/**
+ * Clave del grupo de las salidas sin proyecto dentro del acumulador (US28, FR-125).
+ *
+ * Se usa `null` como clave del `Map` —que JavaScript admite sin problema— en vez de un id
+ * imposible como `-1` o `0`: la clave ES el `proyectoId` de la salida, y ese valor es
+ * literalmente `null`. Inventar un centinela numérico obligaría a recordar cuál es en cada
+ * sitio que lea el mapa.
+ */
+const SIN_PROYECTO = null;
+
+/** Un grupo del reporte a partir de su acumulado: productos ordenados por valor y su total.
+ *  Sin acumulado —proyecto sin consumo en el período— devuelve el grupo vacío (US4-AS4). */
+function grupoConsumo(
+  proyecto: ProyectoConsumoReporte['proyecto'],
+  acumuladoProductos: Map<number, AcumuladorProducto> | undefined,
+  nombresPorProducto: ReadonlyMap<number, string>,
+): ProyectoConsumoReporte {
+  const productos = acumuladoProductos
+    ? Array.from(acumuladoProductos.values())
+        .map(
+          (acumulado): ProductoConsumoReporte => ({
+            productoId: acumulado.productoId,
+            nombre: nombresPorProducto.get(acumulado.productoId) ?? `Producto N.º ${acumulado.productoId}`,
+            cantidad: acumulado.cantidad,
+            valorTotal: acumulado.valorTotal,
+          }),
+        )
+        .sort((a, b) => b.valorTotal - a.valorTotal)
+    : [];
+  return {
+    proyecto,
+    productos,
+    totalProyecto: productos.reduce((acumulado, producto) => acumulado + producto.valorTotal, 0),
+  };
+}
+
+/** Agrupa las líneas de TODAS las salidas de consumo por `proyectoId` —`null` incluido, que es
+ *  el grupo "Sin proyecto" de FR-125— y, dentro de cada uno, por `productoId`, sumando
+ *  `cantidad`/`valorTotal` (FR-039). */
+function agruparPorProyectoYProducto(
+  salidas: readonly SalidaConDetalles[],
+): Map<number | null, Map<number, AcumuladorProducto>> {
+  const acumuladoPorProyecto = new Map<number | null, Map<number, AcumuladorProducto>>();
   for (const salida of salidas) {
     const acumuladoProductos = acumuladoPorProyecto.get(salida.proyectoId) ?? new Map<number, AcumuladorProducto>();
     for (const detalle of salida.detalles) {

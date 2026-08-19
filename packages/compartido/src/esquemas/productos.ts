@@ -15,12 +15,6 @@
  */
 import { z } from 'zod';
 
-/** Mismo criterio que en ingresos y salidas: las cantidades del inventario admiten como mucho
- *  dos decimales (data-model.md — `NUMERIC(14,2)`). */
-function tieneMaximoDosDecimales(valor: number): boolean {
-  return Number.isInteger(Math.round(valor * 100));
-}
-
 /**
  * Campos del alta, SIN la validación cruzada de las existencias iniciales.
  *
@@ -72,6 +66,10 @@ const camposCrearProducto = z
     ubicacion: z.string().trim().max(100, 'La ubicación no puede superar 100 caracteres').optional(),
     umbralStockBajo: z
       .number({ invalid_type_error: 'El umbral de stock bajo debe ser un número' })
+      // US26 (FR-122): el umbral se compara contra el stock, así que es una cantidad y sigue su
+      // misma regla. Admite 0 —que significa "sin alerta"—, a diferencia de las cantidades de
+      // línea, que exigen algo mayor que cero.
+      .int('El umbral de stock bajo debe ser un número entero, sin decimales')
       .min(0, 'El umbral de stock bajo no puede ser negativo')
       .optional()
       .default(0),
@@ -95,8 +93,10 @@ const camposCrearProducto = z
       .optional(),
     cantidadInicial: z
       .number({ invalid_type_error: 'La cantidad inicial debe ser un número' })
+      // US26 (FR-122): las existencias iniciales generan un ingreso real (FR-106), así que su
+      // cantidad no puede ser menos estricta que la de una línea de ingreso.
+      .int('La cantidad inicial debe ser un número entero, sin decimales')
       .min(0, 'La cantidad inicial no puede ser negativa')
-      .refine(tieneMaximoDosDecimales, 'La cantidad inicial admite máximo 2 decimales')
       .optional(),
     valorUnitario: z
       .number({ invalid_type_error: 'El valor unitario debe ser un número' })
@@ -193,6 +193,9 @@ export const esquemaFilaImportacionProducto = z
     umbralStockBajo: camposCrearProducto.shape.umbralStockBajo,
     cantidadInicial: z
       .number({ invalid_type_error: 'La cantidad inicial debe ser un número' })
+      // US26 (FR-122): una fila con `12,5` invalida ESA fila nombrando la columna y el resto del
+      // archivo se procesa igual (FR-051) — el esquema se aplica fila a fila.
+      .int('La cantidad inicial debe ser un número entero, sin decimales')
       .min(0, 'La cantidad inicial no puede ser negativa')
       .optional(),
     valorUnitario: z

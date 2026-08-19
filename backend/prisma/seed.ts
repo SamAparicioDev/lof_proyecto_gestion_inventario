@@ -818,6 +818,7 @@ async function sembrarDatosNegocioDemo(adminId: bigint): Promise<void> {
         data: {
           numero: BigInt(numeroConfirmadaNorte),
           fechaSalida: FECHA_SALIDA_CONFIRMADA_NORTE,
+          clienteId: proyectoNorte.clienteId,
           proyectoId: proyectoNorte.id,
           estado: 'CONFIRMADA',
           valorTotal: 100 * DEMO_JUMBO.cemento.precioSalida,
@@ -857,6 +858,7 @@ async function sembrarDatosNegocioDemo(adminId: bigint): Promise<void> {
         data: {
           numero: BigInt(numeroAnuladaNorte),
           fechaSalida: FECHA_SALIDA_ANULADA_NORTE,
+          clienteId: proyectoNorte.clienteId,
           proyectoId: proyectoNorte.id,
           estado: 'ANULADA',
           valorTotal: 10 * DEMO_JUMBO.cemento.precioSalida,
@@ -883,6 +885,7 @@ async function sembrarDatosNegocioDemo(adminId: bigint): Promise<void> {
         data: {
           numero: BigInt(numeroCompletadaNorte),
           fechaSalida: FECHA_SALIDA_COMPLETADA_NORTE,
+          clienteId: proyectoNorte.clienteId,
           proyectoId: proyectoNorte.id,
           estado: 'COMPLETADA',
           valorTotal: 60 * DEMO_JUMBO.cemento.precioSalida,
@@ -922,6 +925,7 @@ async function sembrarDatosNegocioDemo(adminId: bigint): Promise<void> {
         data: {
           numero: BigInt(numeroPendienteNorte),
           fechaSalida: FECHA_SALIDA_PENDIENTE_NORTE,
+          clienteId: proyectoNorte.clienteId,
           proyectoId: proyectoNorte.id,
           estado: 'PENDIENTE',
           valorTotal: 20 * DEMO_JUMBO.cemento.precioSalida,
@@ -947,6 +951,7 @@ async function sembrarDatosNegocioDemo(adminId: bigint): Promise<void> {
         data: {
           numero: BigInt(numeroConfirmadaSur),
           fechaSalida: FECHA_SALIDA_CONFIRMADA_SUR,
+          clienteId: proyectoSur.clienteId,
           proyectoId: proyectoSur.id,
           estado: 'CONFIRMADA',
           valorTotal: 50 * DEMO_JUMBO.varilla.precioSalida,

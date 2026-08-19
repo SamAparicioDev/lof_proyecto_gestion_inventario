@@ -203,10 +203,20 @@ export default async function PaginaIngresos({
                 pagina.datos.map((ingreso) => (
                   <tr key={ingreso.id}>
                     <td>
-                      <Link href={`/ingresos/${ingreso.id}`}>{ingreso.numeroFactura}</Link>
+                      {/* US29 (FR-126): un ajuste muestra su correlativo donde las facturas
+                          muestran su número, y se distingue con una etiqueta — el usuario tiene
+                          que poder ver de un vistazo qué entró comprado y qué por corrección. */}
+                      <Link href={`/ingresos/${ingreso.id}`}>
+                        {ingreso.numeroFactura ?? ingreso.numeroAjuste}
+                      </Link>
+                      {ingreso.tipo === 'AJUSTE' && (
+                        <span className="tag" style={{ marginLeft: 8 }}>
+                          Ajuste
+                        </span>
+                      )}
                     </td>
-                    <td>{ingreso.proveedor.nombre}</td>
-                    <td>{formatoFecha(ingreso.fechaFactura)}</td>
+                    <td>{ingreso.proveedor?.nombre ?? '—'}</td>
+                    <td>{ingreso.fechaFactura ? formatoFecha(ingreso.fechaFactura) : '—'}</td>
                     <td>{formatoFecha(ingreso.fechaRecepcion)}</td>
                     <td>
                       <EstadoIngresoTag estado={ingreso.estado} />

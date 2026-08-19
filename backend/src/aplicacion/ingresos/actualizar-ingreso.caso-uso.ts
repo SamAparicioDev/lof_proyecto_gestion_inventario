@@ -28,10 +28,10 @@ import { verificarProveedorAsignable } from './verificar-proveedor-asignable';
 /** Entrada: datos validados por `esquemaActualizarIngreso` + auditoría (FR-045). */
 export interface ActualizarIngresoEntrada {
   readonly ingresoId: number;
-  readonly numeroFactura: string;
-  readonly fechaFactura: string;
+  readonly numeroFactura?: string;
+  readonly fechaFactura?: string;
   /** Referencia al catálogo de proveedores (US15, FR-091) — obligatoria. */
-  readonly proveedorId: number;
+  readonly proveedorId?: number;
   readonly fechaRecepcion: string;
   readonly observaciones: string | null;
   readonly lineas: readonly LineaCrearIngresoEntrada[];
@@ -58,16 +58,19 @@ export class ActualizarIngresoCasoUso implements CasoDeUso<ActualizarIngresoEntr
     // Solo si CAMBIA: un ingreso que ya apuntaba a un proveedor luego desactivado lo conserva
     // (US15, FR-091 — ver el TSDoc de `verificarProveedorAsignable`). Exigirlo siempre dejaría
     // facturas pendientes imposibles de guardar por un cambio de catálogo ajeno a ellas.
-    if (entrada.proveedorId !== ingreso.proveedor.id) {
+    if (entrada.proveedorId !== undefined && entrada.proveedorId !== ingreso.proveedor?.id) {
       await verificarProveedorAsignable(this.repositorioProveedores, entrada.proveedorId);
     }
 
     await this.repositorioIngresos.actualizar(
       entrada.ingresoId,
       {
-        numeroFactura: entrada.numeroFactura,
-        fechaFactura: new Date(entrada.fechaFactura),
-        proveedorId: entrada.proveedorId,
+        // US29 (FR-126): el TIPO no se edita — se conserva el del documento guardado. Cambiarlo
+        // convertiría una factura en un ajuste (o al revés) y con ella su número y su proveedor.
+        tipo: ingreso.tipo,
+        numeroFactura: entrada.numeroFactura ?? null,
+        fechaFactura: entrada.fechaFactura === undefined ? null : new Date(entrada.fechaFactura),
+        proveedorId: entrada.proveedorId ?? null,
         fechaRecepcion: new Date(entrada.fechaRecepcion),
         observaciones: entrada.observaciones,
         lineas: entrada.lineas.map((linea) => ({ ...linea })),

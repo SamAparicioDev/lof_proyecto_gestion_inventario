@@ -135,6 +135,7 @@ export class ControladorIngresos {
     const pagina = await this.repositorioIngresos.listar({
       buscar: filtros.buscar,
       proveedorId: filtros.proveedorId,
+      tipo: filtros.tipo,
       estado: filtros.estado,
       desde: filtros.desde ? new Date(filtros.desde) : undefined,
       hasta: filtros.hasta ? new Date(filtros.hasta) : undefined,
@@ -162,6 +163,7 @@ export class ControladorIngresos {
     const ingresos = await this.repositorioIngresos.listarTodos({
       buscar: filtros.buscar,
       proveedorId: filtros.proveedorId,
+      tipo: filtros.tipo,
       estado: filtros.estado,
       desde: filtros.desde ? new Date(filtros.desde) : undefined,
       hasta: filtros.hasta ? new Date(filtros.hasta) : undefined,

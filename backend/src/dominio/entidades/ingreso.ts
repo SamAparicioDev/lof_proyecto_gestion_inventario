@@ -15,6 +15,12 @@
  * de en `RepositorioIngresosPrisma` (que las importa y aplica dentro de la transacción de
  * `crear`/`actualizar`) — así se prueban en `backend/test/unit/ingresos.spec.ts` sin BD.
  *
+ * US29 (FR-126): un ingreso puede ser una FACTURA o un AJUSTE de inventario. Lo único que
+ * cambia en el dominio es qué campos pueden faltar; la máquina de estados, los totales y el
+ * efecto sobre el stock son los mismos — con una diferencia deliberada al recibirlo, que el
+ * movimiento sea `AJUSTE_ENTRADA` y no `ENTRADA` para que el historial distinga una compra de
+ * una corrección.
+ *
  * Implementa: FR-013 (registro de factura con cabecera + líneas), FR-014 (totales), FR-017
  * (transición PENDIENTE→RECIBIDO que dispara el efecto de stock — research R4) y FR-019
  * (transición a ANULADO, con o sin reversa de stock según el estado de origen).
@@ -23,20 +29,35 @@
 /** Máquina de estados de un ingreso (data-model.md — FR-017/FR-019). */
 export type EstadoIngreso = 'PENDIENTE' | 'RECIBIDO' | 'VERIFICADO' | 'ANULADO';
 
+/** De qué clase es la entrada de mercancía (US29, FR-126). */
+export type TipoIngreso = 'FACTURA' | 'AJUSTE';
+
 export interface Ingreso {
   readonly id: number;
-  readonly numeroFactura: string;
-  readonly fechaFactura: Date;
+  /**
+   * US29 (FR-126): `FACTURA` es una compra; `AJUSTE` es una corrección de inventario — un
+   * conteo físico que aparece de más, una devolución, mercancía encontrada. El tipo decide qué
+   * campos de esta entidad pueden ser `null`, y lo garantiza un CHECK en la base.
+   */
+  readonly tipo: TipoIngreso;
+  /** `null` en los AJUSTE: no hay factura detrás. */
+  readonly numeroFactura: string | null;
+  /** Correlativo propio del AJUSTE (`contadores['ajuste']`), `null` en las facturas. Un
+   *  documento sin identificador no es trazable (Principio II), y el del ajuste es este. */
+  readonly numeroAjuste: number | null;
+  /** `null` en los AJUSTE: un ajuste no tiene factura que fechar; su fecha es la de recepción. */
+  readonly fechaFactura: Date | null;
   /**
    * US15 (FR-091): el proveedor dejó de ser texto libre y pasó a ser una referencia al catálogo
    * (`dominio/entidades/proveedor.ts`). Viaja RESUELTO —id y nombre—, igual que
    * `Producto.categoria`, porque el nombre es lo que toda pantalla y todo documento exportado
    * muestran, y resolverlo aguas arriba evita una consulta por fila.
    *
-   * Nunca es `null`, a diferencia de la categoría de un producto: una factura sin saber a quién
-   * se le compró no es trazable, y por eso la FK es NOT NULL en la base de datos.
+   * `null` SOLO en los AJUSTE (US29, FR-126): una factura sin saber a quién se le compró no es
+   * trazable, pero a un ajuste no se le compra a nadie — y obligarlo a elegir un proveedor de
+   * relleno ensuciaría el catálogo y el reporte de compras con una compra que nunca ocurrió.
    */
-  readonly proveedor: { readonly id: number; readonly nombre: string };
+  readonly proveedor: { readonly id: number; readonly nombre: string } | null;
   readonly fechaRecepcion: Date;
   readonly observaciones: string | null;
   readonly estado: EstadoIngreso;

@@ -10,18 +10,26 @@
  * Implementa: FR-013…FR-019 (forma de lectura de ingresos y sus líneas).
  */
 import type { TasaIva } from '../esquemas/impuestos';
+import type { TipoIngreso } from '../esquemas/ingresos';
 
 /** Máquina de estados de un ingreso (data-model.md — FR-017/FR-019). */
 export type EstadoIngreso = 'PENDIENTE' | 'RECIBIDO' | 'VERIFICADO' | 'ANULADO';
 
 export interface Ingreso {
   id: number;
-  numeroFactura: string;
-  fechaFactura: string;
+  /** US29 (FR-126): `FACTURA` es una compra; `AJUSTE`, una corrección de inventario. */
+  tipo: TipoIngreso;
+  /** `null` en los ajustes: no hay factura detrás (US29, FR-126). */
+  numeroFactura: string | null;
+  /** Correlativo propio del ajuste, YA formateado como `AJU-000042`; `null` en las facturas.
+   *  Es el identificador que la pantalla muestra donde las facturas muestran su número. */
+  numeroAjuste: string | null;
+  /** `null` en los ajustes. */
+  fechaFactura: string | null;
   /** US15 (FR-091): el proveedor vive en un catálogo. Viaja resuelto —id y nombre— porque es
    *  lo que la pantalla necesita mostrar sin una segunda petición, igual que `Producto.categoria`.
-   *  Nunca es `null`: el proveedor de un ingreso es obligatorio. */
-  proveedor: { id: number; nombre: string };
+   *  `null` solo en los ajustes de inventario (US29): a un ajuste no se le compra a nadie. */
+  proveedor: { id: number; nombre: string } | null;
   fechaRecepcion: string;
   observaciones: string | null;
   estado: EstadoIngreso;

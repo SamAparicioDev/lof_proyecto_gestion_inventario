@@ -14,7 +14,7 @@
  * reforzada por la BD y traducida a `Duplicado`), FR-017 (recibir suma stock), FR-018
  * (usuario que registra), FR-019 (anular, con reversa si estaba RECIBIDO).
  */
-import type { DetalleIngreso, EstadoIngreso, Ingreso } from '../entidades/ingreso';
+import type { TipoIngreso, DetalleIngreso, EstadoIngreso, Ingreso } from '../entidades/ingreso';
 
 /** Línea de un ingreso nuevo o actualizado (aún sin id — lo asigna la persistencia). */
 export interface LineaNuevoIngreso {
@@ -48,6 +48,9 @@ export interface CriteriosIngresos {
    * también facturas cuyo NÚMERO contiene "3M". Se combinan con Y lógico.
    */
   readonly proveedorId?: number;
+  /** US29 (FR-126): mirar solo las compras o solo los ajustes de inventario. Vive aquí, en
+   *  `CriteriosIngresos`, para que el export del listado lo respete por construcción. */
+  readonly tipo?: TipoIngreso;
 }
 
 /** Filtros del listado de ingresos (FR-018) — paginación siempre obligatoria. */
@@ -64,10 +67,13 @@ export interface PaginaIngresos {
 
 /** Datos de alta de un ingreso — el usuario que registra viaja embebido (FR-018). */
 export interface DatosNuevoIngreso {
-  readonly numeroFactura: string;
-  readonly fechaFactura: Date;
-  /** Referencia al catálogo (US15, FR-091) — obligatoria: no hay ingreso sin proveedor. */
-  readonly proveedorId: number;
+  /** US29 (FR-126). Los tres campos siguientes son `null` exactamente cuando es `AJUSTE`; el
+   *  correlativo del ajuste lo asigna el adaptador dentro de la transacción, no llega aquí. */
+  readonly tipo: TipoIngreso;
+  readonly numeroFactura: string | null;
+  readonly fechaFactura: Date | null;
+  /** Referencia al catálogo (US15, FR-091) — obligatoria en FACTURA, ausente en AJUSTE. */
+  readonly proveedorId: number | null;
   /** Orden de compra que este ingreso surte, si nació de una (US16, FR-099). `null` es la
    *  situación normal de todo ingreso registrado sin orden previa. */
   readonly ordenCompraId: number | null;
@@ -80,9 +86,10 @@ export interface DatosNuevoIngreso {
 /** Datos editables de un ingreso `PENDIENTE` (US1-AS5) — el usuario que edita va aparte,
  *  como en `actualizar()`, porque no es "quien registró" sino "quien modificó ahora". */
 export interface DatosActualizarIngreso {
-  readonly numeroFactura: string;
-  readonly fechaFactura: Date;
-  readonly proveedorId: number;
+  readonly tipo: TipoIngreso;
+  readonly numeroFactura: string | null;
+  readonly fechaFactura: Date | null;
+  readonly proveedorId: number | null;
   readonly fechaRecepcion: Date;
   readonly observaciones: string | null;
   readonly lineas: LineaNuevoIngreso[];

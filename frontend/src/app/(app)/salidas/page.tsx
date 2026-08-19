@@ -109,6 +109,8 @@ export default async function PaginaSalidas({
   ]);
   const totalPaginas = Math.max(1, Math.ceil(pagina.total / pagina.porPagina));
   const proyectosPorId = new Map(proyectos.map((proyecto) => [proyecto.id, proyecto]));
+  // US28 (FR-124): el cliente se lee de la salida, ya no del proyecto — que puede faltar.
+  const clientesPorId = new Map(clientes.map((cliente) => [cliente.id, cliente]));
 
   // Mismo orden que los campos de la barra (FR-078). Cliente y proyecto se muestran por NOMBRE:
   // un chip que dijera "Cliente: 4" no le explica nada a nadie. `usuarioAutorizaId` sí viaja como
@@ -240,15 +242,20 @@ export default async function PaginaSalidas({
                 </tr>
               ) : (
                 pagina.datos.map((salida) => {
-                  const proyecto = proyectosPorId.get(salida.proyectoId);
+                  // US28 (FR-124): puede no haber proyecto — la entrega es del cliente.
+                  const proyecto = salida.proyectoId === null ? undefined : proyectosPorId.get(salida.proyectoId);
                   return (
                     <tr key={salida.id}>
                       <td>
                         <Link href={`/salidas/${salida.id}`}>N.º {salida.numero}</Link>
                       </td>
                       <td>{formatoFecha(salida.fechaSalida)}</td>
-                      <td>{proyecto?.clienteNombre ?? '—'}</td>
-                      <td>{proyecto?.nombre ?? `Proyecto N.º ${salida.proyectoId}`}</td>
+                      <td>{clientesPorId.get(salida.clienteId)?.nombre ?? `Cliente N.º ${salida.clienteId}`}</td>
+                      <td className={salida.proyectoId === null ? 'text-muted' : undefined}>
+                        {salida.proyectoId === null
+                          ? 'Sin proyecto'
+                          : (proyecto?.nombre ?? `Proyecto N.º ${salida.proyectoId}`)}
+                      </td>
                       <td>
                         <EstadoSalidaTag estado={salida.estado} />
                       </td>

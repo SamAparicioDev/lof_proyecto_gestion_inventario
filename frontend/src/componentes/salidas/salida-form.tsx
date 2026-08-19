@@ -9,33 +9,40 @@
  * `esquemaCrearSalida` — el MISMO esquema que usa `PUT /api/salidas/:id` como autoridad
  * (contracts/api-rest.md: "mismo esquema" para crear/actualizar).
  *
- * Combobox EN CASCADA cliente → proyecto: `proyectoId` es el único campo que el esquema
- * valida (`esquemas/salidas.ts` — data-model.md: guardar `clienteId` en la salida duplicaría
- * la verdad, el proyecto ya pertenece a un único cliente). El cliente es SOLO un filtro de UI
- * — vive en estado local `clienteSeleccionado`, NUNCA se envía al backend. Al elegir un
- * cliente se piden sus `proyectos-destino` (`GET /api/clientes/:id/proyectos-destino`, SOLO
- * proyectos ACTIVO de un cliente ACTIVO — FR-038) y se resetea `proyectoId` a 0 para forzar
- * una elección válida para el cliente recién elegido.
+ * Combobox EN CASCADA cliente → proyecto. Desde US28 (FR-124) los DOS son campos del
+ * formulario: `clienteId` es obligatorio y `proyectoId` opcional — hay entregas que son del
+ * cliente y no de una obra. Hasta esa historia el cliente era solo un filtro de interfaz que
+ * jamás se enviaba, porque la salida lo deducía del proyecto; con el proyecto ya opcional, esa
+ * deducción dejaría entregas sin destino.
  *
- * Modo edición: `proyectoInicial` (el proyecto ya asignado, con su `clienteId`) permite
- * preseleccionar el cliente y disparar la carga de sus proyectos-destino en un efecto al
- * montar. Igual que la preselección de "producto nuevo" en `ingreso-form.tsx`, el `<select>`
- * de proyecto es un campo NO controlado (`register`): la opción con el valor precargado no
- * existe en el DOM hasta que el efecto asíncrono resuelve, así que `proyectoId` se reasigna
- * con `setValue` en un efecto que corre DESPUÉS de que `proyectosDelCliente` ya se pintó. Si
- * el proyecto actual ya no es un destino válido (se desactivó mientras la salida seguía
- * PENDIENTE) se agrega igual a la lista para no perder contexto en pantalla — el backend es
- * quien decide si el guardado se rechaza (409), no este combobox.
+ * Al elegir cliente se piden sus `proyectos-destino` (`GET /api/clientes/:id/proyectos-destino`,
+ * SOLO proyectos ACTIVO de un cliente ACTIVO — FR-038) y se limpia `proyectoId`: el proyecto
+ * anterior era de otro cliente, y el servidor lo rechazaría por incoherente.
+ *
+ * Modo edición: el `clienteId` precargado dispara la carga de sus proyectos-destino al montar.
+ * La opción del proyecto ya asignado no existe en la lista hasta que ese efecto asíncrono
+ * resuelve, así que `proyectoId` se reasigna con `setValue` DESPUÉS de que `proyectosDelCliente`
+ * se pintó (mismo problema y misma solución que la preselección de "producto nuevo" en
+ * `ingreso-form.tsx`). Si el proyecto actual ya no es un destino válido (se desactivó mientras
+ * la salida seguía PENDIENTE) se agrega igual a la lista para no perder contexto en pantalla —
+ * el backend decide si el guardado se rechaza, no este combobox.
  *
  * Líneas dinámicas vía `useFieldArray` (FR-025): cada línea muestra el `disponible` real del
- * producto elegido (`GET /api/productos`, extendido en T052) como texto de ayuda, con una
- * advertencia visual (no bloqueante — la autoridad es el backend) si la cantidad lo supera;
- * el precio unitario se prellena con `ultimoCosto` al elegir el producto y sigue siendo
+ * producto elegido (`GET /api/productos`, extendido en T052) como texto de ayuda.
+ *
+ * US31: ese texto es SOLO el número. Hasta esta historia se pintaba en rojo con un "— supera el
+ * disponible" cuando la cantidad era mayor, y se estaba leyendo al revés: quien lo veía entendía
+ * que el producto no tenía inventario y dejaba de despachar mercancía que sí estaba en la
+ * bodega. El aviso nunca fue una garantía —quien decide es la revalidación atómica de
+ * `confirmar` (Principio I), intacta—, así que costaba entregas y no evitaba ningún error.
+ *
+ * El precio unitario se prellena con `ultimoCosto` al elegir el producto y sigue siendo
  * editable (precio de referencia, data-model.md § detalles_salidas). El valor de línea y el
  * total se recalculan en vivo; el total AUTORITATIVO lo recalcula el backend al guardar.
  *
  * Errores de servidor (`ErrorApi.campos`) se pintan junto al campo de cabecera correspondiente
- * (incluida la ruta `proyectoId` → "El cliente/proyecto es obligatorio", US3-AS3), o junto al
+ * (incluida la ruta `clienteId` → "El cliente es obligatorio", US3-AS3 llevado al campo que
+ * desde US28 es el obligatorio), o junto al
  * campo de línea si la ruta es `lineas.N.campo`; cualquier ruta desconocida cae al mensaje
  * general (frontend/CLAUDE.md).
  */
@@ -73,7 +80,12 @@ const MENSAJE_ERROR_RED = 'No fue posible comunicarse con el servidor. Intenta d
 
 /** Ruta `lineas.N.campo` que arma `PipeValidacionZod` para errores de líneas individuales. */
 const PATRON_ERROR_LINEA = /^lineas\.(\d+)\.(productoId|cantidad|precioUnitario)$/;
-const CAMPOS_CABECERA = new Set<keyof DatosCrearSalida>(['proyectoId', 'fechaSalida', 'observaciones']);
+const CAMPOS_CABECERA = new Set<keyof DatosCrearSalida>([
+  'clienteId',
+  'proyectoId',
+  'fechaSalida',
+  'observaciones',
+]);
 
 function crearLineaVacia(): LineaSalida {
   // US20 (FR-109): la línea nueva se propone al 19%, la tasa general.
@@ -81,7 +93,10 @@ function crearLineaVacia(): LineaSalida {
 }
 
 const VALORES_INICIALES_VACIOS: DatosCrearSalida = {
-  proyectoId: 0,
+  clienteId: 0,
+  // US28 (FR-124): `null`, no 0 — "esta entrega no es de una obra" es una respuesta válida
+  // desde el primer momento, no un campo a medio llenar.
+  proyectoId: null,
   fechaSalida: '',
   observaciones: '',
   lineas: [crearLineaVacia()],
@@ -102,7 +117,6 @@ interface SalidaFormProps {
 
 export function SalidaForm({ clientes, productos, salidaId, valoresIniciales, proyectoInicial }: SalidaFormProps) {
   const router = useRouter();
-  const [clienteSeleccionado, setClienteSeleccionado] = useState<number | null>(proyectoInicial?.clienteId ?? null);
   const [proyectosDelCliente, setProyectosDelCliente] = useState<Proyecto[]>([]);
   const [cargandoProyectos, setCargandoProyectos] = useState(false);
   const [errorGeneral, setErrorGeneral] = useState<string | null>(null);
@@ -122,6 +136,9 @@ export function SalidaForm({ clientes, productos, salidaId, valoresIniciales, pr
 
   const { fields, append, remove } = useFieldArray({ control, name: 'lineas' });
   const lineasEnVivo = useWatch({ control, name: 'lineas' });
+  /** US28: el cliente ya no es estado local — es un campo del formulario, y la cascada se
+   *  alimenta de ÉL para que no puedan discrepar. */
+  const clienteSeleccionado = useWatch({ control, name: 'clienteId' }) || null;
 
   // Carga (y recarga al cambiar de cliente) los proyectos-destino del cliente elegido —
   // ver TSDoc de cabecera para el porqué de agregar `proyectoInicial` si el backend no lo
@@ -162,10 +179,11 @@ export function SalidaForm({ clientes, productos, salidaId, valoresIniciales, pr
     setValue('proyectoId', proyectoInicial.id);
   }, [proyectosDelCliente, proyectoInicial, setValue]);
 
-  function alCambiarCliente(valor: string): void {
-    const clienteId = Number(valor) || null;
-    setClienteSeleccionado(clienteId);
-    setValue('proyectoId', 0);
+  function alCambiarCliente(clienteId: number): void {
+    setValue('clienteId', clienteId);
+    // El proyecto elegido era de otro cliente: mantenerlo dejaría en pantalla una combinación
+    // que el servidor rechaza por incoherente (FR-124).
+    setValue('proyectoId', null);
   }
 
   function alCambiarProducto(indice: number, productoId: number): void {
@@ -253,18 +271,30 @@ export function SalidaForm({ clientes, productos, salidaId, valoresIniciales, pr
       <div className="card gap-4 p-5">
         <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
           <div className="field">
-            <label htmlFor="cliente">Cliente</label>
-            <SelectorBuscable
-              id="cliente"
-              opciones={opcionesCliente}
-              value={clienteSeleccionado ?? 0}
-              onChange={(clienteId) => alCambiarCliente(String(clienteId))}
-              placeholder="Escribe para buscar un cliente…"
+            <label htmlFor="clienteId">Cliente</label>
+            <Controller
+              name="clienteId"
+              control={control}
+              render={({ field }) => (
+                <SelectorBuscable
+                  id="clienteId"
+                  opciones={opcionesCliente}
+                  value={field.value}
+                  onChange={alCambiarCliente}
+                  ariaInvalid={!!errors.clienteId}
+                  placeholder="Escribe para buscar un cliente…"
+                />
+              )}
             />
+            {errors.clienteId && (
+              <p role="alert" style={{ fontSize: 12, color: 'var(--color-accent-300)', marginTop: 5 }}>
+                {errors.clienteId.message}
+              </p>
+            )}
           </div>
 
           <div className="field">
-            <label htmlFor="proyectoId">Proyecto</label>
+            <label htmlFor="proyectoId">Proyecto (opcional)</label>
             <Controller
               name="proyectoId"
               control={control}
@@ -272,17 +302,19 @@ export function SalidaForm({ clientes, productos, salidaId, valoresIniciales, pr
                 <SelectorBuscable
                   id="proyectoId"
                   opciones={opcionesProyecto}
-                  value={field.value}
-                  onChange={field.onChange}
-                  disabled={clienteSeleccionado === null || cargandoProyectos || proyectosDelCliente.length === 0}
+                  value={field.value ?? 0}
+                  // `0` es "ninguna" en `SelectorBuscable`; en el modelo eso es `null` (FR-124).
+                  onChange={(proyectoId) => field.onChange(proyectoId === 0 ? null : proyectoId)}
+                  disabled={clienteSeleccionado === null || cargandoProyectos}
                   ariaInvalid={!!errors.proyectoId}
-                  placeholder={cargandoProyectos ? 'Cargando…' : 'Escribe para buscar un proyecto…'}
+                  placeholder={cargandoProyectos ? 'Cargando…' : 'Sin proyecto — escribe para buscar uno…'}
+                  etiquetaVacia="Sin proyecto específico"
                 />
               )}
             />
             {sinProyectosActivos && (
               <p className="text-muted" style={{ fontSize: 12, marginTop: 5 }}>
-                Este cliente no tiene proyectos activos.
+                Este cliente no tiene proyectos activos: la salida quedará a su nombre, sin proyecto.
               </p>
             )}
             {errors.proyectoId && (
@@ -333,7 +365,6 @@ export function SalidaForm({ clientes, productos, salidaId, valoresIniciales, pr
                 const producto = productos.find((p) => p.id === linea?.productoId);
                 const cantidad = Number(linea?.cantidad) || 0;
                 const valorLinea = cantidad * (Number(linea?.precioUnitario) || 0);
-                const superaDisponible = !!producto && cantidad > producto.disponible;
                 const registroProducto = register(`lineas.${indice}.productoId`, { valueAsNumber: true });
                 return (
                   <tr key={campo.id}>
@@ -356,16 +387,8 @@ export function SalidaForm({ clientes, productos, salidaId, valoresIniciales, pr
                         )}
                       />
                       {producto && (
-                        <p
-                          className="text-muted"
-                          style={{
-                            fontSize: 12,
-                            marginTop: 5,
-                            color: superaDisponible ? 'var(--color-accent-300)' : undefined,
-                          }}
-                        >
+                        <p className="text-muted" style={{ fontSize: 12, marginTop: 5 }}>
                           Disponible: {producto.disponible}
-                          {superaDisponible ? ' — supera el disponible' : ''}
                         </p>
                       )}
                       {lineaErrores?.productoId && (
@@ -377,7 +400,9 @@ export function SalidaForm({ clientes, productos, salidaId, valoresIniciales, pr
                     <td style={{ width: 130 }}>
                       <input
                         type="number"
-                        step="0.01"
+                        // US26 (FR-122): entera — las flechas suben de uno en uno y el navegador
+                        // rechaza los decimales antes de que el esquema tenga que hacerlo.
+                        step="1"
                         min={0}
                         className="input"
                         aria-label={`Cantidad de la línea ${indice + 1}`}

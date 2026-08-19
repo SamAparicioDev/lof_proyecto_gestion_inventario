@@ -109,6 +109,7 @@ async function construirLibro(documento: DocumentoReporte): Promise<Buffer> {
   }
 
   agregarFilasDeTotales(hoja, documento);
+  agregarFilasDeFirma(hoja, documento);
   agregarLogo(libro, hoja, documento);
 
   const bufferGenerado = await libro.xlsx.writeBuffer();
@@ -134,6 +135,9 @@ function agregarFilasDeEncabezado(hoja: ExcelJS.Worksheet, documento: DocumentoR
   // +1 por la fila en blanco que separa la cabecera de la tabla.
   return encabezado.length + 1;
 }
+
+/** Guiones bajos de la línea de firma en Excel (US27) — el equivalente al `canvas` del PDF. */
+const LARGO_LINEA_FIRMA = 42;
 
 /** Nombre de hoja válido para Excel: sin caracteres prohibidos y máximo 31 caracteres. */
 function nombreHojaValido(titulo: string): string {
@@ -163,6 +167,33 @@ function agregarFilasDeTotales(hoja: ExcelJS.Worksheet, documento: DocumentoRepo
     if (columnaValor) datosFila[columnaValor.clave] = total.valor;
     const fila = hoja.addRow(datosFila);
     fila.font = { bold: true };
+  }
+}
+
+/**
+ * Escribe el espacio de firma al cierre de la hoja (US27, FR-123). Ausente en todo documento que
+ * no declare `firmas`, que hoy son todos menos el de una salida.
+ *
+ * En Excel no hay cómo dibujar una línea sobre la que firmar sin recurrir a una forma flotante,
+ * así que se usa una fila de guiones bajos —que es exactamente lo que el archivo va a mostrar al
+ * imprimirse— y encima dos filas en blanco para la firma. El resultado en papel es el mismo que
+ * el del PDF; el medio es el que impone la diferencia.
+ *
+ * Va DESPUÉS de los totales y separado por una fila vacía, para que el autofiltro de la tabla no
+ * lo alcance: una firma no es una fila de datos que alguien deba poder ordenar.
+ */
+function agregarFilasDeFirma(hoja: ExcelJS.Worksheet, documento: DocumentoReporte): void {
+  const firmas = documento.firmas ?? [];
+  if (firmas.length === 0) return;
+
+  for (const firma of firmas) {
+    hoja.addRow([]);
+    hoja.addRow([]);
+    hoja.addRow(['_'.repeat(LARGO_LINEA_FIRMA)]);
+    const filaNombre = hoja.addRow([firma.nombre]);
+    filaNombre.font = { bold: true };
+    hoja.addRow([firma.etiqueta]);
+    hoja.addRow(['Fecha: ____ / ____ / ________']);
   }
 }
 

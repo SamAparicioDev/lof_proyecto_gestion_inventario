@@ -52,6 +52,7 @@ import type {
 } from '../../dominio/puertos/repositorio-ingresos';
 import { ServicioStock, type InfoProductoStock } from '../../dominio/servicios/servicio-stock';
 import { PrismaService } from './prisma.service';
+import { ContadoresPrisma } from './contadores.prisma';
 import { marcarOrdenRecibidaEnTransaccion } from './repositorio-ordenes-compra.prisma';
 import { registrarCambioDeCosto } from './registrar-cambio-costo';
 import { UnidadDeTrabajo, type PrismaTransactionClient } from './unidad-de-trabajo';
@@ -72,16 +73,24 @@ interface FilaProductoBloqueado {
  * `Ingreso.proveedor` no admite `undefined`, y una consulta que se olvidara de pedirlo no
  * compilaría, que es exactamente la garantía que se busca.
  */
+/** Clave del correlativo de los ajustes de inventario en `contadores` (US29, FR-126). */
+export const CLAVE_CONTADOR_AJUSTE = 'ajuste';
+
 const INCLUIR_PROVEEDOR = { proveedor: { select: { id: true, nombre: true } } } as const;
 
-/** Registro de `ingresos` con el proveedor ya resuelto por `INCLUIR_PROVEEDOR`. */
-type IngresoPrismaConProveedor = IngresoPrisma & { proveedor: { id: bigint; nombre: string } };
+/** Registro de `ingresos` con el proveedor ya resuelto por `INCLUIR_PROVEEDOR`. `null` en los
+ *  ajustes de inventario, que no tienen a quién comprarle (US29, FR-126). */
+type IngresoPrismaConProveedor = IngresoPrisma & { proveedor: { id: bigint; nombre: string } | null };
 
 @Injectable()
 export class RepositorioIngresosPrisma implements RepositorioIngresos {
   constructor(
     private readonly prisma: PrismaService,
     private readonly unidadDeTrabajo: UnidadDeTrabajo,
+    /** Adaptador CONCRETO (no el puerto `Contadores`): se necesita
+     *  `siguienteNumeroEnTransaccion`, que solo tiene sentido dentro de la transacción del
+     *  documento — mismo criterio que `RepositorioSalidasPrisma` (US29, research R5). */
+    private readonly contadores: ContadoresPrisma,
   ) {}
 
   async buscarPorId(id: number): Promise<IngresoConDetalles | null> {
@@ -136,21 +145,33 @@ export class RepositorioIngresosPrisma implements RepositorioIngresos {
       }));
       const valorTotal = calcularValorTotalIngreso(datos.lineas);
 
-      const registro = await this.prisma.ingreso.create({
-        data: {
-          numeroFactura: datos.numeroFactura,
-          fechaFactura: datos.fechaFactura,
-          proveedorId: BigInt(datos.proveedorId),
-          ordenCompraId: datos.ordenCompraId === null ? null : BigInt(datos.ordenCompraId),
-          fechaRecepcion: datos.fechaRecepcion,
-          observaciones: datos.observaciones,
-          valorTotal,
-          valorIva: impuestosDeDocumento(datos.lineas).iva,
-          usuarioRegistraId: BigInt(datos.usuarioId),
-          usuarioCreacionId: BigInt(datos.usuarioId),
-          detalles: { create: detallesCrear },
-        },
-        include: INCLUIR_PROVEEDOR,
+      // US29 (FR-126): el correlativo del ajuste se emite DENTRO de la transacción que crea el
+      // documento (research R5, igual que salidas, órdenes y cotizaciones): si el INSERT falla,
+      // el contador se revierte con él y no queda un hueco en la numeración. Por eso el `create`
+      // pasa a vivir en una transacción, que antes no necesitaba.
+      const registro = await this.unidadDeTrabajo.ejecutar(async (tx) => {
+        const numeroAjuste =
+          datos.tipo === 'AJUSTE'
+            ? await this.contadores.siguienteNumeroEnTransaccion(tx, CLAVE_CONTADOR_AJUSTE)
+            : null;
+        return tx.ingreso.create({
+          data: {
+            tipo: datos.tipo,
+            numeroFactura: datos.numeroFactura,
+            numeroAjuste: numeroAjuste === null ? null : BigInt(numeroAjuste),
+            fechaFactura: datos.fechaFactura,
+            proveedorId: datos.proveedorId === null ? null : BigInt(datos.proveedorId),
+            ordenCompraId: datos.ordenCompraId === null ? null : BigInt(datos.ordenCompraId),
+            fechaRecepcion: datos.fechaRecepcion,
+            observaciones: datos.observaciones,
+            valorTotal,
+            valorIva: impuestosDeDocumento(datos.lineas).iva,
+            usuarioRegistraId: BigInt(datos.usuarioId),
+            usuarioCreacionId: BigInt(datos.usuarioId),
+            detalles: { create: detallesCrear },
+          },
+          include: INCLUIR_PROVEEDOR,
+        });
       });
       return aIngresoDominio(registro);
     } catch (error) {
@@ -185,9 +206,12 @@ export class RepositorioIngresosPrisma implements RepositorioIngresos {
         await tx.ingreso.update({
           where: { id: BigInt(id) },
           data: {
+            // El TIPO no se edita: cambiarlo convertiría una factura en un ajuste — y con ella
+            // su número único y su proveedor— o al revés, dejando un documento que ya no es el
+            // que alguien registró. Para eso se anula y se hace otro (FR-019).
             numeroFactura: datos.numeroFactura,
             fechaFactura: datos.fechaFactura,
-            proveedorId: BigInt(datos.proveedorId),
+            proveedorId: datos.proveedorId === null ? null : BigInt(datos.proveedorId),
             fechaRecepcion: datos.fechaRecepcion,
             observaciones: datos.observaciones,
             valorTotal,
@@ -265,7 +289,10 @@ export class RepositorioIngresosPrisma implements RepositorioIngresos {
       for (const movimiento of resultado.movimientos) {
         await tx.movimientoInventario.create({
           data: {
-            tipo: 'ENTRADA',
+            // US29 (FR-126): un ajuste deja `AJUSTE_ENTRADA`, no `ENTRADA`. Es lo que permite
+            // que el reporte de movimientos distinga la mercancía que se compró de la que
+            // apareció en un conteo — dos hechos distintos que hasta ahora se leían igual.
+            tipo: ingreso.tipo === 'AJUSTE' ? 'AJUSTE_ENTRADA' : 'ENTRADA',
             productoId: BigInt(movimiento.productoId),
             cantidad: movimiento.cantidad,
             stockResultante: movimiento.stockResultante,
@@ -441,6 +468,8 @@ function construirWhereListarIngresos(filtros: CriteriosIngresos): Prisma.Ingres
   // hay nada que "escribir parecido". Sigue sin ser redundante con el `buscar` de arriba, que
   // cruza número de factura OR NOMBRE del proveedor y por eso no permite preguntar solo por uno.
   if (filtros.proveedorId) condiciones.push({ proveedorId: BigInt(filtros.proveedorId) });
+  // US29 (FR-126): igualdad exacta sobre el enum — no hay nada parecido que escribir.
+  if (filtros.tipo) condiciones.push({ tipo: filtros.tipo });
   if (filtros.estado) condiciones.push({ estado: mapearEstadoIngresoAPrisma(filtros.estado) });
   if (filtros.desde) condiciones.push({ fechaRecepcion: { gte: filtros.desde } });
   if (filtros.hasta) condiciones.push({ fechaRecepcion: { lte: filtros.hasta } });
@@ -451,9 +480,14 @@ function construirWhereListarIngresos(filtros: CriteriosIngresos): Prisma.Ingres
 function aIngresoDominio(registro: IngresoPrismaConProveedor): Ingreso {
   return {
     id: Number(registro.id),
+    tipo: registro.tipo,
     numeroFactura: registro.numeroFactura,
+    numeroAjuste: registro.numeroAjuste === null ? null : Number(registro.numeroAjuste),
     fechaFactura: registro.fechaFactura,
-    proveedor: { id: Number(registro.proveedor.id), nombre: registro.proveedor.nombre },
+    proveedor:
+      registro.proveedor === null
+        ? null
+        : { id: Number(registro.proveedor.id), nombre: registro.proveedor.nombre },
     fechaRecepcion: registro.fechaRecepcion,
     observaciones: registro.observaciones,
     estado: mapearEstadoIngresoDeDominio(registro.estado),

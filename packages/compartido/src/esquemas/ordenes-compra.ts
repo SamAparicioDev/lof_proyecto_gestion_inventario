@@ -19,17 +19,11 @@
  */
 import { z } from 'zod';
 import { esquemaTasaIva } from './impuestos';
-import { esquemaIdFiltro, esquemaPaginacion } from './comunes';
+import { MENSAJE_CANTIDAD_ENTERA, esquemaIdFiltro, esquemaPaginacion } from './comunes';
 
 /** Estados de una orden (data-model.md — FR-096). */
 export const ESTADOS_ORDEN_COMPRA = ['BORRADOR', 'ENVIADA', 'RECIBIDA', 'ANULADA'] as const;
 export type EstadoOrdenCompra = (typeof ESTADOS_ORDEN_COMPRA)[number];
-
-/** `true` si `valor` tiene, como máximo, 2 cifras decimales (columnas `DECIMAL(_,2)`). */
-function tieneMaximoDosDecimales(valor: number): boolean {
-  const [, decimales] = valor.toString().split('.');
-  return (decimales?.length ?? 0) <= 2;
-}
 
 /** Línea de la orden: producto pedido, cantidad y precio unitario ESTIMADO. */
 const esquemaLineaOrdenCompra = z.object({
@@ -39,8 +33,11 @@ const esquemaLineaOrdenCompra = z.object({
     .positive('El producto no es válido'),
   cantidad: z
     .number({ required_error: 'La cantidad es obligatoria', invalid_type_error: 'La cantidad debe ser un número' })
-    .positive('La cantidad debe ser mayor a 0')
-    .refine(tieneMaximoDosDecimales, 'La cantidad admite máximo 2 decimales'),
+    // US26 (FR-122): entera. `.int()` va ANTES de `.positive()` para que `2.5` se queje de los
+    // decimales y no de otra cosa; `0.5` sí caería en el primero de los dos, y cualquiera de los
+    // mensajes es correcto ahí.
+    .int(MENSAJE_CANTIDAD_ENTERA)
+    .positive('La cantidad debe ser mayor a 0'),
   precioUnitario: z
     .number({
       required_error: 'El precio unitario es obligatorio',

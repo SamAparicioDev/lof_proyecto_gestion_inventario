@@ -25,7 +25,7 @@
  *       compromiso a sí misma.
  *
  * Implementa: FR-025 (registro de salida con destino y líneas), FR-026 (correlativo vía
- * `Contadores`, research R5), FR-027 (destino obligatorio), FR-028 (revalidación atómica de
+ * `Contadores`, research R5), FR-027/FR-124 (destino obligatorio: el cliente; el proyecto es opcional), FR-028 (revalidación atómica de
  * disponibilidad al confirmar), FR-029/FR-030 (confirmar fija autorizante y fecha), FR-031
  * (totales), FR-032 (anular con reversa cuando aplica), FR-033 (listado paginado con
  * filtros).
@@ -47,11 +47,13 @@ export interface SalidaConDetalles extends Salida {
 }
 
 /**
- * Filtros del listado de salidas (FR-033) — paginación siempre obligatoria. `clienteId` NO
- * es una columna de `salidas` (data-model.md: el cliente se deriva del proyecto) — el
- * adaptador Prisma lo traduce a un filtro sobre `proyecto.clienteId` vía el `include`/`where`
- * anidado de la relación `Salida.proyecto`, es decir, un JOIN implícito
- * `salidas ⋈ proyectos ON proyecto_id WHERE proyectos.cliente_id = :clienteId`.
+ * Filtros del listado de salidas (FR-033) — paginación siempre obligatoria.
+ *
+ * `clienteId` fue hasta US28 un JOIN implícito contra `proyectos`, porque el cliente no se
+ * guardaba en `salidas`. Desde FR-124 es una igualdad sobre la columna `salidas.cliente_id`:
+ * mismo resultado para el histórico (la migración la rellenó desde el proyecto de cada salida)
+ * y, además, las entregas SIN proyecto aparecen bajo su cliente — con el JOIN habrían sido
+ * invisibles justo en el filtro que más se usa.
  */
 export interface FiltrosListarSalidas extends CriteriosSalidas {
   readonly pagina: number;
@@ -93,8 +95,9 @@ export interface PaginaSalidas {
  * Filtros del reporte de consumo (FR-044, US4): a diferencia de `FiltrosListarSalidas`, NO
  * hay `estado` ni paginación — `listarParaConsumo` fija el estado a `CONFIRMADA`/`COMPLETADA`
  * internamente (PENDIENTE/ANULADA NUNCA cuentan como consumo, sin excepción) y devuelve TODAS
- * las coincidencias porque alimenta un reporte, no un listado en pantalla. `clienteId` usa el
- * MISMO JOIN implícito vía `proyecto.clienteId` que `FiltrosListarSalidas` (ver TSDoc arriba).
+ * las coincidencias porque alimenta un reporte, no un listado en pantalla. `clienteId` filtra
+ * por la columna propia desde US28 (FR-124), igual que `FiltrosListarSalidas` — y por eso el
+ * consumo de un cliente incluye ahora sus entregas sin proyecto (FR-125).
  */
 export interface FiltrosConsumoSalidas {
   readonly clienteId?: number;
@@ -108,7 +111,10 @@ export interface FiltrosConsumoSalidas {
  *  datos, para que `actualizar` pueda reutilizar el MISMO shape sin arrastrar semántica de
  *  "quién creó" en una operación de edición. */
 export interface DatosNuevaSalida {
-  readonly proyectoId: number;
+  /** US28 (FR-124): destino obligatorio. */
+  readonly clienteId: number;
+  /** US28 (FR-124): `null` cuando la entrega no corresponde a una obra. */
+  readonly proyectoId: number | null;
   readonly fechaSalida: Date;
   readonly observaciones: string | null;
   readonly lineas: LineaNuevaSalida[];
@@ -141,8 +147,8 @@ export interface RepositorioSalidas {
    * es la fuente de un reporte, no un listado en pantalla) las salidas en estado
    * `CONFIRMADA` o `COMPLETADA` que matchean los filtros, CON sus líneas de detalle
    * (`SalidaConDetalles`, igual forma que `buscarPorId`). Filtra por `fechaSalida` entre
-   * `desde`/`hasta` si se pasan. El adaptador reutiliza la MISMA lógica de JOIN
-   * cliente→proyecto que `listar` (ver TSDoc de `FiltrosConsumoSalidas`) — no la duplica.
+   * `desde`/`hasta` si se pasan. El adaptador reutiliza el MISMO filtro por `clienteId` que
+   * `listar` (ver TSDoc de `FiltrosConsumoSalidas`) — no lo duplica.
    */
   listarParaConsumo(filtros: FiltrosConsumoSalidas): Promise<SalidaConDetalles[]>;
 

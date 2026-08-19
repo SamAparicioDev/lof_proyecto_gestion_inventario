@@ -210,6 +210,9 @@ export class RepositorioCotizacionesPrisma implements RepositorioCotizaciones {
           // La salida se fecha HOY, no con la fecha de la cotización: la oferta pudo hacerse
           // semanas antes y lo que se está registrando ahora es la decisión de despacharla.
           fechaSalida: new Date(),
+          // US28 (FR-124): la salida generada hereda los DOS destinos de la cotización — una
+          // cotización siempre tiene proyecto, así que esta salida también lo lleva.
+          clienteId: cotizacion.clienteId,
           proyectoId: cotizacion.proyectoId,
           cotizacionId: cotizacion.id,
           observaciones: `Generada al aceptar la cotización N.º ${cotizacion.numero}.`,

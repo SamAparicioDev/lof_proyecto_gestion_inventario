@@ -192,6 +192,17 @@ enum TipoMovimiento {
 }
 
 /**
+ * De qué clase es una entrada de mercancía (US29, FR-126). `FACTURA` es una compra; `AJUSTE`
+ * es una corrección de inventario, sin factura ni proveedor y con motivo obligatorio.
+ */
+enum TipoIngreso {
+  FACTURA
+  AJUSTE
+
+  @@map("tipo_ingreso")
+}
+
+/**
  * A qué documento pertenece un movimiento (FR-045: trazabilidad del origen).
  */
 enum DocumentoTipo {
@@ -374,6 +385,10 @@ model Producto {
   unidadMedidaId        BigInt?        @map("unidad_medida_id")
   unidadMedida          UnidadMedida?  @relation(fields: [unidadMedidaId], references: [id])
   ubicacion             String?        @db.VarChar(100)
+  /// US26 (FR-122): entera. A diferencia de las tablas de historia, este CHECK sí se validó al
+  /// migrar (los valores heredados con decimales se redondearon): es un parámetro de alerta, no
+  /// un hecho registrado, y dejarlo sin validar convertiría cualquier UPDATE del producto en un
+  /// error sorpresa.
   umbralStockBajo       Decimal        @default(0) @map("umbral_stock_bajo") @db.Decimal(12, 2)
   stockActual           Decimal        @default(0) @map("stock_actual") @db.Decimal(12, 2)
   /**
@@ -564,6 +579,8 @@ model Cliente {
 
   proyectos    Proyecto[]
   cotizaciones Cotizacion[]
+  /// US28 (FR-124): el cliente es el destino obligatorio de toda salida.
+  salidas      Salida[]
 
   @@index([nombre])
   @@map("clientes")
@@ -666,6 +683,9 @@ model DetalleOrdenCompra {
   ordenCompra    OrdenCompra @relation(fields: [ordenCompraId], references: [id], onDelete: Cascade)
   productoId     BigInt      @map("producto_id")
   producto       Producto    @relation(fields: [productoId], references: [id])
+  /// US26 (FR-122): entera. El tipo conserva la escala por el histórico; la migración
+  /// `20260818090000_cantidades_enteras` añade el CHECK `cantidad = trunc(cantidad)` NOT VALID,
+  /// que exige la regla a lo nuevo sin invalidar lo ya registrado.
   cantidad       Decimal     @db.Decimal(12, 2)
   precioUnitario Decimal     @map("precio_unitario") @db.Decimal(14, 2)
   valorTotal     Decimal     @map("valor_total") @db.Decimal(14, 2)
@@ -681,16 +701,37 @@ model DetalleOrdenCompra {
   @@map("detalles_ordenes_compra")
 }
 
+/**
+ * Entrada de mercancía. Desde US29 (FR-126) tiene TIPO: `FACTURA` (una compra) o `AJUSTE` (un
+ * ajuste de inventario — conteo físico, devolución, mercancía encontrada).
+ * El tipo decide qué columnas son obligatorias, y esa regla NO vive en los `NOT NULL` de cada
+ * una —ninguna combinación de ellos podría expresar "esto sí cuando aquello"— sino en el CHECK
+ * `ingresos_tipo_check` de la migración `*_ingreso_ajuste_inventario`:
+ * - `FACTURA`: número único, fecha de factura y proveedor obligatorios; sin `numeroAjuste`.
+ * - `AJUSTE`: ninguno de los tres, con `numeroAjuste` y `observaciones` (su MOTIVO) obligatorios.
+ * Que las columnas se vean opcionales aquí es consecuencia de eso, no una relajación: un
+ * ingreso de factura sin proveedor sigue siendo imposible de guardar.
+ */
 model Ingreso {
   id                BigInt        @id @default(autoincrement())
-  numeroFactura     String        @unique @map("numero_factura") @db.VarChar(50)
-  fechaFactura      DateTime      @map("fecha_factura") @db.Date
+  /// US29 (FR-126). El DEFAULT deja intacto todo lo registrado antes de la historia.
+  tipo              TipoIngreso   @default(FACTURA)
+  /// NOT NULL solo en `tipo = FACTURA` (CHECK). En PostgreSQL un único admite varios NULL, que
+  /// es justo lo que necesitan los ajustes: todos vacíos y ninguno chocando con otro.
+  numeroFactura     String?       @unique @map("numero_factura") @db.VarChar(50)
+  /// Correlativo de `contadores['ajuste']`, NOT NULL solo en `tipo = AJUSTE` (CHECK). BIGINT y
+  /// no texto: `AJU-000042` es presentación, igual que en salidas, órdenes y cotizaciones.
+  numeroAjuste      BigInt?       @unique @map("numero_ajuste")
+  /// NOT NULL solo en `tipo = FACTURA` (CHECK): un ajuste no tiene factura que fechar.
+  fechaFactura      DateTime?     @map("fecha_factura") @db.Date
   /**
-   * US15 (FR-091): FK OBLIGATORIA al catálogo — sustituye a la columna `proveedor VARCHAR(150)`
-   * de texto libre. Sin `?`: una factura sin saber a quién se le compró no es trazable.
+   * US15 (FR-091): FK al catálogo — sustituye a la columna `proveedor VARCHAR(150)` de texto
+   * libre. NOT NULL solo en `tipo = FACTURA` (CHECK): una factura sin saber a quién se le compró
+   * no es trazable, pero un ajuste no se le compra a nadie y exigirle un proveedor de relleno
+   * ensuciaría el catálogo igual que un número de factura inventado (US29, FR-126).
    */
-  proveedorId       BigInt        @map("proveedor_id")
-  proveedor         Proveedor     @relation(fields: [proveedorId], references: [id])
+  proveedorId       BigInt?       @map("proveedor_id")
+  proveedor         Proveedor?    @relation(fields: [proveedorId], references: [id])
   fechaRecepcion    DateTime      @map("fecha_recepcion") @db.Date
   observaciones     String?       @db.Text
   estado            EstadoIngreso @default(PENDIENTE)
@@ -736,6 +777,9 @@ model DetalleIngreso {
   ingreso        Ingreso  @relation(fields: [ingresoId], references: [id], onDelete: Cascade)
   productoId     BigInt   @map("producto_id")
   producto       Producto @relation(fields: [productoId], references: [id])
+  /// US26 (FR-122): entera. El tipo conserva la escala por el histórico; la migración
+  /// `20260818090000_cantidades_enteras` añade el CHECK `cantidad = trunc(cantidad)` NOT VALID,
+  /// que exige la regla a lo nuevo sin invalidar lo ya registrado.
   cantidad       Decimal  @db.Decimal(12, 2)
   precioUnitario Decimal  @map("precio_unitario") @db.Decimal(14, 2)
   valorTotal     Decimal  @map("valor_total") @db.Decimal(14, 2)
@@ -756,10 +800,18 @@ model DetalleIngreso {
 // ============================================================================
 
 /**
- * Salida de mercancía. `proyectoId` es NOT NULL: cumple "salida vinculada a cliente y
- * proyecto" (FR-027) porque todo proyecto pertenece a exactamente un cliente — no se
- * duplica `clienteId` aquí (data-model.md). `usuarioAutorizaId`/`fechaConfirmacion` quedan
- * NULL en PENDIENTE y se fijan atómicamente al `confirmar` (FR-030).
+ * Salida de mercancía. Desde US28 (FR-124) el destino OBLIGATORIO es `clienteId`; `proyectoId`
+ * es opcional — hay entregas que son del cliente y no de una obra concreta, y forzarles un
+ * proyecto inventado corrompía el reporte de consumo por proyecto (FR-039).
+ * Hasta esa historia el cliente NO se guardaba: se deducía del proyecto, que era NOT NULL. Esa
+ * deducción deja de ser posible en cuanto el proyecto puede faltar, y por eso la columna existe
+ * ahora — no es una desnormalización por rendimiento. La migración la rellenó desde
+ * `proyectos.cliente_id`, así que ninguna salida histórica cambió de dueño.
+ * Que el proyecto elegido PERTENEZCA al cliente elegido lo verifica `validar-destino-salida.ts`
+ * (aplicación): la base no puede expresarlo sin un disparador o una FK compuesta que obligaría
+ * a un índice artificial en `proyectos`.
+ * `usuarioAutorizaId`/`fechaConfirmacion` quedan NULL en PENDIENTE y se fijan atómicamente al
+ * `confirmar` (FR-030).
  */
 model Salida {
   id                BigInt       @id @default(autoincrement())
@@ -768,8 +820,12 @@ model Salida {
    */
   numero            BigInt       @unique
   fechaSalida       DateTime     @map("fecha_salida") @db.Date
-  proyectoId        BigInt       @map("proyecto_id")
-  proyecto          Proyecto     @relation(fields: [proyectoId], references: [id])
+  /// US28 (FR-124): destino OBLIGATORIO de la salida.
+  clienteId         BigInt       @map("cliente_id")
+  cliente           Cliente      @relation(fields: [clienteId], references: [id])
+  /// US28 (FR-124): opcional — la entrega puede no corresponder a ninguna obra.
+  proyectoId        BigInt?      @map("proyecto_id")
+  proyecto          Proyecto?    @relation(fields: [proyectoId], references: [id])
   observaciones     String?      @db.Text
   estado            EstadoSalida @default(PENDIENTE)
   valorTotal        Decimal      @default(0) @map("valor_total") @db.Decimal(14, 2)
@@ -797,6 +853,8 @@ model Salida {
   cotizacionId BigInt?         @map("cotizacion_id")
   cotizacion   Cotizacion?     @relation(fields: [cotizacionId], references: [id])
 
+  // US28 (T228): el filtro por cliente dejó de resolverse con un JOIN contra `proyectos`.
+  @@index([clienteId, estado])
   @@index([proyectoId, estado])
   @@index([fechaSalida])
   @@index([estado])
@@ -815,6 +873,9 @@ model DetalleSalida {
   salida         Salida   @relation(fields: [salidaId], references: [id], onDelete: Cascade)
   productoId     BigInt   @map("producto_id")
   producto       Producto @relation(fields: [productoId], references: [id])
+  /// US26 (FR-122): entera. El tipo conserva la escala por el histórico; la migración
+  /// `20260818090000_cantidades_enteras` añade el CHECK `cantidad = trunc(cantidad)` NOT VALID,
+  /// que exige la regla a lo nuevo sin invalidar lo ya registrado.
   cantidad       Decimal  @db.Decimal(12, 2)
   precioUnitario Decimal  @map("precio_unitario") @db.Decimal(14, 2)
   valorTotal     Decimal  @map("valor_total") @db.Decimal(14, 2)
@@ -849,6 +910,9 @@ model MovimientoInventario {
   /**
    * El signo lo define `tipo` (ENTRADA/AJUSTE_ENTRADA suman, SALIDA/AJUSTE_SALIDA restan).
    */
+  /// US26 (FR-122): entera desde la migración `20260818090000_cantidades_enteras` (CHECK NOT
+  /// VALID — los movimientos anteriores con decimales se conservan intactos; esta tabla es
+  /// inmutable y reescribirlos está prohibido por su trigger).
   cantidad        Decimal        @db.Decimal(12, 2)
   /**
    * Snapshot de `stock_actual` inmediatamente después de este movimiento (auditoría).
@@ -955,6 +1019,9 @@ model DetalleCotizacion {
   cotizacion     Cotizacion @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
   productoId     BigInt     @map("producto_id")
   producto       Producto   @relation(fields: [productoId], references: [id])
+  /// US26 (FR-122): entera. El tipo conserva la escala por el histórico; la migración
+  /// `20260818090000_cantidades_enteras` añade el CHECK `cantidad = trunc(cantidad)` NOT VALID,
+  /// que exige la regla a lo nuevo sin invalidar lo ya registrado.
   cantidad       Decimal    @db.Decimal(12, 2)
   precioUnitario Decimal    @map("precio_unitario") @db.Decimal(14, 2)
   valorTotal     Decimal    @map("valor_total") @db.Decimal(14, 2)

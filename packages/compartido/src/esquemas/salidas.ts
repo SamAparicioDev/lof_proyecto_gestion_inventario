@@ -2,10 +2,10 @@
  * Esquemas de salidas (entrega de mercancía a cliente/proyecto) — cabecera + líneas de
  * producto (FR-025…FR-033).
  *
- * Implementa: FR-027 (destino obligatorio: `proyectoId` — el mensaje es EXACTO "El
- * cliente/proyecto es obligatorio" para toda forma de dato inválido, US3-AS3, porque en la
- * UI el combobox de proyecto se deriva del combobox de cliente y el usuario percibe ambos
- * como un solo campo), FR-016/FR-047 (mensajes en español que indican el campo). La regla
+ * Implementa: FR-027 y FR-124 (destino obligatorio: `clienteId` — el mensaje es EXACTO "El
+ * cliente es obligatorio" para toda forma de dato inválido, US3-AS3 llevado al campo que desde
+ * US28 es el obligatorio; `proyectoId` es opcional), FR-016/FR-047 (mensajes en español que
+ * indican el campo). La regla
  * "sin producto repetido en dos líneas" vive aquí porque es una regla de FORMA del
  * documento (coincide con `UNIQUE(salida_id, producto_id)` de data-model.md), no una regla
  * de disponibilidad de stock — esa vive en `ServicioStock` (dominio, research R4).
@@ -20,13 +20,8 @@
  */
 import { z } from 'zod';
 import { esquemaTasaIva } from './impuestos';
-import { esquemaIdFiltro, esquemaPaginacion } from './comunes';
-
-/** `true` si `valor` tiene, como máximo, 2 cifras decimales (columnas `DECIMAL(12,2)` — FR-016). */
-function tieneMaximoDosDecimales(valor: number): boolean {
-  const [, decimales] = valor.toString().split('.');
-  return (decimales?.length ?? 0) <= 2;
-}
+import { MENSAJE_CANTIDAD_ENTERA, esquemaIdFiltro, esquemaPaginacion } from './comunes';
+import { esquemaFormatoExport } from './reportes';
 
 /** Línea de salida: producto entregado, cantidad y precio unitario de referencia. */
 const esquemaLineaSalida = z.object({
@@ -36,8 +31,11 @@ const esquemaLineaSalida = z.object({
     .positive('El producto no es válido'),
   cantidad: z
     .number({ required_error: 'La cantidad es obligatoria', invalid_type_error: 'La cantidad debe ser un número' })
-    .positive('La cantidad debe ser mayor a 0')
-    .refine(tieneMaximoDosDecimales, 'La cantidad admite máximo 2 decimales'),
+    // US26 (FR-122): entera. `.int()` va ANTES de `.positive()` para que `2.5` se queje de los
+    // decimales y no de otra cosa; `0.5` sí caería en el primero de los dos, y cualquiera de los
+    // mensajes es correcto ahí.
+    .int(MENSAJE_CANTIDAD_ENTERA)
+    .positive('La cantidad debe ser mayor a 0'),
   precioUnitario: z
     .number({
       required_error: 'El precio unitario es obligatorio',
@@ -80,23 +78,37 @@ function esquemaFecha(mensajeObligatoria: string, mensajeInvalida: string) {
 }
 
 /**
- * `proyectoId` obligatorio con el MISMO mensaje exacto sin importar la forma del error
- * (ausente, texto, cero, negativo o decimal) — US3-AS3 exige un único mensaje reconocible:
- * "El cliente/proyecto es obligatorio".
+ * `clienteId` obligatorio con el MISMO mensaje exacto sin importar la forma del error (ausente,
+ * texto, cero, negativo o decimal) — US3-AS3 exigía un único mensaje reconocible, y desde US28
+ * (FR-124) el campo que lo lleva es el cliente, no el proyecto.
  */
-const MENSAJE_PROYECTO_OBLIGATORIO = 'El cliente/proyecto es obligatorio';
+const MENSAJE_CLIENTE_OBLIGATORIO = 'El cliente es obligatorio';
 
 /** Construye el esquema de cabecera+líneas de una salida — reutilizado por crear y actualizar. */
 function construirEsquemaSalida() {
   return z
     .object({
-      proyectoId: z
+      clienteId: z
         .number({
-          required_error: MENSAJE_PROYECTO_OBLIGATORIO,
-          invalid_type_error: MENSAJE_PROYECTO_OBLIGATORIO,
+          required_error: MENSAJE_CLIENTE_OBLIGATORIO,
+          invalid_type_error: MENSAJE_CLIENTE_OBLIGATORIO,
         })
-        .int(MENSAJE_PROYECTO_OBLIGATORIO)
-        .positive(MENSAJE_PROYECTO_OBLIGATORIO),
+        .int(MENSAJE_CLIENTE_OBLIGATORIO)
+        .positive(MENSAJE_CLIENTE_OBLIGATORIO),
+      /**
+       * US28 (FR-124): opcional. `null` y ausente significan lo mismo — "esta entrega no es de
+       * una obra concreta"— y se admiten los dos porque un formulario que limpia un selector
+       * envía `null`, mientras que un cliente de API sencillamente omite el campo.
+       *
+       * Que el proyecto sea DE ESE cliente y esté activo es una regla de negocio contra la base
+       * de datos (FR-038), no de forma: vive en `validar-destino-salida.ts`, no aquí.
+       */
+      proyectoId: z
+        .number({ invalid_type_error: 'El proyecto no es válido' })
+        .int('El proyecto no es válido')
+        .positive('El proyecto no es válido')
+        .nullable()
+        .optional(),
       fechaSalida: esquemaFecha('La fecha de salida es obligatoria', 'La fecha de salida no es válida'),
       observaciones: z.string().trim().optional(),
       lineas: z.array(esquemaLineaSalida).min(1, 'Agrega al menos un producto'),
@@ -159,3 +171,32 @@ export const esquemaFiltroSalidas = z
   })
   .merge(esquemaPaginacion);
 export type FiltroSalidas = z.infer<typeof esquemaFiltroSalidas>;
+
+/**
+ * Query de `GET /api/salidas/:id/export` (US27, FR-123) — el ÚNICO `/export` del sistema con
+ * parámetros propios, porque su archivo no es un informe sino el soporte de una entrega que
+ * alguien firma en papel.
+ *
+ * NO extiende `esquemaFiltroSalidas`: `valores` y `recibe` no son filtros. No deciden QUÉ filas
+ * salen —eso lo fija el `:id` de la ruta— sino cómo se presentan, así que mezclarlos con los
+ * criterios del listado (que sí viajan a `CriteriosSalidas` y acotan datos) confundiría dos
+ * cosas distintas. Por eso parte de `esquemaFormatoExport`, que es lo único que sí comparte con
+ * el resto de exportaciones.
+ *
+ * `recibe` es obligatorio en AMBAS variantes: un comprobante de entrega que no dice quién
+ * recibió no comprueba nada. Se recorta y se limita a 120 caracteres — va impreso en una línea
+ * bajo la firma, no es un campo de observaciones.
+ */
+export const esquemaExportDocumentoSalida = esquemaFormatoExport.extend({
+  // Un solo `errorMap` y no `required_error`: Zod no admite las dos formas a la vez, y el mapa
+  // ya cubre los dos casos (ausente y valor desconocido) con el mismo texto.
+  valores: z.enum(['con', 'sin'], {
+    errorMap: () => ({ message: 'Indica si el documento va con o sin valores' }),
+  }),
+  recibe: z
+    .string({ required_error: 'El nombre de quien recibe es obligatorio' })
+    .trim()
+    .min(1, 'El nombre de quien recibe es obligatorio')
+    .max(120, 'El nombre de quien recibe no puede superar 120 caracteres'),
+});
+export type ExportDocumentoSalida = z.infer<typeof esquemaExportDocumentoSalida>;

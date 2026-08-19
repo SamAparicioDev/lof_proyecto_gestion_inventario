@@ -37,6 +37,7 @@ import { REPOSITORIO_MOVIMIENTOS, type RepositorioMovimientos } from '../../domi
 import { REPOSITORIO_PROYECTOS, type RepositorioProyectos } from '../../dominio/puertos/repositorio-proyectos';
 import { REPOSITORIO_SALIDAS, type RepositorioSalidas } from '../../dominio/puertos/repositorio-salidas';
 import { REPOSITORIO_USUARIOS, type RepositorioUsuarios } from '../../dominio/puertos/repositorio-usuarios';
+import { identificadorIngreso } from '../ingresos/identificador-ingreso';
 
 export interface HistorialProductoEntrada {
   readonly productoId: number;
@@ -135,7 +136,9 @@ export class HistorialProductoCasoUso implements CasoDeUso<HistorialProductoEntr
     const mapa = new Map<string, string>();
     idsIngreso.forEach((id, indice) => {
       const ingreso = ingresos[indice];
-      mapa.set(`INGRESO:${id}`, ingreso ? ingreso.numeroFactura : String(id));
+      // US29 (FR-126): un ajuste se identifica por su correlativo, no por una factura
+      // que no tiene.
+      mapa.set(`INGRESO:${id}`, ingreso ? identificadorIngreso(ingreso) : String(id));
     });
     idsSalida.forEach((id, indice) => {
       const salida = salidas[indice];

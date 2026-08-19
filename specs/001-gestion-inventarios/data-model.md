@@ -3,7 +3,7 @@
 **Date**: 2026-08-10 | **Plan**: [plan.md](./plan.md) | **Research**: [research.md](./research.md)
 
 Convenciones: tablas y columnas en `snake_case` español. Todos los montos en COP con
-`DECIMAL(14,2)`; cantidades con `DECIMAL(12,2)` (hasta 2 decimales, FR-016). Timestamps en
+`DECIMAL(14,2)`; cantidades con `DECIMAL(12,2)` — el tipo conserva la escala por el histórico, pero desde US26 (FR-122) toda cantidad NUEVA es entera y un `CHECK` lo exige. Timestamps en
 `timestamptz` (UTC), presentación en `America/Bogota`. IDs `BIGINT` autoincrementales.
 
 Implementación (arquitectura hexagonal — Principio VI): el esquema físico vive en
@@ -144,7 +144,7 @@ Reglas (FR-101…FR-104), mismas que `categorias` salvo lo que se indica:
 | `categoria_id` | BIGINT FK → categorias | NULL (US15, FR-086 — la categoría sigue siendo opcional, pero ya no es texto libre: sustituye a la columna `categoria VARCHAR(100)` de US8) |
 | `unidad_medida_id` | BIGINT FK → unidades_medida | NULL en la BD por los productos anteriores a US17 (FR-103); OBLIGATORIA en el alta y la edición (FR-102) |
 | `ubicacion` | VARCHAR(100) | NULL (texto libre, un solo almacén) |
-| `umbral_stock_bajo` | DECIMAL(12,2) | NOT NULL DEFAULT 0, CHECK `>= 0` (FR-010/FR-022) |
+| `umbral_stock_bajo` | DECIMAL(12,2) | NOT NULL DEFAULT 0, CHECK `>= 0`, CHECK `= trunc(...)` NOT VALID (FR-010/FR-022/FR-122 — es una cantidad, entera desde US26) |
 | `stock_actual` | DECIMAL(12,2) | NOT NULL DEFAULT 0, **CHECK `stock_actual >= 0`** (Principio I — red final en BD) |
 | `ultimo_costo` | DECIMAL(14,2) | NOT NULL DEFAULT 0 (se actualiza al recibir ingresos; precio de referencia para salidas) |
 | `fecha_ultimo_movimiento` | timestamptz | NULL (FR-020) |
@@ -263,7 +263,7 @@ registrado antes de US20 queda con tasa 0 y su total intacto.
 | `id` | BIGINT PK | |
 | `orden_compra_id` | BIGINT FK → ordenes_compra | NOT NULL, `ON DELETE CASCADE` (solo se ejerce mientras la orden es BORRADOR) |
 | `producto_id` | BIGINT FK → productos | NOT NULL, `ON DELETE RESTRICT` |
-| `cantidad` | DECIMAL(12,2) | NOT NULL, CHECK `> 0` |
+| `cantidad` | DECIMAL(12,2) | NOT NULL, CHECK `> 0`, CHECK `= trunc(cantidad)` NOT VALID (US26, FR-122) |
 | `precio_unitario` | DECIMAL(14,2) | NOT NULL, CHECK `> 0` — precio ESTIMADO: el real lo fija la factura |
 | `valor_total` | DECIMAL(14,2) | NOT NULL |
 
@@ -297,7 +297,7 @@ cuando el INGRESO vinculado se recibe, con el flujo atómico que ya existe (FR-0
 | `id` | BIGINT PK | |
 | `cotizacion_id` | BIGINT FK → cotizaciones | NOT NULL, `ON DELETE CASCADE` (solo se ejerce mientras la cotización es BORRADOR) |
 | `producto_id` | BIGINT FK → productos | NOT NULL, `ON DELETE RESTRICT` |
-| `cantidad` | DECIMAL(12,2) | NOT NULL, CHECK `> 0` |
+| `cantidad` | DECIMAL(12,2) | NOT NULL, CHECK `> 0`, CHECK `= trunc(cantidad)` NOT VALID (US26, FR-122) |
 | `precio_unitario` | DECIMAL(14,2) | NOT NULL, CHECK `> 0` |
 | `tasa_iva` | DECIMAL(5,2) | NOT NULL DEFAULT 0, CHECK `IN (0, 5, 19)` |
 | `valor_iva` | DECIMAL(14,2) | NOT NULL DEFAULT 0 |
@@ -315,16 +315,33 @@ UNIQUE `(cotizacion_id, producto_id)`: un producto por línea, mismo criterio qu
 | Columna | Tipo | Constraints |
 |---|---|---|
 | `id` | BIGINT PK | |
-| `numero_factura` | VARCHAR(50) | NOT NULL, **UNIQUE** (FR-015 — la unicidad concurrente la garantiza la BD) |
-| `fecha_factura` | DATE | NOT NULL |
-| `proveedor_id` | BIGINT FK → proveedores | **NOT NULL** (US15, FR-091 — sustituye a la columna `proveedor VARCHAR(150)` de v1; `ON DELETE RESTRICT`) |
+| `tipo` | ENUM `FACTURA/AJUSTE` | NOT NULL DEFAULT FACTURA (US29, FR-126 — el defecto deja intactos los ingresos anteriores a la historia) |
+| `numero_factura` | VARCHAR(50) | **UNIQUE**; NOT NULL solo en `tipo = FACTURA` (FR-015 — la unicidad concurrente la garantiza la BD; en PostgreSQL un índice único admite varios NULL, que es justo lo que necesitan los ajustes) |
+| `numero_ajuste` | BIGINT | **UNIQUE**; NOT NULL solo en `tipo = AJUSTE` — correlativo de `contadores['ajuste']`, mostrado como `AJU-000042` (FR-126, mismo mecanismo que salidas, órdenes y cotizaciones) |
+| `fecha_factura` | DATE | NOT NULL solo en `tipo = FACTURA` (un ajuste no tiene factura que fechar; su fecha es la de recepción) |
+| `proveedor_id` | BIGINT FK → proveedores | NOT NULL solo en `tipo = FACTURA` (US15, FR-091; `ON DELETE RESTRICT`). Un ajuste no se le compra a nadie — exigir un proveedor de relleno ensuciaría el catálogo igual que un número de factura inventado |
 | `fecha_recepcion` | DATE | NOT NULL |
 | `observaciones` | TEXT | NULL |
 | `estado` | ENUM `PENDIENTE/RECIBIDO/VERIFICADO/ANULADO` | NOT NULL DEFAULT PENDIENTE (FR-017/FR-019) |
 | `valor_total` | DECIMAL(14,2) | NOT NULL DEFAULT 0 (recalculado al guardar líneas — FR-014) |
 | `usuario_registra_id` | FK → usuarios | NOT NULL (FR-018) |
 | `motivo_anulacion` | TEXT | NULL (obligatorio a nivel de aplicación al anular — FR-019) |
-| `orden_compra_id` | BIGINT FK → ordenes_compra | NULL (US16, FR-099 — presente solo si el ingreso nació de una orden; un ingreso sin orden previa sigue siendo válido) |
+| `orden_compra_id` | BIGINT FK → ordenes_compra | NULL (US16, FR-099 — presente solo si el ingreso nació de una orden; un ingreso sin orden previa sigue siendo válido). Un AJUSTE nunca la lleva: no surte ninguna orden |
+
+**CHECK `ingresos_tipo_check` (US29, FR-126)** — una sola restricción expresa la forma completa
+de cada tipo, en vez de cuatro columnas nullables sueltas que nadie relaciona:
+
+```sql
+(tipo = 'FACTURA' AND numero_factura IS NOT NULL AND fecha_factura IS NOT NULL
+                  AND proveedor_id IS NOT NULL AND numero_ajuste IS NULL)
+OR
+(tipo = 'AJUSTE'  AND numero_factura IS NULL AND fecha_factura IS NULL
+                  AND proveedor_id IS NULL AND numero_ajuste IS NOT NULL AND observaciones IS NOT NULL)
+```
+
+El `observaciones IS NOT NULL` del ajuste es su MOTIVO: la factura justifica la entrada de un
+ingreso normal, y cuando no hay factura lo único que queda para justificarla es el motivo
+escrito (Principio II — un movimiento de corrección sin causa registrada no es trazable).
 
 ### detalles_ingresos
 
@@ -333,7 +350,7 @@ UNIQUE `(cotizacion_id, producto_id)`: un producto por línea, mismo criterio qu
 | `id` | BIGINT PK | |
 | `ingreso_id` | FK → ingresos ON DELETE CASCADE (solo aplicable en PENDIENTE) | NOT NULL |
 | `producto_id` | FK → productos | NOT NULL |
-| `cantidad` | DECIMAL(12,2) | NOT NULL, **CHECK `cantidad > 0`** (FR-016) |
+| `cantidad` | DECIMAL(12,2) | NOT NULL, **CHECK `cantidad > 0`** (FR-016), **CHECK `cantidad = trunc(cantidad)` NOT VALID** (US26, FR-122) |
 | `precio_unitario` | DECIMAL(14,2) | NOT NULL, **CHECK `precio_unitario > 0`** (FR-016) |
 | `valor_total` | DECIMAL(14,2) | NOT NULL (= cantidad × precio_unitario — FR-014) |
 | | | **UNIQUE (ingreso_id, producto_id)** — un producto una vez por factura |
@@ -345,7 +362,8 @@ UNIQUE `(cotizacion_id, producto_id)`: un producto por línea, mismo criterio qu
 | `id` | BIGINT PK | |
 | `numero` | BIGINT | NOT NULL, **UNIQUE** — correlativo de `contadores` (FR-026, research R5) |
 | `fecha_salida` | DATE | NOT NULL |
-| `proyecto_id` | FK → proyectos | **NOT NULL** (FR-025/FR-027 — el cliente se deriva del proyecto; guardar ambos duplicaría la verdad) |
+| `cliente_id` | FK → clientes | **NOT NULL** (US28, FR-124 — el destino obligatorio de una salida es el CLIENTE; `ON DELETE RESTRICT`) |
+| `proyecto_id` | FK → proyectos | NULL (US28, FR-124 — opcional: hay entregas del cliente que no son de una obra) |
 | `observaciones` | TEXT | NULL |
 | `estado` | ENUM `PENDIENTE/CONFIRMADA/COMPLETADA/ANULADA` | NOT NULL DEFAULT PENDIENTE (FR-029/FR-032) |
 | `valor_total` | DECIMAL(14,2) | NOT NULL DEFAULT 0 (FR-031) |
@@ -353,9 +371,16 @@ UNIQUE `(cotizacion_id, producto_id)`: un producto por línea, mismo criterio qu
 | `fecha_confirmacion` | timestamptz | NULL; se fija al confirmar (FR-030) |
 | `motivo_anulacion` | TEXT | NULL (obligatorio al anular — FR-032) |
 
-Nota de trazabilidad: "salida vinculada a cliente y proyecto" (FR-027) se cumple con
-`proyecto_id NOT NULL` porque todo proyecto pertenece a exactamente un cliente; los listados y
-reportes muestran ambos vía JOIN.
+Nota de trazabilidad (US28, FR-124): hasta esta historia el cliente NO se guardaba —se
+derivaba del proyecto, que era obligatorio— y esa es exactamente la razón por la que ahora hay
+una columna propia: al volverse opcional el proyecto, derivar el cliente de él dejaría sin
+destino a las salidas que no lo llevan. `cliente_id` se rellenó en la migración desde
+`proyectos.cliente_id`, así que ninguna salida histórica cambió de dueño.
+
+La coherencia entre las dos columnas —que el proyecto elegido pertenezca al cliente elegido— la
+verifica la capa de aplicación al crear y al editar (`validar-destino-salida.ts`), no un `CHECK`:
+la base no puede expresar "`proyecto_id` referencia un proyecto cuyo `cliente_id` es este" sin un
+disparador o una FK compuesta que obligaría a un índice artificial en `proyectos`.
 
 ### detalles_salidas
 
@@ -364,7 +389,7 @@ reportes muestran ambos vía JOIN.
 | `id` | BIGINT PK | |
 | `salida_id` | FK → salidas ON DELETE CASCADE (solo aplicable en PENDIENTE) | NOT NULL |
 | `producto_id` | FK → productos | NOT NULL |
-| `cantidad` | DECIMAL(12,2) | NOT NULL, **CHECK `cantidad > 0`** (FR-016/validaciones de salida) |
+| `cantidad` | DECIMAL(12,2) | NOT NULL, **CHECK `cantidad > 0`** (FR-016/validaciones de salida), **CHECK `cantidad = trunc(cantidad)` NOT VALID** (US26, FR-122) |
 | `precio_unitario` | DECIMAL(14,2) | NOT NULL, CHECK `>= 0` (referencia, editable — supuesto de spec) |
 | `valor_total` | DECIMAL(14,2) | NOT NULL (= cantidad × precio_unitario — FR-031) |
 | | | **UNIQUE (salida_id, producto_id)** |
@@ -406,11 +431,11 @@ en esta tabla.
 | `fecha_hora` | timestamptz | NOT NULL DEFAULT now() (FR-045) |
 | `tipo` | ENUM `ENTRADA/SALIDA/AJUSTE_ENTRADA/AJUSTE_SALIDA` | NOT NULL (anulaciones = AJUSTE_* — FR-019/FR-032/FR-046) |
 | `producto_id` | FK → productos | NOT NULL |
-| `cantidad` | DECIMAL(12,2) | NOT NULL, CHECK `> 0` (el signo lo define `tipo`) |
+| `cantidad` | DECIMAL(12,2) | NOT NULL, CHECK `> 0` (el signo lo define `tipo`), CHECK `= trunc(cantidad)` **NOT VALID** (US26, FR-122 — ver nota abajo) |
 | `stock_resultante` | DECIMAL(12,2) | NOT NULL (snapshot post-movimiento — facilita auditoría) |
 | `documento_tipo` | ENUM `INGRESO/SALIDA` | NOT NULL (FR-045) |
 | `documento_id` | BIGINT | NOT NULL (FK lógico al ingreso o salida) |
-| `proyecto_id` | FK → proyectos | NULL (NOT NULL cuando documento_tipo = SALIDA — FR-042) |
+| `proyecto_id` | FK → proyectos | NULL — se puebla cuando la salida que lo origina tiene proyecto (US28, FR-124: ya no siempre lo tiene; antes era NOT NULL de facto para `documento_tipo = SALIDA`, FR-042) |
 | `usuario_id` | FK → usuarios | NOT NULL (FR-045) |
 | `motivo` | TEXT | NULL (obligatorio en AJUSTE_*) |
 
@@ -418,11 +443,17 @@ en esta tabla.
 sobre esta tabla (`RAISE EXCEPTION`); la migración lo crea junto a la tabla. Solo INSERT,
 siempre dentro de la transacción que modifica `stock_actual`.
 
+**Por qué los CHECK de cantidad entera son `NOT VALID` (US26, FR-122)**: `ADD CONSTRAINT` valida
+por defecto las filas existentes y abortaría la migración si alguna cantidad histórica tiene
+decimales. `NOT VALID` hace que PostgreSQL exija la regla a todo INSERT/UPDATE futuro sin tocar
+lo ya escrito — que es exactamente la política de la constitución: se cierra la puerta, no se
+reescribe la historia (y en esta tabla reescribirla está prohibido por el trigger de arriba).
+
 ### contadores
 
 | Columna | Tipo | Constraints |
 |---|---|---|
-| `clave` | VARCHAR(30) PK | `'salida'` (FR-026) y `'orden_compra'` (US16, FR-095) |
+| `clave` | VARCHAR(30) PK | `'salida'` (FR-026), `'orden_compra'` (US16, FR-095), `'cotizacion'` (US21, FR-112) y `'ajuste'` (US29, FR-126) |
 | `valor` | BIGINT | NOT NULL DEFAULT 0 |
 
 Uso exclusivo vía `UPDATE ... RETURNING` dentro de transacciones (research R5). Sin campos de
@@ -435,7 +466,8 @@ usuarios 1───n ingresos (usuario_registra)
 usuarios 1───n salidas (usuario_autoriza)
 usuarios 1───n movimientos_inventario
 clientes 1───n proyectos
-proyectos 1───n salidas
+clientes 1───n salidas              (OBLIGATORIO — FR-124)
+proyectos 1───n salidas             (OPCIONAL desde US28 — FR-124)
 categorias 1───n productos          (opcional — FR-086)
 unidades_medida 1───n productos     (obligatoria desde US17 — FR-102/FR-103)
 proveedores 1───n ingresos          (OBLIGATORIO — FR-091)
@@ -548,7 +580,7 @@ cruzado sería sobre-ingeniería para este caso de uso (Principio V, YAGNI).
 | ordenes_compra | UNIQUE(numero); btree(proveedor_id, estado); btree(fecha_orden); btree(estado) | listado y filtros de US16; el compuesto responde "qué le pedí a este proveedor y qué sigue pendiente" |
 | detalles_ordenes_compra | btree(producto_id); UNIQUE(orden_compra_id, producto_id) | historial por producto, un producto por línea |
 | ingresos | UNIQUE(numero_factura); btree(fecha_recepcion); btree(estado); btree(proveedor_id) | historial/filtros FR-018; el último, filtro por proveedor de FR-075, que desde US15 es una igualdad por FK y no un `LIKE` sobre texto |
-| salidas | UNIQUE(numero); btree(proyecto_id, estado); btree(fecha_salida); btree(estado); btree(usuario_autoriza_id) | filtros FR-033, comprometido R4; el último, filtro por autorizante de FR-075 (US13) |
+| salidas | UNIQUE(numero); btree(cliente_id, estado); btree(proyecto_id, estado); btree(fecha_salida); btree(estado); btree(usuario_autoriza_id) | filtros FR-033, comprometido R4; el de autorizante, FR-075 (US13); el de cliente, FR-124 (US28) — el filtro por cliente dejó de resolverse con un JOIN contra `proyectos` |
 | detalles_salidas | btree(producto_id); UNIQUE(salida_id, producto_id) | agregado de comprometido R4 |
 | detalles_ingresos | btree(producto_id); UNIQUE(ingreso_id, producto_id) | historial por producto |
 | movimientos_inventario | btree(producto_id, fecha_hora); btree(documento_tipo, documento_id); btree(proyecto_id); btree(usuario_id); btree(fecha_hora) | reportes FR-024/FR-042 |

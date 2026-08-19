@@ -10,6 +10,18 @@
  */
 import { z } from 'zod';
 
+/**
+ * Mensaje ÚNICO de "esta cantidad no admite decimales" (US26, FR-122).
+ *
+ * Vive aquí y no en cada archivo de documento porque los cuatro documentos —ingreso, salida,
+ * orden de compra y cotización— validan exactamente la misma regla, y un mensaje que se escribe
+ * cinco veces termina diciendo cinco cosas parecidas. Es el mismo criterio por el que la
+ * paginación de todos los listados se define una sola vez debajo.
+ *
+ * La regla es sobre UNIDADES, no sobre dinero: los precios siguen admitiendo dos decimales.
+ */
+export const MENSAJE_CANTIDAD_ENTERA = 'La cantidad debe ser un número entero, sin decimales';
+
 /** Límite superior de `porPagina` — listados sin límite práctico degradan el rendimiento. */
 export const POR_PAGINA_MAXIMA = 100;
 

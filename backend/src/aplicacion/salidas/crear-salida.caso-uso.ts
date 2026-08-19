@@ -7,8 +7,9 @@
  *
  * Antes de crear, valida DOS reglas de negocio que el esquema Zod no puede expresar (no
  * conoce el catálogo ni el estado de proyectos/clientes en BD):
- * 1. **Destino válido** (FR-027/FR-038) — `validar-destino-salida.ts`: el `proyectoId` debe
- *    existir y ser un destino válido (proyecto `ACTIVO` de cliente `ACTIVO`).
+ * 1. **Destino válido** (FR-027/FR-038/FR-124) — `validar-destino-salida.ts`: el `clienteId`
+ *    debe existir y estar `ACTIVO`; el `proyectoId`, si viaja, debe existir, estar `ACTIVO` y
+ *    ser de ESE cliente.
  * 2. **Disponibilidad por línea** (FR-028, UX temprana) — `validar-disponibilidad-lineas.ts`:
  *    `cantidad ≤ disponible` con `disponible = stockActual − comprometido` de TODAS las
  *    salidas `PENDIENTE` (sin excluir nada — es una salida nueva, no puede tener compromiso
@@ -16,7 +17,8 @@
  *    I) — esa vive en la transacción atómica de `confirmar`.
  *
  * Implementa: FR-025 (registro con destino + líneas), FR-026 (correlativo, asignado por el
- * repositorio dentro de su propia transacción — research R5), FR-027 (destino obligatorio).
+ * repositorio dentro de su propia transacción — research R5), FR-027/FR-124 (destino
+ * obligatorio: el cliente; el proyecto es opcional).
  */
 import { Inject, Injectable } from '@nestjs/common';
 import type { CasoDeUso } from '../comunes/caso-de-uso';
@@ -37,7 +39,10 @@ export interface LineaCrearSalidaEntrada {
 /** Entrada: datos validados por `esquemaCrearSalida` + auditoría (FR-045). La fecha llega
  *  como texto ISO (`YYYY-MM-DD`) — este caso de uso la convierte a `Date`. */
 export interface CrearSalidaEntrada {
-  readonly proyectoId: number;
+  /** US28 (FR-124): destino obligatorio de la entrega. */
+  readonly clienteId: number;
+  /** US28 (FR-124): `null` cuando la entrega no corresponde a una obra concreta. */
+  readonly proyectoId: number | null;
   readonly fechaSalida: string;
   readonly observaciones: string | null;
   readonly lineas: readonly LineaCrearSalidaEntrada[];
@@ -60,11 +65,17 @@ export class CrearSalidaCasoUso implements CasoDeUso<CrearSalidaEntrada, CrearSa
   ) {}
 
   async ejecutar(entrada: CrearSalidaEntrada): Promise<CrearSalidaSalida> {
-    await validarDestinoSalida(this.repositorioProyectos, this.repositorioClientes, entrada.proyectoId);
+    await validarDestinoSalida(
+      this.repositorioProyectos,
+      this.repositorioClientes,
+      entrada.clienteId,
+      entrada.proyectoId,
+    );
     await validarDisponibilidadLineas(this.repositorioProductos, this.repositorioSalidas, entrada.lineas);
 
     const salida = await this.repositorioSalidas.crear(
       {
+        clienteId: entrada.clienteId,
         proyectoId: entrada.proyectoId,
         fechaSalida: new Date(entrada.fechaSalida),
         observaciones: entrada.observaciones,

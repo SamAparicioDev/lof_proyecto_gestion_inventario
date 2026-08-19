@@ -512,7 +512,7 @@ async function crearIngresoDePrueba(
       },
     },
   });
-  return { id: Number(registro.id), numeroFactura: registro.numeroFactura };
+  return { id: Number(registro.id), numeroFactura: registro.numeroFactura ?? '' };
 }
 
 

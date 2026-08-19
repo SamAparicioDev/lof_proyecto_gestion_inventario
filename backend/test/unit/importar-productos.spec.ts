@@ -323,9 +323,13 @@ class RepositorioIngresosFalso implements RepositorioIngresos {
     const id = this.siguienteId++;
     return {
       id,
+      // US29: la carga masiva registra ingresos de FACTURA (hay proveedor del sistema y hay
+      // costo); el doble refleja eso y no una forma inventada.
+      tipo: 'FACTURA',
       numeroFactura: datos.numeroFactura,
+      numeroAjuste: null,
       fechaFactura: datos.fechaFactura,
-      proveedor: { id: datos.proveedorId, nombre: 'Carga masiva de inventario' },
+      proveedor: datos.proveedorId === null ? null : { id: datos.proveedorId, nombre: 'Carga masiva de inventario' },
       fechaRecepcion: datos.fechaRecepcion,
       observaciones: datos.observaciones,
       estado: 'PENDIENTE',

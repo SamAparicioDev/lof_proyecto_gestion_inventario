@@ -588,6 +588,54 @@ Proveedores — MISMO patrón que categorías (FR-091), con dos diferencias que 
 **Checkpoint**: Los dos reportes se filtran con lo que el usuario sabe (una categoría, un nombre), no con identificadores internos
 
 ---
+## Phase 29: User Story 26 - Cantidades enteras (Priority: P2)
+
+**Goal**: Que ninguna cantidad nueva entre con decimales, sin invalidar el histórico (FR-122)
+
+**Independent Test**: Escribir `2,5` en la cantidad de cualquier documento y ver que se rechaza nombrando el campo (US26-AS1)
+
+- [x] T220 [US26] Esquemas compartidos: `.int()` en las cantidades de ingresos, salidas, órdenes, cotizaciones, existencias iniciales y umbral, con UN mensaje común en español
+- [x] T221 [US26] Migración: `CHECK ... NOT VALID` de cantidad entera en los cuatro `detalles_*`, en `movimientos_inventario` y en `productos.umbral_stock_bajo` (rige hacia adelante — US26-AS4)
+- [x] T222 [US26] Carga masiva: la cantidad decimal invalida SU fila nombrando la columna, sin bloquear el archivo (FR-051)
+- [x] T223 [US26] Frontend: `step=1` e `inputMode` numérico en todos los campos de cantidad; la unidad se sigue mostrando al lado
+
+## Phase 30: User Story 27 - La salida se exporta con o sin valores, y siempre firmada (Priority: P2)
+
+**Goal**: Que el PDF de una salida sirva de soporte de entrega (FR-123)
+
+**Independent Test**: Exportar "sin valores" y comprobar que no hay ninguna cifra de dinero y sí bloque de firma (US27-AS2/AS4)
+
+- [x] T224 [US27] Esquema compartido `esquemaExportDocumentoSalida` {formato, valores: con|sin, recibe} — `recibe` obligatorio con mensaje propio
+- [x] T225 [US27] Puerto `ExportadorReporte`: campo opcional `firmas`; PDF y Excel lo pintan al cierre (línea, nombre y fecha), sin tocar los demás exportables
+- [x] T226 [US27] Mapeador de la salida: la variante `sin` QUITA columnas de precio/valor y el bloque de totales (no los deja en cero); ambas variantes declaran la firma
+- [x] T227 [US27] Frontend: diálogo de exportación en `/salidas/[id]` (formato, valores, quien recibe) que construye la URL; el listado sigue exportando sin preguntar
+
+## Phase 31: User Story 28 - Salida a un cliente sin proyecto específico (Priority: P2)
+
+**Goal**: Entregar a un cliente sin inventarle una obra (FR-124/FR-125)
+
+**Independent Test**: Registrar una salida con solo cliente, confirmarla y verla en el consumo de ese cliente (US28-AS1/AS3)
+
+- [x] T228 [US28] Migración: `salidas.cliente_id` NOT NULL con backfill desde `proyectos.cliente_id`, `proyecto_id` a NULL, índice `(cliente_id, estado)`
+- [x] T229 [US28] Dominio y puerto: `Salida.clienteId` + `proyectoId: number | null`; `validarDestinoSalida` valida cliente, y proyecto solo si viaja (incluida su pertenencia al cliente)
+- [x] T230 [US28] Repositorio y casos de uso: crear/actualizar con cliente; el filtro `clienteId` deja de ser un JOIN contra `proyectos`
+- [x] T231 [US28] Reporte de consumo del cliente: grupo "Sin proyecto" al final, sumado en el total (FR-125); export incluido
+- [x] T232 [US28] Frontend: el formulario exige cliente y deja el proyecto vacío; listado, ficha e historial del cliente muestran "—" donde no hay proyecto
+
+## Phase 32: User Story 29 - Ajuste de inventario (Priority: P2)
+
+**Goal**: Registrar lo que entra sin factura, sin ensuciar la columna de facturas (FR-126)
+
+**Independent Test**: Guardar un ajuste sin factura ni proveedor, recibirlo y ver que suma stock con movimiento AJUSTE_ENTRADA (US29-AS2/AS3)
+
+- [x] T233 [US29] Migración: enum `tipo_ingreso`, `ingresos.tipo`, `numero_ajuste` único, columnas de factura y proveedor a NULL, `CHECK` de forma por tipo y `contadores['ajuste']`
+- [x] T234 [US29] Esquemas y backend: unión discriminada por `tipo` (campos prohibidos rechazados), correlativo en la transacción del documento y `AJUSTE_ENTRADA` al recibir
+- [x] T235 [US29] Frontend: selector de tipo en el alta, campos que aparecen y desaparecen, motivo obligatorio y el número visible en listado y ficha
+- [x] T236 [P] [US26/US27/US28/US29] Pruebas de integración: cantidad decimal rechazada y movimiento histórico intacto; export sin valores y con firma; salida sin proyecto que consume; ajuste sin factura con su movimiento de ajuste
+
+**Checkpoint**: Las cuatro reglas que la operación real pedía —cantidades enteras, soporte de entrega firmado, entrega sin obra y entrada sin factura— funcionan sin romper ningún documento anterior
+
+---
 
 ## Dependencies & Execution Order
 
@@ -680,7 +728,7 @@ persona: orden estricto de fases 1→10.
 
 ## Notes
 
-- Total: **172 tareas** (Setup 7, Foundational 20, US1 11, US2 8, US3 12, US5 8, US4 8, US6 5, US7 5, US8 8, Polish 6, US9 11, Experiencia de uso 4, US10 4, US11 6, US12 6, US13 10); **MVP = 66 tareas** (T001–T066). Siete bloques se agregaron fuera del plan original, a pedido directo del dueño del proyecto: US8/carga masiva (T091-T098, ver research R15), US9/roles y permisos (T099-T109, ver research R16), la Phase 13 de experiencia de uso (T110-T113, cierra huecos detectados usando el sistema en vivo), US10/panel (T114-T117), US11/exportación universal (T118-T123), US12/costo con historial (T124-T129) y US13/filtrado de listados (T130-T139, 2026-08-12).
+- Total: **236 tareas** (las 172 del plan original más las historias pedidas sobre la marcha, US14…US29); recuento original abajo: **172 tareas** (Setup 7, Foundational 20, US1 11, US2 8, US3 12, US5 8, US4 8, US6 5, US7 5, US8 8, Polish 6, US9 11, Experiencia de uso 4, US10 4, US11 6, US12 6, US13 10); **MVP = 66 tareas** (T001–T066). Siete bloques se agregaron fuera del plan original, a pedido directo del dueño del proyecto: US8/carga masiva (T091-T098, ver research R15), US9/roles y permisos (T099-T109, ver research R16), la Phase 13 de experiencia de uso (T110-T113, cierra huecos detectados usando el sistema en vivo), US10/panel (T114-T117), US11/exportación universal (T118-T123), US12/costo con historial (T124-T129) y US13/filtrado de listados (T130-T139, 2026-08-12).
 - [P] = archivos distintos sin dependencias pendientes dentro de su fase
 - Cada checkpoint de historia es un incremento demostrable e independientemente testeable
 - Toda tarea de backend respeta la regla de dependencia y las convenciones de [docs/arquitectura.md](../../docs/arquitectura.md); TSDoc con `FR-###` obligatorio en casos de uso, puertos y controladores

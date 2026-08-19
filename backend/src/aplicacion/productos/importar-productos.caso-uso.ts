@@ -353,6 +353,9 @@ export class ImportarProductosCasoUso implements CasoDeUso<ImportarProductosEntr
 
     const ahora = new Date();
     const ingreso = await this.repositorioIngresos.crear({
+      // US29 (FR-126): las existencias iniciales las respalda un ingreso de FACTURA — hay
+      // proveedor y hay costo. Un AJUSTE es otra cosa: mercancía que aparece sin compra.
+      tipo: 'FACTURA' as const,
       numeroFactura: numeroFacturaSintetico(),
       fechaFactura: ahora,
       proveedorId: await this.resolverProveedorDelSistema(),

@@ -236,7 +236,8 @@ export function DialogoProductoNuevo({
             <input
               id="producto-nuevo-umbral"
               type="number"
-              step="0.01"
+              // US26 (FR-122): es una cantidad, como el stock que vigila.
+              step="1"
               min={0}
               className="input"
               {...register('umbralStockBajo', { valueAsNumber: true })}
@@ -287,7 +288,8 @@ export function DialogoProductoNuevo({
                 <input
                   id="producto-nuevo-cantidad"
                   type="number"
-                  step="0.01"
+                  // US26 (FR-122): estas existencias generan un ingreso real (FR-106).
+                  step="1"
                   min={0}
                   className="input"
                   aria-invalid={!!errors.cantidadInicial}

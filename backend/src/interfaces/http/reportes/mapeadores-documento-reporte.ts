@@ -71,7 +71,12 @@ export function mapearConsumoClienteADocumento(
 
   const totales = [
     ...reporte.proyectos.map((proyecto) => ({
-      etiqueta: `Total ${proyecto.proyecto.nombre} (${proyecto.proyecto.estado})`,
+      // US28 (FR-125): el grupo "Sin proyecto" no tiene estado que mostrar — no es un proyecto
+      // del catálogo. Interpolarlo tal cual imprimiría "(null)" en el archivo.
+      etiqueta:
+        proyecto.proyecto.estado === null
+          ? `Total ${proyecto.proyecto.nombre}`
+          : `Total ${proyecto.proyecto.nombre} (${proyecto.proyecto.estado})`,
       valor: formatoMonedaCop(proyecto.totalProyecto),
     })),
     { etiqueta: 'Total cliente', valor: formatoMonedaCop(reporte.totalCliente) },

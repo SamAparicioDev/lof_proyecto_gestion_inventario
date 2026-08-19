@@ -68,12 +68,14 @@ import {
   esquemaActualizarSalida,
   esquemaCrearSalida,
   esquemaFiltroSalidas,
+  esquemaExportDocumentoSalida,
   esquemaFormatoExport,
   esquemaMotivo,
   type DatosActualizarSalida,
   type DatosCrearSalida,
   type DatosMotivo,
   type FiltroSalidas,
+  type ExportDocumentoSalida,
   type FormatoExport,
   type Paginado,
 } from '@trazo/compartido';
@@ -102,9 +104,10 @@ import { RequierePermiso } from '../comunes/requiere-permiso.decorator';
 import { fechaHoyIso, responderConArchivoExportado } from '../comunes/respuesta-export';
 import { UsuarioActual } from '../comunes/usuario-actual.decorator';
 import {
+  destinoDeSalida,
   mapearListadoSalidasADocumento,
   mapearSalidaADocumento,
-  type DestinoSalida,
+  type DirectorioDestinos,
 } from './mapeadores-documento-salida';
 
 @Controller('salidas')
@@ -168,7 +171,7 @@ export class ControladorSalidas {
       hasta: filtros.hasta ? new Date(filtros.hasta) : undefined,
     });
 
-    const destinos = await this.resolverDestinos(salidas.map((salida) => salida.proyectoId));
+    const destinos = await this.resolverDestinos(salidas);
     const documento = mapearListadoSalidasADocumento(
       salidas,
       filtros,
@@ -190,10 +193,24 @@ export class ControladorSalidas {
   }
 
   /**
-   * `GET /api/salidas/:id/export?formato=pdf|xlsx` — el documento COMPLETO de la salida
-   * (cabecera con su destino, líneas, total y auditoría — FR-065) CON el logo del cliente dueño
-   * del proyecto (FR-067/FR-069). Es el archivo que se le envía al cliente como soporte de
-   * entrega. `404` si no existe, igual que `obtener`.
+   * `GET /api/salidas/:id/export?formato=pdf|xlsx&valores=con|sin&recibe=<nombre>` — el
+   * documento COMPLETO de la salida (cabecera con su destino, líneas, total y auditoría —
+   * FR-065) con el logotipo institucional (FR-067). `404` si no existe, igual que `obtener`.
+   *
+   * ## US27 (FR-123): es un comprobante, no un informe
+   *
+   * Es la ÚNICA ruta `/export` con parámetros propios, y por eso valida con un esquema distinto
+   * al `esquemaFormatoExport` que comparten las otras once:
+   *
+   * - `valores=sin` genera la variante sin precios ni totales, para las entregas donde quien
+   *   recibe no debe ver lo que se le factura a su empresa.
+   * - `recibe` es OBLIGATORIO en las dos variantes y va impreso bajo la línea de firma. Sin él
+   *   la respuesta es `400`: el archivo existe para respaldar la entrega, y un soporte que no
+   *   dice quién recibió no respalda nada.
+   *
+   * Ninguno de los dos es un filtro — no cambian qué líneas salen, solo cómo se presentan —,
+   * así que no viven en `CriteriosSalidas` ni tocan el export del LISTADO, que sigue sin
+   * preguntar nada.
    *
    * Nombre del archivo: `salida-<numero>.<ext>` (contrato).
    */
@@ -201,7 +218,7 @@ export class ControladorSalidas {
   @RequierePermiso('salidas.ver')
   async exportarDocumento(
     @Param('id', ParseIntPipe) id: number,
-    @Query(new PipeValidacionZod(esquemaFormatoExport)) filtros: FormatoExport,
+    @Query(new PipeValidacionZod(esquemaExportDocumentoSalida)) filtros: ExportDocumentoSalida,
     @Res({ passthrough: true }) respuesta: Response,
   ): Promise<StreamableFile> {
     const salida = await this.repositorioSalidas.buscarPorId(id);
@@ -209,15 +226,16 @@ export class ControladorSalidas {
       throw new NoEncontrado('La salida');
     }
 
-    const destinos = await this.resolverDestinos([salida.proyectoId]);
+    const destinos = await this.resolverDestinos([salida]);
     const productos = await this.repositorioProductos.buscarPorIds(
       salida.detalles.map((detalle) => detalle.productoId),
     );
 
     const documento = mapearSalidaADocumento(
       salida,
-      destinos.get(salida.proyectoId) ?? { cliente: '—', proyecto: `Proyecto N.º ${salida.proyectoId}` },
+      destinoDeSalida(salida, destinos),
       new Map(productos.map((producto) => [producto.id, producto])),
+      { conValores: filtros.valores === 'con', recibe: filtros.recibe },
     );
     return this.exportar(documento, filtros.formato, `salida-${salida.numero}`, respuesta);
   }
@@ -232,6 +250,9 @@ export class ControladorSalidas {
   ): Promise<{ id: number; numero: number }> {
     return this.crearSalida.ejecutar({
       ...datos,
+      // US28 (FR-124): omitir el proyecto y enviarlo en `null` significan lo mismo — "esta
+      // entrega no es de una obra"— y el caso de uso trabaja con un solo valor para ese hecho.
+      proyectoId: datos.proyectoId ?? null,
       observaciones: datos.observaciones ?? null,
       usuarioId: usuario.id,
     });
@@ -249,6 +270,7 @@ export class ControladorSalidas {
     await this.actualizarSalida.ejecutar({
       salidaId: id,
       ...datos,
+      proyectoId: datos.proyectoId ?? null,
       observaciones: datos.observaciones ?? null,
       usuarioId: usuario.id,
     });
@@ -295,33 +317,37 @@ export class ControladorSalidas {
   }
 
   /**
-   * Nombre de cliente y de proyecto de cada `proyectoId` que aparece en el export (US11) — los
-   * MISMOS textos que la pantalla resuelve con `cargarClientesYProyectos`.
+   * Nombres de los clientes y proyectos que aparecen en un export (US11) — los MISMOS textos que
+   * la pantalla resuelve con `cargarClientesYProyectos`.
    *
-   * Se resuelve en DOS lecturas fijas (proyectos únicos, luego sus clientes únicos), no una por
-   * salida: un export sin filtrar puede traer miles de filas y casi todas comparten proyecto.
-   * Un proyecto o un cliente que no se pueda resolver simplemente no entra en el mapa, y el
-   * mapeador cae en el texto de respaldo que ya usa la pantalla.
+   * Se resuelve en DOS tandas en lote (clientes únicos y proyectos únicos), no una lectura por
+   * salida: un export sin filtrar puede traer miles de filas y casi todas comparten destino.
+   *
+   * US28 (FR-124): los clientes se leen de `salida.clienteId`, no del proyecto. Deducirlos del
+   * proyecto dejaría sin nombre a las entregas que no tienen ninguno. Lo que no se pueda
+   * resolver simplemente no entra en el mapa, y `destinoDeSalida` cae en su texto de respaldo.
    */
-  private async resolverDestinos(proyectoIds: readonly number[]): Promise<Map<number, DestinoSalida>> {
-    const idsUnicos = [...new Set(proyectoIds)];
-    if (idsUnicos.length === 0) return new Map();
+  private async resolverDestinos(
+    salidas: readonly Pick<Salida, 'clienteId' | 'proyectoId'>[],
+  ): Promise<DirectorioDestinos> {
+    const clienteIds = [...new Set(salidas.map((salida) => salida.clienteId))];
+    const proyectoIds = [
+      ...new Set(salidas.map((salida) => salida.proyectoId).filter((id): id is number => id !== null)),
+    ];
 
-    const proyectos = (await Promise.all(idsUnicos.map((id) => this.repositorioProyectos.buscarPorId(id)))).filter(
-      (proyecto): proyecto is NonNullable<typeof proyecto> => proyecto !== null,
-    );
-    const clientesUnicos = [...new Set(proyectos.map((proyecto) => proyecto.clienteId))];
-    const clientes = (await Promise.all(clientesUnicos.map((id) => this.repositorioClientes.buscarPorId(id)))).filter(
-      (cliente): cliente is NonNullable<typeof cliente> => cliente !== null,
-    );
-    const nombrePorClienteId = new Map(clientes.map((cliente) => [cliente.id, cliente.nombre]));
+    const [clientes, proyectos] = await Promise.all([
+      Promise.all(clienteIds.map((id) => this.repositorioClientes.buscarPorId(id))),
+      Promise.all(proyectoIds.map((id) => this.repositorioProyectos.buscarPorId(id))),
+    ]);
 
-    return new Map(
-      proyectos.map((proyecto) => [
-        proyecto.id,
-        { cliente: nombrePorClienteId.get(proyecto.clienteId) ?? '—', proyecto: proyecto.nombre },
-      ]),
-    );
+    return {
+      clientes: new Map(
+        clientes.filter((cliente) => cliente !== null).map((cliente) => [cliente.id, cliente.nombre]),
+      ),
+      proyectos: new Map(
+        proyectos.filter((proyecto) => proyecto !== null).map((proyecto) => [proyecto.id, proyecto.nombre]),
+      ),
+    };
   }
 
   /** Nombres de los filtros de cliente/proyecto para el encabezado del archivo — sin ellos, la

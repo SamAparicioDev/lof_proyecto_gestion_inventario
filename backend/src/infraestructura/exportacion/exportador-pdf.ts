@@ -39,7 +39,13 @@
  * `test/unit/maqueta-pdf.spec.ts` vigila el invariante; el contrato lo documenta en
  * `contracts/api-rest.md` §«Maqueta del PDF».
  *
- * Implementa: FR-043, FR-065, FR-067, FR-068.
+ * ## US27 (T225): el bloque de firmas
+ *
+ * `firmas` se pinta DESPUÉS de la tabla, con `unbreakable` para que la línea y el nombre no
+ * queden en páginas distintas. Solo lo declara el documento de una salida (FR-123): es el único
+ * exportable que se imprime para que alguien firme encima.
+ *
+ * Implementa: FR-043, FR-065, FR-067, FR-068, FR-123.
  */
 import { Injectable } from '@nestjs/common';
 import PdfPrinter from 'pdfmake';
@@ -63,6 +69,14 @@ const FORMATO_FECHA_GENERACION = new Intl.DateTimeFormat('es-CO', {
   dateStyle: 'short',
   timeStyle: 'short',
 });
+
+/** Alto en blanco reservado sobre la línea de firma (US27, FR-123): lo justo para una firma
+ *  manuscrita sin que el bloque se coma media hoja. */
+const ALTO_ESPACIO_FIRMA_PT = 34;
+
+/** Largo de la línea sobre la que se firma (US27) — fijo, no proporcional a la página: una
+ *  línea de firma de 500 pt no invita a firmar, invita a escribir un párrafo. */
+const ANCHO_LINEA_FIRMA_PT = 210;
 
 /** Ancho (en puntos) con el que se incrusta el logo — `pdfmake` deduce el alto conservando la
  *  proporción, así que un logo apaisado y uno cuadrado se ven bien con el mismo valor. */
@@ -181,6 +195,7 @@ function construirDefinicionDocumento(documento: DocumentoReporte): TDocumentDef
       },
       layout: construirLayoutTabla(filaPrimerTotal),
     },
+    ...construirBloqueFirmas(documento),
   ];
 
   return {
@@ -366,6 +381,45 @@ function construirBloqueEncabezado(documento: DocumentoReporte): Content[] {
       },
       layout: 'noBorders',
       margin: [0, 0, 0, 12],
+    },
+  ];
+}
+
+/**
+ * Espacio de firma al cierre del documento (US27, FR-123) — ausente en todo exportable que no
+ * lo declare, que hoy son todos menos el documento de una salida.
+ *
+ * Se dibuja con `canvas` y no con guiones bajos repetidos porque la línea tiene que medir lo
+ * mismo en pantalla y en papel: una fila de `_` depende de la fuente y del ancho de página, y en
+ * apaisado quedaba corrida. `unbreakable` impide que el salto de página parta la firma de su
+ * nombre — una línea suelta al final de una hoja no es un espacio para firmar, es un error de
+ * maqueta.
+ *
+ * El hueco de arriba (`ALTO_ESPACIO_FIRMA_PT`) es para la firma manuscrita: sin él la línea
+ * queda pegada a la tabla y no hay dónde firmar.
+ */
+function construirBloqueFirmas(documento: DocumentoReporte): Content[] {
+  const firmas = documento.firmas ?? [];
+  if (firmas.length === 0) return [];
+
+  return [
+    {
+      margin: [0, 30, 0, 0],
+      unbreakable: true,
+      columns: firmas.map((firma) => ({
+        width: '*',
+        stack: [
+          { text: '', margin: [0, ALTO_ESPACIO_FIRMA_PT, 0, 0] },
+          {
+            canvas: [
+              { type: 'line', x1: 0, y1: 0, x2: ANCHO_LINEA_FIRMA_PT, y2: 0, lineWidth: 0.8, lineColor: COLOR_TEXTO },
+            ],
+          },
+          { text: firma.nombre, bold: true, margin: [0, 5, 0, 0] },
+          { text: firma.etiqueta, style: 'meta', margin: [0, 1, 0, 0] },
+          { text: 'Fecha: ____ / ____ / ________', style: 'meta', margin: [0, 6, 0, 0] },
+        ],
+      })),
     },
   ];
 }

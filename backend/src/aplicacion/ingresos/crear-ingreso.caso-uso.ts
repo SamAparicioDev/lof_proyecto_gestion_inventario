@@ -46,10 +46,14 @@ export interface LineaCrearIngresoEntrada {
 /** Entrada: datos validados por `esquemaCrearIngreso` + auditoría (FR-045). Las fechas
  *  llegan como texto ISO (`YYYY-MM-DD`) — este caso de uso las convierte a `Date`. */
 export interface CrearIngresoEntrada {
-  readonly numeroFactura: string;
-  readonly fechaFactura: string;
-  /** Referencia al catálogo de proveedores (US15, FR-091) — obligatoria. */
-  readonly proveedorId: number;
+  /** US29 (FR-126): `FACTURA` (una compra) o `AJUSTE` (corrección de inventario). El esquema Zod
+   *  ya garantizó que los tres campos siguientes acompañan al tipo correcto. */
+  readonly tipo: 'FACTURA' | 'AJUSTE';
+  readonly numeroFactura?: string;
+  readonly fechaFactura?: string;
+  /** Referencia al catálogo de proveedores (US15, FR-091) — obligatoria en FACTURA, ausente en
+   *  AJUSTE: no hay a quién comprarle. */
+  readonly proveedorId?: number;
   /** Orden de compra que este ingreso surte (US16, FR-099). Opcional: registrar un ingreso sin
    *  orden previa sigue siendo el camino normal. */
   readonly ordenCompraId?: number;
@@ -76,15 +80,20 @@ export class CrearIngresoCasoUso implements CasoDeUso<CrearIngresoEntrada, Crear
     // US15 (FR-091): el proveedor se comprueba ANTES de escribir. La FK de la BD ya impediría
     // uno inexistente, pero con un error técnico; y el estado INACTIVO no lo cubre ninguna
     // restricción de base de datos — un proveedor retirado no debe aparecer en facturas nuevas.
-    await verificarProveedorAsignable(this.repositorioProveedores, entrada.proveedorId);
-    if (entrada.ordenCompraId !== undefined) {
-      await this.verificarOrdenSurtible(entrada.ordenCompraId, entrada.proveedorId);
+    // US29 (FR-126): un ajuste no tiene proveedor que comprobar ni orden que surtir. El esquema
+    // ya rechazó el body que trajera cualquiera de los dos, así que aquí basta con no exigirlos.
+    if (entrada.proveedorId !== undefined) {
+      await verificarProveedorAsignable(this.repositorioProveedores, entrada.proveedorId);
+      if (entrada.ordenCompraId !== undefined) {
+        await this.verificarOrdenSurtible(entrada.ordenCompraId, entrada.proveedorId);
+      }
     }
 
     const ingreso = await this.repositorioIngresos.crear({
-      numeroFactura: entrada.numeroFactura,
-      fechaFactura: new Date(entrada.fechaFactura),
-      proveedorId: entrada.proveedorId,
+      tipo: entrada.tipo,
+      numeroFactura: entrada.numeroFactura ?? null,
+      fechaFactura: entrada.fechaFactura === undefined ? null : new Date(entrada.fechaFactura),
+      proveedorId: entrada.proveedorId ?? null,
       ordenCompraId: entrada.ordenCompraId ?? null,
       fechaRecepcion: new Date(entrada.fechaRecepcion),
       observaciones: entrada.observaciones,

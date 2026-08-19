@@ -5,8 +5,8 @@
  * y líneas de solo lectura. `AccionesSalida` (Client Component) pone los botones
  * Confirmar/Completar/Cancelar/Anular según estado y rol (contracts/api-rest.md).
  *
- * `GET /api/salidas/:id` solo trae `proyectoId` (data-model.md: el cliente se deriva del
- * proyecto), así que se resuelve el nombre de cliente/proyecto con
+ * `GET /api/salidas/:id` trae `clienteId` y `proyectoId` (este último puede ser `null` desde
+ * US28/FR-124), así que se resuelven sus nombres con
  * `cargarClientesYProyectos` (mismo helper que el listado, T053) — en modo edición ese mismo
  * proyecto se le pasa a `SalidaForm` como `proyectoInicial` para precargar la cascada
  * cliente→proyecto (ver TSDoc de `salida-form.tsx`).
@@ -31,7 +31,7 @@ import { formatoFecha, formatoFechaHora, formatoMoneda } from '@/lib/formato';
 import { EstadoSalidaTag } from '@/componentes/salidas/estado-salida-tag';
 import { SalidaForm } from '@/componentes/salidas/salida-form';
 import { AccionesSalida } from '@/componentes/salidas/acciones-salida';
-import { BotonesExportar } from '@/componentes/comunes/botones-exportar';
+import { ExportarSalida } from '@/componentes/salidas/exportar-salida';
 
 /** `2026-08-01T00:00:00.000Z` → `2026-08-01`, el ISO que espera `CampoFecha` (que lo muestra como `dd/mm/aaaa`). */
 function aFechaInput(fechaIso: string): string {
@@ -40,6 +40,7 @@ function aFechaInput(fechaIso: string): string {
 
 function aValoresFormulario(salida: SalidaConDetalles): DatosCrearSalida {
   return {
+    clienteId: salida.clienteId,
     proyectoId: salida.proyectoId,
     fechaSalida: aFechaInput(salida.fechaSalida),
     observaciones: salida.observaciones ?? '',
@@ -78,7 +79,8 @@ export default async function PaginaDetalleSalida({ params }: { params: Promise<
     cargarClientesYProyectos(),
   ]);
   const productosPorId = new Map(productos.map((producto) => [producto.id, producto]));
-  const proyecto = proyectos.find((p) => p.id === salida.proyectoId);
+  const proyecto = salida.proyectoId === null ? undefined : proyectos.find((p) => p.id === salida.proyectoId);
+  const cliente = clientes.find((c) => c.id === salida.clienteId);
   const esPendiente = salida.estado === 'PENDIENTE';
 
   return (
@@ -89,10 +91,11 @@ export default async function PaginaDetalleSalida({ params }: { params: Promise<
           <h2 style={{ margin: 0 }}>Salida N.º {salida.numero}</h2>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          {/* US11/T122: el documento completo (FR-065) CON el logo del cliente dueño del
-              proyecto (FR-067/FR-069) — es el archivo que se le envía al cliente como soporte
-              de entrega, la razón de ser de esta historia. */}
-          <BotonesExportar hrefBase={`/api/salidas/${salida.id}/export`} descripcion="esta salida" />
+          {/* US11/T122 + US27/T227: el documento completo (FR-065) con el logotipo institucional
+              (FR-067) es el archivo que se le envía al cliente como soporte de entrega — por eso
+              desde US27 no se descarga de un tirón: antes pregunta si va con o sin valores y a
+              nombre de quién se imprime la firma (FR-123). */}
+          <ExportarSalida salidaId={salida.id} numero={salida.numero} />
           <EstadoSalidaTag estado={salida.estado} />
         </div>
       </div>
@@ -108,8 +111,15 @@ export default async function PaginaDetalleSalida({ params }: { params: Promise<
       ) : (
         <div className="card gap-4 p-5">
           <dl className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', margin: 0 }}>
-            <DatoSoloLectura etiqueta="Cliente" valor={proyecto?.clienteNombre ?? '—'} />
-            <DatoSoloLectura etiqueta="Proyecto" valor={proyecto?.nombre ?? `Proyecto N.º ${salida.proyectoId}`} />
+            <DatoSoloLectura etiqueta="Cliente" valor={cliente?.nombre ?? `Cliente N.º ${salida.clienteId}`} />
+            <DatoSoloLectura
+              etiqueta="Proyecto"
+              valor={
+                salida.proyectoId === null
+                  ? 'Sin proyecto'
+                  : (proyecto?.nombre ?? `Proyecto N.º ${salida.proyectoId}`)
+              }
+            />
             <DatoSoloLectura etiqueta="Fecha de salida" valor={formatoFecha(salida.fechaSalida)} />
             <DatoSoloLectura etiqueta="Valor total" valor={formatoMoneda(salida.valorTotal)} />
             <DatoSoloLectura

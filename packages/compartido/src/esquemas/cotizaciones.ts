@@ -10,15 +10,11 @@
  */
 import { z } from 'zod';
 import { esquemaTasaIva } from './impuestos';
+import { MENSAJE_CANTIDAD_ENTERA } from './comunes';
 
 /** Estados del documento (data-model.md — FR-112). */
 export const ESTADOS_COTIZACION = ['BORRADOR', 'ENVIADA', 'ACEPTADA', 'RECHAZADA', 'ANULADA'] as const;
 export type EstadoCotizacion = (typeof ESTADOS_COTIZACION)[number];
-
-/** Cantidades y precios se guardan en `DECIMAL(_,2)`. */
-function tieneMaximoDosDecimales(valor: number): boolean {
-  return Number.isInteger(Math.round(valor * 100));
-}
 
 /** Línea de cotización: producto ofrecido, cantidad, precio e impuesto. */
 const esquemaLineaCotizacion = z.object({
@@ -28,8 +24,11 @@ const esquemaLineaCotizacion = z.object({
     .positive('El producto no es válido'),
   cantidad: z
     .number({ required_error: 'La cantidad es obligatoria', invalid_type_error: 'La cantidad debe ser un número' })
-    .positive('La cantidad debe ser mayor a 0')
-    .refine(tieneMaximoDosDecimales, 'La cantidad admite máximo 2 decimales'),
+    // US26 (FR-122): entera. `.int()` va ANTES de `.positive()` para que `2.5` se queje de los
+    // decimales y no de otra cosa; `0.5` sí caería en el primero de los dos, y cualquiera de los
+    // mensajes es correcto ahí.
+    .int(MENSAJE_CANTIDAD_ENTERA)
+    .positive('La cantidad debe ser mayor a 0'),
   precioUnitario: z
     .number({
       required_error: 'El precio unitario es obligatorio',

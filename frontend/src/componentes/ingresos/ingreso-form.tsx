@@ -61,6 +61,7 @@ const MENSAJE_ERROR_RED = 'No fue posible comunicarse con el servidor. Intenta d
 /** Ruta `lineas.N.campo` que arma `PipeValidacionZod` para errores de líneas individuales. */
 const PATRON_ERROR_LINEA = /^lineas\.(\d+)\.(productoId|cantidad|precioUnitario)$/;
 const CAMPOS_CABECERA = new Set<keyof DatosCrearIngreso>([
+  'tipo',
   'numeroFactura',
   'fechaFactura',
   'proveedorId',
@@ -74,10 +75,12 @@ function crearLineaVacia(): LineaIngreso {
 }
 
 const VALORES_INICIALES_VACIOS: DatosCrearIngreso = {
+  // US29 (FR-126): el caso normal sigue siendo una compra.
+  tipo: 'FACTURA',
   numeroFactura: '',
   fechaFactura: '',
-  // 0 = "sin elegir": el esquema exige un entero positivo, así que un ingreso sin proveedor no
-  // pasa la validación (US15, FR-091 — el proveedor es obligatorio).
+  // 0 = "sin elegir": el esquema exige un entero positivo, así que un ingreso de factura sin
+  // proveedor no pasa la validación (US15, FR-091). En un AJUSTE el campo ni se pinta.
   proveedorId: 0,
   fechaRecepcion: '',
   observaciones: '',
@@ -132,6 +135,9 @@ export function IngresoForm({
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: 'lineas' });
+  /** US29 (FR-126): lo que decide qué campos se piden. Se observa el campo del formulario y
+   *  no un estado aparte, para que no puedan discrepar. */
+  const esAjuste = useWatch({ control, name: 'tipo' }) === 'AJUSTE';
   const lineasEnVivo = useWatch({ control, name: 'lineas' });
 
   useEffect(() => {
@@ -220,38 +226,78 @@ export function IngresoForm({
         )}
 
         <div className="card gap-4 p-5">
-          <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
-            <CampoTexto id="numeroFactura" label="Número de factura" error={errors.numeroFactura?.message} registro={register('numeroFactura')} />
-            {/* US15 (FR-091): el proveedor se elige del catálogo. Va con `Controller` y no con
-                `register` porque `SelectorProveedor` es controlado — entrega un número, no el
-                evento de un `<input>` nativo (mismo criterio que `CampoFecha`). */}
-            <div className="field">
-              <label htmlFor="proveedorId">Proveedor</label>
-              <Controller
-                name="proveedorId"
-                control={control}
-                render={({ field }) => (
-                  <SelectorProveedor
-                    id="proveedorId"
-                    value={typeof field.value === 'number' ? field.value : undefined}
-                    onChange={field.onChange}
-                    proveedorActual={proveedorActual}
-                    ariaInvalid={!!errors.proveedorId}
-                  />
-                )}
-              />
-              {errors.proveedorId && (
-                <p role="alert" style={{ fontSize: 12, color: 'var(--color-accent-300)', marginTop: 5 }}>
-                  {errors.proveedorId.message}
+          {/* US29 (FR-126): la primera pregunta es de qué clase es la entrada, porque de ella
+              depende qué campos tienen sentido. Lista CERRADA de dos opciones: desplegable
+              nativo, no buscador (FR-119). En edición no se ofrece — cambiar el tipo de un
+              documento guardado lo convertiría en otro (ver `actualizar-ingreso.caso-uso.ts`). */}
+          {!ingresoId && (
+            <div className="field" style={{ maxWidth: 320 }}>
+              <label htmlFor="tipo">Tipo de entrada</label>
+              <select id="tipo" className="input" {...register('tipo')}>
+                <option value="FACTURA">Factura de compra</option>
+                <option value="AJUSTE">Ajuste de inventario</option>
+              </select>
+              {esAjuste && (
+                <p className="text-muted" style={{ fontSize: 12, marginTop: 5 }}>
+                  Un ajuste no lleva factura ni proveedor: es mercancía que aparece en un conteo,
+                  una devolución o existencias que ya estaban. Suma al inventario igual, y queda
+                  registrado como ajuste con su propio número.
                 </p>
               )}
             </div>
-            <CampoFecha id="fechaFactura" label="Fecha de la factura" error={errors.fechaFactura?.message} control={control} name="fechaFactura" />
+          )}
+          <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+            {!esAjuste && (
+              <CampoTexto id="numeroFactura" label="Número de factura" error={errors.numeroFactura?.message} registro={register('numeroFactura')} />
+            )}
+            {/* US15 (FR-091): el proveedor se elige del catálogo. Va con `Controller` y no con
+                `register` porque `SelectorProveedor` es controlado — entrega un número, no el
+                evento de un `<input>` nativo (mismo criterio que `CampoFecha`). */}
+            {!esAjuste && (
+              <div className="field">
+                <label htmlFor="proveedorId">Proveedor</label>
+                <Controller
+                  name="proveedorId"
+                  control={control}
+                  render={({ field }) => (
+                    <SelectorProveedor
+                      id="proveedorId"
+                      value={typeof field.value === 'number' ? field.value : undefined}
+                      onChange={field.onChange}
+                      proveedorActual={proveedorActual}
+                      ariaInvalid={!!errors.proveedorId}
+                    />
+                  )}
+                />
+                {errors.proveedorId && (
+                  <p role="alert" style={{ fontSize: 12, color: 'var(--color-accent-300)', marginTop: 5 }}>
+                    {errors.proveedorId.message}
+                  </p>
+                )}
+              </div>
+            )}
+            {!esAjuste && (
+              <CampoFecha id="fechaFactura" label="Fecha de la factura" error={errors.fechaFactura?.message} control={control} name="fechaFactura" />
+            )}
             <CampoFecha id="fechaRecepcion" label="Fecha de recepción" error={errors.fechaRecepcion?.message} control={control} name="fechaRecepcion" />
           </div>
           <div className="field">
-            <label htmlFor="observaciones">Observaciones (opcional)</label>
-            <textarea id="observaciones" className="input" rows={2} {...register('observaciones')} />
+            {/* US29 (FR-126): en un ajuste, las observaciones SON el motivo, y son obligatorias:
+                sin factura detrás, es lo único que justifica la entrada (Principio II). */}
+            <label htmlFor="observaciones">{esAjuste ? 'Motivo del ajuste' : 'Observaciones (opcional)'}</label>
+            <textarea
+              id="observaciones"
+              className="input"
+              rows={2}
+              placeholder={esAjuste ? 'Por qué entra esta mercancía sin factura' : undefined}
+              aria-invalid={!!errors.observaciones}
+              {...register('observaciones')}
+            />
+            {errors.observaciones && (
+              <p role="alert" style={{ fontSize: 12, color: 'var(--color-accent-300)', marginTop: 5 }}>
+                {errors.observaciones.message}
+              </p>
+            )}
           </div>
         </div>
 
@@ -326,7 +372,9 @@ export function IngresoForm({
                       <td style={{ width: 130 }}>
                         <input
                           type="number"
-                          step="0.01"
+                          // US26 (FR-122): entera — las flechas suben de uno en uno y el navegador
+                          // rechaza los decimales antes de que el esquema tenga que hacerlo.
+                          step="1"
                           min={0}
                           className="input"
                           aria-label={`Cantidad de la línea ${indice + 1}`}

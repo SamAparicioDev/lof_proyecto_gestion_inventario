@@ -43,6 +43,7 @@ import {
   textoFiltroOpcional,
   soloFiltrosAplicados,
 } from '../comunes/formato-documento';
+import { identificadorIngreso } from '../../../aplicacion/ingresos/identificador-ingreso';
 
 /**
  * Etiquetas de estado IDÉNTICAS a las de `frontend/src/componentes/ingresos/estado-ingreso-tag.tsx`.
@@ -93,9 +94,12 @@ export function mapearListadoIngresosADocumento(
     }),
     columnas: COLUMNAS_LISTADO_INGRESOS,
     filas: ingresos.map((ingreso) => ({
-      numeroFactura: ingreso.numeroFactura,
-      proveedor: ingreso.proveedor.nombre,
-      fechaFactura: formatoFechaSoloDia(ingreso.fechaFactura),
+      // US29 (FR-126): un ajuste enseña su correlativo donde las facturas enseñan su número, y
+      // deja en blanco lo que no tiene. Un guión es la respuesta honesta: no hay proveedor, no
+      // un proveedor que no se pudo resolver.
+      numeroFactura: identificadorIngreso(ingreso),
+      proveedor: ingreso.proveedor?.nombre ?? '—',
+      fechaFactura: ingreso.fechaFactura ? formatoFechaSoloDia(ingreso.fechaFactura) : '—',
       fechaRecepcion: formatoFechaSoloDia(ingreso.fechaRecepcion),
       estado: ETIQUETA_ESTADO_INGRESO[ingreso.estado],
       valorTotal: ingreso.valorTotal,
@@ -124,10 +128,16 @@ export function mapearIngresoADocumento(
   ingreso: IngresoConDetalles,
   productosPorId: ReadonlyMap<number, Producto>,
 ): DocumentoReporte {
+  // US29 (FR-126): un ajuste no tiene factura, fecha de factura ni proveedor, y su cabecera no
+  // los inventa: se omiten las filas que no existen y el documento se encabeza con su propio
+  // correlativo. Escribirlas con un guión daría a entender que faltan datos por completar.
+  const esAjuste = ingreso.tipo === 'AJUSTE';
   const encabezado: DatoEncabezadoDocumento[] = [
-    { etiqueta: 'Factura', valor: ingreso.numeroFactura },
-    { etiqueta: 'Proveedor', valor: ingreso.proveedor.nombre },
-    { etiqueta: 'Fecha de la factura', valor: formatoFechaSoloDia(ingreso.fechaFactura) },
+    { etiqueta: esAjuste ? 'Ajuste de inventario' : 'Factura', valor: identificadorIngreso(ingreso) },
+    ...(ingreso.proveedor ? [{ etiqueta: 'Proveedor', valor: ingreso.proveedor.nombre }] : []),
+    ...(ingreso.fechaFactura
+      ? [{ etiqueta: 'Fecha de la factura', valor: formatoFechaSoloDia(ingreso.fechaFactura) }]
+      : []),
     { etiqueta: 'Fecha de recepción', valor: formatoFechaSoloDia(ingreso.fechaRecepcion) },
     { etiqueta: 'Estado', valor: ETIQUETA_ESTADO_INGRESO[ingreso.estado] },
     // Auditoría (FR-065): quién registró el documento. Mismo texto que la pantalla, ver TSDoc.

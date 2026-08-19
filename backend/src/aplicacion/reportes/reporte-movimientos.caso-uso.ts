@@ -53,6 +53,7 @@ import { REPOSITORIO_PRODUCTOS, type RepositorioProductos } from '../../dominio/
 import { REPOSITORIO_PROYECTOS, type RepositorioProyectos } from '../../dominio/puertos/repositorio-proyectos';
 import { REPOSITORIO_SALIDAS, type RepositorioSalidas } from '../../dominio/puertos/repositorio-salidas';
 import { REPOSITORIO_USUARIOS, type RepositorioUsuarios } from '../../dominio/puertos/repositorio-usuarios';
+import { identificadorIngreso } from '../ingresos/identificador-ingreso';
 
 /** `desde`/`hasta` llegan como `Date` — el controlador convierte el texto ISO ya validado por
  *  `esquemaFiltroReporteMovimientos` ANTES de invocar el caso de uso, mismo patrón que
@@ -194,7 +195,8 @@ export class ReporteMovimientosCasoUso implements CasoDeUso<ReporteMovimientosEn
       Promise.all(
         idsIngreso.map(async (id): Promise<readonly [string, string] | null> => {
           const ingreso = await this.repositorioIngresos.buscarPorId(id);
-          return ingreso ? ([claveDocumento('INGRESO', id), ingreso.numeroFactura] as const) : null;
+          // US29 (FR-126): `AJU-000042` cuando el movimiento viene de un ajuste.
+          return ingreso ? ([claveDocumento('INGRESO', id), identificadorIngreso(ingreso)] as const) : null;
         }),
       ),
       Promise.all(

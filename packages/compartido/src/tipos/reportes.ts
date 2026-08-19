@@ -35,12 +35,17 @@ export interface ProductoConsumoReporte {
   valorTotal: number;
 }
 
-/** Consumo de un proyecto: sus productos consumidos (orden descendente por valor) y el total. */
+/**
+ * Consumo de un proyecto: sus productos consumidos (orden descendente por valor) y el total.
+ *
+ * US28 (FR-125): `id` y `estado` son `null` en el grupo "Sin proyecto" — lo entregado al cliente
+ * sin obra concreta. No es un proyecto del catálogo, pero es consumo suyo y suma en su total.
+ */
 export interface ProyectoConsumoReporte {
   proyecto: {
-    id: number;
+    id: number | null;
     nombre: string;
-    estado: EstadoProyecto;
+    estado: EstadoProyecto | null;
   };
   productos: ProductoConsumoReporte[];
   totalProyecto: number;

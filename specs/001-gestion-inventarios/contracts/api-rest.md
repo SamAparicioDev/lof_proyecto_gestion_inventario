@@ -113,7 +113,28 @@ con sus estrategias Excel/PDF (research R8):
 | `GET /api/ingresos/export?formato=pdf\|xlsx&…` | A,G,O | mismos filtros que `GET /api/ingresos` | stream con TODAS las filas que cumplen el filtro (FR-064: sin paginar — la paginación es de lectura, no un recorte de datos), `filename="ingresos-<fecha>.<ext>"` |
 | `GET /api/salidas/export?formato=pdf\|xlsx&…` | A,G,O | mismos filtros que `GET /api/salidas` | ídem, `filename="salidas-<fecha>.<ext>"` |
 | `GET /api/ingresos/:id/export?formato=pdf\|xlsx` | A,G,O | — | documento completo del ingreso (cabecera, líneas, totales, auditoría — FR-065), `filename="ingreso-<numeroFactura>.<ext>"` |
-| `GET /api/salidas/:id/export?formato=pdf\|xlsx` | A,G,O | — | documento completo de la salida, `filename="salida-<numero>.<ext>"` |
+| `GET /api/salidas/:id/export?formato=pdf\|xlsx&valores=con\|sin&recibe=<nombre>` | A,G,O | **`valores` y `recibe` OBLIGATORIOS** (US27, FR-123) | documento completo de la salida, `filename="salida-<numero>.<ext>"` |
+
+**El documento de una salida se exporta con o sin valores, y siempre firmado (US27, FR-123)**:
+
+`GET /api/salidas/:id/export` es la ÚNICA ruta `/export` con parámetros propios, porque es la
+única cuyo archivo no es un informe sino el soporte de una entrega que alguien firma:
+
+- **`valores=con|sin`** (obligatorio). `sin` omite las columnas `precioUnitario` y `valorLinea` y
+  el bloque de totales completo (base, IVA y total). No los pone en cero ni los deja en blanco:
+  los quita, porque una columna vacía llamada "Precio unitario" invita a escribir a mano justo lo
+  que se quería ocultar.
+- **`recibe=<nombre>`** (obligatorio, 1…120 caracteres). Va impreso bajo la línea de firma. Sin
+  él la respuesta es `400` con `"El nombre de quien recibe es obligatorio"`: el archivo existe
+  para respaldar la entrega, y un soporte que no dice quién recibió no respalda nada.
+- El bloque de firma se pinta en AMBOS formatos y en AMBAS variantes. `DocumentoReporte` gana un
+  tercer campo opcional, `firmas` (etiqueta + nombre), que las dos estrategias dibujan al final:
+  una línea sobre la que firmar, el nombre debajo y un espacio para la fecha. Ningún otro
+  documento lo declara, así que ninguna otra exportación cambia en un solo byte.
+- El LISTADO (`GET /api/salidas/export`) NO acepta estos parámetros y no lleva firma: es un
+  informe de gestión, no un comprobante de entrega.
+- Estos dos parámetros NO son filtros: no entran en `CriteriosSalidas` ni afectan a qué filas
+  salen, solo a cómo se presentan. Por eso viven en su propio esquema y no en el del listado.
 
 **Permisos de las cuatro rutas** (anotado al implementar T120/T121): exigen `ingresos.ver` y
 `salidas.ver`, los MISMOS del listado y el detalle que exportan (que es lo que produce la
@@ -547,6 +568,25 @@ que SC-013 se conserva sin tocar una sola aserción de autorización existente.
 | `GET /api/inventario/:productoId` | A,G,O | — | ficha del producto con cifras actuales (mismo shape que una fila) — `404` si no existe |
 | `GET /api/inventario/:productoId/movimientos` | A,G,O | {desde?, hasta?, pagina…} | página de movimientos (fecha, tipo, documento, cantidad, usuario, cliente/proyecto) |
 
+**El destino de una salida es el CLIENTE; el proyecto es opcional (US28, FR-124)**:
+
+- El body envía `clienteId` SIEMPRE y `proyectoId` solo cuando la entrega corresponde a una obra
+  concreta. Enviar `proyectoId: null` y omitirlo son equivalentes.
+- La lectura (`GET /api/salidas` y `GET /api/salidas/:id`) devuelve `clienteId: number` y
+  `proyectoId: number | null`. Hasta US28 el cliente NO viajaba: el frontend lo deducía del
+  proyecto. Esa deducción deja de ser posible en cuanto el proyecto puede faltar, así que el
+  cliente pasa a ser un campo propio de la respuesta.
+- Validación de destino (FR-038 extendida): el cliente debe existir y estar ACTIVO; si viaja
+  `proyectoId`, el proyecto debe existir, estar ACTIVO y **pertenecer a ese cliente** —
+  `409 EstadoInvalido` si no, con el mismo tratamiento que hoy tiene "proyecto no activo".
+- El mensaje de validación de forma sigue siendo uno solo y reconocible, ahora sobre el cliente:
+  `"El cliente es obligatorio"` para toda forma de dato inválido (ausente, texto, cero,
+  negativo o decimal), por el mismo motivo que lo era en US3-AS3.
+- **El filtro `clienteId` del listado deja de resolverse con un JOIN** contra `proyectos`: ahora
+  es una igualdad sobre la columna `salidas.cliente_id`. El resultado para las salidas
+  históricas es idéntico (la migración rellenó la columna desde su proyecto), y las nuevas sin
+  proyecto aparecen bajo su cliente, que antes habría sido imposible.
+
 **Filtros nuevos de US13** (anotados ANTES de implementarlos, T130):
 
 - **`ubicacion`**: igualdad EXACTA contra el valor guardado, no subcadena. Es texto libre, así que
@@ -590,9 +630,9 @@ cálculo adicional.
 |---|---|---|---|---|
 | `GET /api/ingresos?buscar=&estado=&desde=&hasta=&proveedorId=` | A,G,O | `esquemaFiltroIngresos` {buscar?, estado?, desde?, hasta?, **proveedorId?** (US13/US15), pagina, porPagina} | página de cabeceras con totales | — |
 | `GET /api/ingresos/:id` | A,G,O | — | ingreso con líneas | `404` |
-| `POST /api/ingresos` | A,G,O | `esquemaCrearIngreso` {numeroFactura, fechaFactura, **proveedorId**, fechaRecepcion, observaciones?, **ordenCompraId?** (US16), lineas[≥1]{productoId, cantidad>0, precioUnitario>0}} | `201` {id} en PENDIENTE; totales calculados (FR-014) | `400` factura duplicada (FR-015)/validación (FR-016)/proveedor inexistente o inactivo |
+| `POST /api/ingresos` | A,G,O | `esquemaCrearIngreso` {**tipo: 'FACTURA'\|'AJUSTE'** (US29, defecto `FACTURA`), numeroFactura, fechaFactura, **proveedorId**, fechaRecepcion, observaciones?, **ordenCompraId?** (US16), lineas[≥1]{productoId, **cantidad entera >0** (US26), precioUnitario>0}} | `201` {id} en PENDIENTE; totales calculados (FR-014) | `400` factura duplicada (FR-015)/validación (FR-016/FR-122)/proveedor inexistente o inactivo |
 | `PUT /api/ingresos/:id` | A,G,O | mismo esquema | `204` (solo PENDIENTE — US1-AS5) | `409` estado no editable |
-| `POST /api/ingresos/:id/recibir` | A,G,O | — | `204`; transacción atómica suma stock + movimientos ENTRADA (FR-017/FR-021) | `409` estado inválido |
+| `POST /api/ingresos/:id/recibir` | A,G,O | — | `204`; transacción atómica suma stock + movimientos ENTRADA —**AJUSTE_ENTRADA si el ingreso es de tipo AJUSTE** (US29, FR-126)— (FR-017/FR-021) | `409` estado inválido |
 | `POST /api/ingresos/:id/verificar` | A,G | — | `204` (RECIBIDO→VERIFICADO, inmutable) | `409` |
 | `POST /api/ingresos/:id/anular` | A,G | {motivo} (obligatorio) | `204`; RECIBIDO genera reversa AJUSTE_SALIDA (FR-019) | `409` disponible insuficiente para revertir / VERIFICADO no anulable |
 
@@ -610,6 +650,34 @@ EXACTA por id, que es lo que hace el resultado reproducible (FR-088 aplicado a p
 ser redundantes y se combinan con Y lógico. Como todo filtro del listado, viaja también al
 export (`GET /api/ingresos/export`) por construcción: vive en `CriteriosIngresos`, que
 `FiltrosListarIngresos` extiende.
+
+**El ingreso tiene TIPO (US29, FR-126)**: `FACTURA` (todo lo anterior a esta historia, y el
+defecto cuando el campo no viaja) o `AJUSTE` (ajuste de inventario). El tipo decide qué campos
+son obligatorios, y el esquema Zod lo valida como una unión discriminada — no como cinco campos
+opcionales sueltos:
+
+| Campo | `tipo: 'FACTURA'` | `tipo: 'AJUSTE'` |
+|---|---|---|
+| `numeroFactura` | obligatorio, único | **prohibido** (se rechaza si viaja) |
+| `fechaFactura` | obligatoria | **prohibida** |
+| `proveedorId` | obligatorio | **prohibido** |
+| `ordenCompraId` | opcional (FR-099) | **prohibido** — un ajuste no surte ninguna orden |
+| `observaciones` | opcional | **obligatorio**: es el MOTIVO del ajuste |
+| `fechaRecepcion`, `lineas` | obligatorias | obligatorias |
+
+Se rechazan explícitamente (`400`) los campos prohibidos en vez de ignorarlos en silencio: un
+cliente que envía `proveedorId` con `tipo: 'AJUSTE'` cree estar guardando algo que no se guardará.
+
+La respuesta de lectura (listado y detalle) trae `tipo`, `numeroFactura: string \| null`,
+`numeroAjuste: string \| null` ya formateado como `AJU-000042` —presentación, igual que
+`ORD-000042` y `COT-000042`— y `proveedor: { id, nombre } \| null`. El correlativo lo asigna el
+servidor con el mismo mecanismo transaccional que el resto de documentos (`contadores['ajuste']`,
+research R5); nunca lo envía el cliente.
+
+**Por qué un ajuste tampoco pide proveedor**: es el mismo problema que el número de factura. No
+hay a quién comprarle, así que cualquier proveedor elegido sería relleno — y el catálogo de
+proveedores alimenta el filtro y el reporte de compras, donde ese relleno se vuelve una compra
+que nunca ocurrió.
 
 ## Órdenes de compra (`/api/ordenes-compra`) (US16, FR-094…FR-100)
 
@@ -683,7 +751,7 @@ opciones de filtro no exponen ningún dato que la propia página no muestre ya e
 |---|---|---|---|---|
 | `GET /api/salidas?clienteId=&proyectoId=&estado=&desde=&hasta=&numero=&usuarioAutorizaId=` | A,G,O | `esquemaFiltroSalidas` {clienteId?, proyectoId?, estado?, desde?, hasta?, **numero?, usuarioAutorizaId?** (US13), pagina, porPagina} | página con número, cliente/proyecto, estado, total (FR-033) | — |
 | `GET /api/salidas/:id` | A,G,O | — | salida con líneas y auditoría | `404` |
-| `POST /api/salidas` | A,G,O | `esquemaCrearSalida` {proyectoId (obligatorio — FR-027), fechaSalida, observaciones?, lineas[≥1]{productoId, cantidad>0, precioUnitario≥0}} | `201` {id, numero} correlativo (FR-026); PENDIENTE compromete disponibilidad | `400` sin proyecto/validación; `409` proyecto no activo (FR-038) o disponibilidad insuficiente con disponible real |
+| `POST /api/salidas` | A,G,O | `esquemaCrearSalida` {**clienteId (obligatorio — FR-124)**, **proyectoId? (OPCIONAL desde US28)**, fechaSalida, observaciones?, lineas[≥1]{productoId, **cantidad entera >0** (US26), precioUnitario≥0}} | `201` {id, numero} correlativo (FR-026); PENDIENTE compromete disponibilidad | `400` sin cliente/validación (FR-122); `409` cliente o proyecto no activo (FR-038), proyecto de otro cliente, o disponibilidad insuficiente con disponible real |
 | `PUT /api/salidas/:id` | A,G,O | mismo esquema | `204` (solo PENDIENTE; revalida disponibilidad) | `409` |
 | `POST /api/salidas/:id/confirmar` | A,G,O | — | `204`; transacción atómica descuenta stock, fija autorizante y fecha (FR-028/029/030). Ante carrera solo una gana (US3-AS5) | `409` disponibilidad insuficiente (disponible real) / estado inválido |
 | `POST /api/salidas/:id/completar` | A,G,O | — | `204` (cierre de entrega) | `409` |
@@ -717,6 +785,15 @@ Los endpoints de datos y los de exportación comparten esquema de filtros y caso
 | `GET /api/reportes/inventario` | {buscar?, cantidadMin?, cantidadMax?} | stock/comprometido/disponible, valor total, bajo umbral (FR-041) |
 | `GET /api/reportes/movimientos` | {desde?, hasta?, tipo?, usuarioId?, clienteId?, proyectoId?} | movimientos con documento y cliente/proyecto (FR-042) |
 | `GET /api/reportes/{tipo}/export?formato=pdf\|xlsx&…` | mismos filtros + formato | stream `application/pdf` o xlsx con `Content-Disposition: attachment; filename="<reporte>-<fecha>.<ext>"`; sin datos → archivo válido con encabezados y cero filas (FR-043) |
+
+**El consumo del cliente incluye lo entregado SIN proyecto (US28/US29, FR-125)**: la respuesta
+de `consumo-cliente` agrupa por proyecto igual que hasta ahora, y añade al FINAL un grupo con
+`proyecto: { id: null, nombre: "Sin proyecto", estado: null }` cuando el cliente tiene salidas
+sin proyecto en el período. Suma en `totalCliente` como cualquier otro grupo. Se emite solo si
+tiene consumo — a diferencia de los proyectos reales, que aparecen aunque estén en cero
+(US4-AS4): un proyecto vacío es información ("esta obra no consumió"), pero un grupo "Sin
+proyecto" vacío es ruido, porque no corresponde a nada que exista en el catálogo.
+`consumo-proyecto` NO cambia: una salida sin proyecto no pertenece a ninguno.
 
 El PDF incluye encabezado con nombre del reporte, filtros aplicados y fecha/hora; el Excel
 incluye formatos COP y autofiltro. Implementación vía puerto `ExportadorReporte` con

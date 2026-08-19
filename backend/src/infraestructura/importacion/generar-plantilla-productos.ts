@@ -165,7 +165,9 @@ const INSTRUCCIONES_COLUMNAS_CATALOGO: ReadonlyArray<InstruccionColumna> = [
   },
   {
     columna: 'Umbral stock bajo',
-    significado: 'Cantidad mínima antes de marcar el producto en stock bajo. Opcional; si se deja vacía, queda en 0.',
+    significado:
+      'Cantidad mínima antes de marcar el producto en stock bajo. Número ENTERO, sin decimales (US26). ' +
+      'Opcional; si se deja vacía, queda en 0.',
   },
 ];
 
@@ -175,8 +177,8 @@ const INSTRUCCIONES_COLUMNAS_STOCK_PLANTILLA: ReadonlyArray<InstruccionColumna> 
   {
     columna: 'Cantidad inicial',
     significado:
-      'Cantidad de stock a ingresar para este producto en esta carga. Opcional: déjala vacía o en 0 si la fila es ' +
-      'solo para crear/actualizar el catálogo, sin mover stock.',
+      'Cantidad de stock a ingresar para este producto en esta carga. Número ENTERO, sin decimales (US26). ' +
+      'Opcional: déjala vacía o en 0 si la fila es solo para crear/actualizar el catálogo, sin mover stock.',
   },
   {
     columna: 'Valor unitario',
@@ -194,7 +196,7 @@ const INSTRUCCIONES_COLUMNAS_STOCK_CATALOGO: ReadonlyArray<InstruccionColumna> =
     significado:
       'DÉJALA VACÍA salvo que quieras INGRESAR mercancía nueva. NO es el stock actual del producto (ese lo ves ' +
       'en la última columna): es la cantidad que se SUMARÍA al stock al subir el archivo. Escribir aquí el stock ' +
-      'que ya tienes lo duplicaría.',
+      'que ya tienes lo duplicaría. Número ENTERO, sin decimales (US26).',
   },
   {
     columna: 'Valor unitario',

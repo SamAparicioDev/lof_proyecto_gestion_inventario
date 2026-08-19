@@ -458,6 +458,79 @@ El reporte de movimientos pide "Usuario (ID)" y espera un número. Nadie sabe qu
 
 ---
 
+### User Story 26 - Cantidades enteras (Priority: P2)
+
+Las cantidades se capturan con hasta dos decimales y en esta bodega eso no describe nada real: no se entrega medio compresor ni se recibe 0,75 de un filtro. Lo que sí produce es ruido —"12,00" donde debería decir "12"— y errores de digitación que nadie ve hasta que el conteo físico no cuadra.
+
+**Why this priority**: una cantidad mal capturada no se queda en su línea; se arrastra al movimiento, al stock, a la valorización y a los cuatro reportes. Cerrar la puerta de entrada es más barato que perseguirla después.
+
+**Independent Test**: Se prueba escribiendo `2,5` en la cantidad de cualquiera de los cuatro documentos y comprobando que se rechaza nombrando el campo.
+
+**Acceptance Scenarios**:
+
+1. **Given** una línea de ingreso, salida, orden de compra o cotización, **When** se escribe una cantidad con decimales, **Then** se rechaza en el navegador Y en el servidor, con el mismo mensaje en español.
+2. **Given** el umbral de stock bajo o las existencias iniciales de un producto, **When** se capturan con decimales, **Then** se rechazan igual: son cantidades, no dinero.
+3. **Given** la carga masiva, **When** una fila trae una cantidad decimal, **Then** esa fila se invalida nombrando la columna y el resto del archivo se procesa (FR-051).
+4. **Given** movimientos históricos con cantidades decimales, **When** se consultan, suman o exportan, **Then** se comportan exactamente como hoy: la regla rige lo que entra desde ahora, no reescribe la historia.
+5. **Given** un precio unitario, **When** se escribe con dos decimales, **Then** se acepta: la regla es sobre unidades, no sobre dinero.
+
+---
+
+### User Story 27 - La salida se exporta con o sin valores, y siempre la firma quien recibe (Priority: P2)
+
+El documento de una salida es el soporte de la entrega: se imprime y se le pone delante a quien recibe la mercancía. Hoy sale siempre con precios —y hay entregas donde el valor no debe verse, porque quien recibe en la obra no tiene por qué conocer lo que se le factura a su empresa— y en ningún caso trae un espacio de firma, así que la constancia se anota a mano en el margen o no queda.
+
+**Why this priority**: el archivo existe para respaldar una entrega; sin firma no respalda nada, y con precios de más se convierte en un problema comercial.
+
+**Independent Test**: Se prueba exportando una salida "sin valores" y comprobando que no aparece ninguna cifra de dinero y que el bloque de firma sí, con el nombre de quien recibe.
+
+**Acceptance Scenarios**:
+
+1. **Given** una salida, **When** se pide exportarla, **Then** el sistema pregunta el formato, si va con o sin valores, y el nombre de quien recibe — y no genera nada mientras ese nombre falte.
+2. **Given** la variante SIN valores, **When** se genera el archivo, **Then** no aparece precio unitario, valor de línea, base gravable, IVA ni total: solo producto y cantidad.
+3. **Given** la variante CON valores, **When** se genera el archivo, **Then** es el documento de hoy, con sus tres cifras.
+4. **Given** cualquiera de las dos variantes, en PDF o en Excel, **Then** el documento cierra con un bloque de firma que nombra a quien recibe y deja espacio para firmar y fechar.
+5. **Given** el LISTADO de salidas, **When** se exporta, **Then** se comporta como cualquier otro listado: la pregunta es del documento de entrega, no del listado.
+
+---
+
+### User Story 28 - Salida a un cliente sin proyecto específico (Priority: P2)
+
+Toda salida exige hoy un proyecto. Hay entregas que son del cliente y no de una obra: consumibles, repuestos de un mantenimiento general, material que el cliente reparte después por su cuenta. Obligar a elegir un proyecto hace que se invente uno ("General", "Varios"), y desde ese momento el consumo por proyecto —que es la pregunta que justifica el sistema— dice algo que no ocurrió.
+
+**Why this priority**: es la regla del sistema que más se pelea con la operación real, y la que más silenciosamente corrompe el reporte más importante.
+
+**Independent Test**: Se prueba registrando una salida con solo el cliente elegido y comprobando que se confirma, descuenta stock y aparece en el consumo de ese cliente.
+
+**Acceptance Scenarios**:
+
+1. **Given** el formulario de salida, **When** se elige cliente y se deja el proyecto vacío, **Then** la salida se registra: el cliente es obligatorio, el proyecto no.
+2. **Given** una salida sin proyecto, **When** se confirma, **Then** descuenta stock y queda en el historial de movimientos como cualquier otra, con su cliente.
+3. **Given** el reporte de consumo de un cliente, **When** hay salidas sin proyecto, **Then** su consumo aparece agrupado aparte, bajo "Sin proyecto", y suma en el total del cliente: ni se pierde ni se reparte entre las obras.
+4. **Given** el reporte de consumo por proyecto, **Then** trae solo lo entregado a ese proyecto — una salida sin proyecto no pertenece a ninguno.
+5. **Given** un cliente inactivo, **When** se intenta entregarle, **Then** se rechaza igual que hoy; y cuando SÍ se elige proyecto, se sigue exigiendo que esté activo y que sea de ese cliente.
+6. **Given** las salidas ya registradas, **Then** conservan su proyecto y su cliente: la historia no cambia.
+
+---
+
+### User Story 29 - Ajuste de inventario (Priority: P2)
+
+No todo lo que entra a la bodega viene con factura: un conteo físico que aparece de más, una devolución del cliente, mercancía encontrada, lo que ya estaba antes de que existiera el sistema. Hoy hay que inventarse un número de factura y elegir un proveedor cualquiera para poder registrarlo, y eso ensucia justo la columna que sirve para cuadrar con contabilidad.
+
+**Why this priority**: es el hueco por el que hoy entra información falsa a la única tabla que no admite correcciones.
+
+**Independent Test**: Se prueba registrando un ingreso marcado como ajuste, sin factura ni proveedor, y comprobando que suma stock y queda identificado con su propio número.
+
+**Acceptance Scenarios**:
+
+1. **Given** el formulario de ingreso, **When** se elige "Ajuste de inventario", **Then** desaparecen el número de factura, la fecha de factura y el proveedor, y el MOTIVO pasa a ser obligatorio.
+2. **Given** un ajuste guardado, **Then** el sistema le asigna un número propio y correlativo (`AJU-000001`): un documento sin identificador no es trazable.
+3. **Given** un ajuste recibido, **Then** suma stock y deja movimientos de AJUSTE DE ENTRADA —no de ENTRADA—, para que el historial distinga una compra de una corrección.
+4. **Given** el tipo "Factura", **Then** todo funciona como hasta hoy: número único obligatorio, fecha de factura y proveedor.
+5. **Given** el listado de ingresos, **Then** un ajuste se distingue a simple vista y muestra su número donde los demás muestran el de la factura.
+
+---
+
 ### Edge Cases
 
 - **Salida mayor al disponible**: debe rechazarse siempre, incluida la carrera entre dos usuarios simultáneos sobre el mismo producto (solo una confirmación puede ganar).
@@ -467,7 +540,9 @@ El reporte de movimientos pide "Usuario (ID)" y espera un número. Nadie sabe qu
 - **Usuario desactivado**: no puede iniciar sesión; su nombre permanece en los movimientos históricos que registró.
 - **Producto sin movimientos vs. con movimientos**: un producto con movimientos no puede eliminarse; solo marcarse inactivo.
 - **Reporte sin datos en el período**: muestra estado vacío claro, sin errores; la exportación produce un archivo válido con encabezados y sin filas.
-- **Cantidades con decimales**: se aceptan hasta 2 decimales (materiales medidos en metros/kg); nunca cantidades cero o negativas.
+- **Cantidades con decimales** (US26): se rechazan al capturarlas —toda cantidad es entera y positiva (FR-122)—, pero las ya registradas antes de la regla se siguen leyendo y sumando tal cual: la restricción mira hacia adelante.
+- **Salida sin proyecto** (US28): el cliente sigue siendo obligatorio; lo entregado sin proyecto suma en el consumo del cliente bajo "Sin proyecto" y no aparece en ningún reporte por proyecto.
+- **Ajuste de inventario** (US29): no lleva factura ni proveedor, pero sí motivo y número propio; sus movimientos son de AJUSTE DE ENTRADA para que no se confundan con una compra en el reporte de movimientos.
 - **Sesión expirada a mitad de un formulario**: al reintentar guardar, el sistema pide autenticarse de nuevo sin perder la información capturada o indicando claramente que debe recapturarse.
 - **Salida pendiente cuya disponibilidad desaparece** (otro usuario consumió el stock): al intentar confirmarla, se rechaza indicando el disponible actual.
 - **SKU repetido dentro del mismo archivo de carga masiva**: la primera ocurrencia se procesa; las repeticiones posteriores del mismo SKU en el archivo se reportan como fila inválida (evita aplicar dos altas/actualizaciones contradictorias del mismo producto en una sola corrida).
@@ -656,6 +731,11 @@ que recordar por separado.
 - **FR-119**: Toda lista de selección que pueda CRECER (productos, clientes, proyectos, proveedores, categorías, unidades de medida) DEBE permitir escribir para filtrar sus opciones en vivo, con el mismo criterio por términos de FR-118 y además ignorando tildes. DEBE ser usable solo con teclado (↑/↓, Enter, Esc) y anunciarse como `combobox` para lectores de pantalla. Las listas CERRADAS y cortas —estado, formato de exportación, tasa de IVA— DEBEN seguir siendo desplegables nativos: un buscador sobre cuatro opciones fijas estorba más de lo que ayuda.
 - **FR-120**: El reporte de inventario actual DEBE poder filtrarse por CATEGORÍA, y ese filtro DEBE aplicarse por igual a lo que se muestra y a lo que se exporta, incluidas sus cifras agregadas (valor total y conteo bajo umbral). El documento exportado DEBE nombrar la categoría filtrada, no su id.
 - **FR-121**: El filtro por persona del reporte de movimientos NO DEBE pedir un identificador interno: DEBE ofrecer una lista de personas por su nombre, alimentada por un endpoint con el MISMO permiso que el reporte (`reportes.ver`) y limitada a quienes tienen movimientos registrados. El documento exportado DEBE nombrar a la persona filtrada.
+- **FR-122**: Toda CANTIDAD DEBE ser un número ENTERO positivo: las líneas de ingreso, salida, orden de compra y cotización, el umbral de stock bajo, las existencias iniciales y las columnas de cantidad de la carga masiva. Los PRECIOS siguen admitiendo dos decimales — la regla es sobre unidades, no sobre dinero. La base de datos DEBE reforzarla, pero SIN invalidar lo ya registrado: los movimientos históricos con decimales se consultan, suman y exportan igual que siempre. Se cierra la puerta, no se reescribe la historia.
+- **FR-123**: El documento individual de una salida DEBE poder exportarse en dos variantes, CON valores y SIN valores, y en AMBAS DEBE pedirse el nombre de quien recibe antes de generar el archivo. La variante sin valores NO DEBE mostrar precio unitario, valor de línea, base gravable, IVA ni total. Toda variante, en PDF y en Excel, DEBE cerrar con un bloque de FIRMA que nombre a quien recibe y deje espacio para firmar y fechar: el archivo es el soporte de la entrega, no un informe. El LISTADO de salidas se exporta como cualquier otro listado, sin esta pregunta.
+- **FR-124**: Una salida DEBE estar vinculada obligatoriamente a un CLIENTE; el PROYECTO es OPCIONAL — hay entregas que son del cliente y no de una obra, y forzar un proyecto inventado corrompe el reporte de consumo (FR-039). La regla de destino válido (FR-038) aplica siempre al cliente y, cuando se elige proyecto, también a él y a su pertenencia a ese cliente. Las salidas registradas antes de esta historia conservan su proyecto.
+- **FR-125**: El reporte de consumo de un CLIENTE DEBE incluir lo entregado sin proyecto, agrupado aparte bajo "Sin proyecto" y sumado en el total del cliente; el reporte por PROYECTO trae solo lo de ese proyecto. Omitir ese consumo o repartirlo entre las obras falsearía las dos preguntas que el reporte responde.
+- **FR-126**: Un ingreso DEBE poder registrarse como AJUSTE DE INVENTARIO: sin número ni fecha de factura y sin proveedor, con MOTIVO obligatorio y con un correlativo propio que lo identifique (`AJU-000001`). Al recibirse DEBE generar movimientos de AJUSTE DE ENTRADA, no de ENTRADA, para que el historial distinga una compra de una corrección. El ingreso de tipo FACTURA mantiene TODAS sus reglas actuales: número único obligatorio, fecha de factura y proveedor.
 
 **Auditoría y trazabilidad (transversal)**
 
@@ -673,10 +753,10 @@ que recordar por separado.
 - **Orden de compra**: pedido formal de mercancía a un proveedor (US16, FR-094); número correlativo propio, proveedor obligatorio, fecha, líneas con producto/cantidad/precio estimado, valor total calculado, estado (borrador, enviada, recibida, anulada) y motivo de anulación. NO mueve inventario: es un compromiso de compra, y el stock solo se mueve cuando el ingreso correspondiente se recibe.
 - **Cotización**: oferta formal de mercancía a un cliente (US21, FR-112); número correlativo propio, cliente y proyecto obligatorios, fecha y fecha de validez, líneas con producto/cantidad/precio/tasa de IVA, las tres cifras del documento (base, IVA y total) y estado (borrador, enviada, aceptada, rechazada, anulada). NO mueve inventario: al aceptarse genera una salida pendiente enlazada, y el stock se compromete cuando esa salida se confirma.
 - **Cliente**: empresa o persona a la que se destinan salidas; nombre, NIT único, contacto (teléfono, email), dirección, ciudad, estado, fecha de registro. Tiene uno o más proyectos.
-- **Proyecto**: trabajo específico de un cliente; nombre, descripción, fechas de inicio y cierre estimada, responsable, presupuesto estimado, estado (Activo/Completado/Suspendido). Destino obligatorio de las salidas.
-- **Ingreso (factura)**: documento de entrada de mercancía; número de factura único, proveedor (texto), fechas de factura y recepción, observaciones, estado (Pendiente/Recibido/Verificado), usuario que registra, valor total. Compuesto por líneas de detalle.
+- **Proyecto**: trabajo específico de un cliente; nombre, descripción, fechas de inicio y cierre estimada, responsable, presupuesto estimado, estado (Activo/Completado/Suspendido). Destino OPCIONAL de las salidas desde US28 (FR-124): el destino obligatorio es el cliente.
+- **Ingreso**: documento de entrada de mercancía, de tipo FACTURA o AJUSTE DE INVENTARIO (US29, FR-126). El de factura lleva número único, proveedor del catálogo y fecha de factura; el de ajuste no lleva ninguno de los tres y a cambio lleva motivo obligatorio y un correlativo propio. Ambos comparten fecha de recepción, observaciones, estado (Pendiente/Recibido/Verificado/Anulado), usuario que registra y valor total, y se componen de líneas de detalle.
 - **Detalle de ingreso**: línea de un ingreso; producto, cantidad, precio unitario, valor total de la línea.
-- **Salida**: documento de egreso de mercancía; número auto-correlativo, fecha, cliente y proyecto de destino (obligatorios), observaciones, estado (Pendiente/Confirmada/Completada, más Anulada como resultado de anulación), usuario que autoriza, valor total. Compuesta por líneas de detalle.
+- **Salida**: documento de egreso de mercancía; número auto-correlativo, fecha, cliente de destino (obligatorio) y proyecto (OPCIONAL desde US28, FR-124), observaciones, estado (Pendiente/Confirmada/Completada, más Anulada como resultado de anulación), usuario que autoriza, valor total. Compuesta por líneas de detalle.
 - **Detalle de salida**: línea de una salida; producto, cantidad, precio unitario de referencia, valor total de la línea.
 - **Movimiento de inventario**: registro inmutable de cada afectación de stock; fecha/hora, tipo (entrada/salida/ajuste), producto, cantidad con signo, documento asociado, usuario, cliente/proyecto cuando aplica.
 

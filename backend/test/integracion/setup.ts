@@ -693,9 +693,18 @@ export interface LineaSalidaDePrueba {
   precioUnitario?: number;
 }
 
-/** Parámetros de `crearSalidaDePrueba` — todos con un valor por defecto útil salvo `proyectoId`/`lineas`. */
+/** Parámetros de `crearSalidaDePrueba` — todos con un valor por defecto útil salvo `lineas`. */
 export interface OpcionesSalidaDePrueba {
-  proyectoId: number;
+  /**
+   * US28 (FR-124): destino obligatorio de la salida. Se puede OMITIR si se pasa `proyectoId`:
+   * el factory lo deduce leyendo el proyecto, igual que hizo la migración con el histórico. Así
+   * las suites anteriores a esta historia siguen expresando lo que quieren decir ("una salida a
+   * este proyecto") sin repetir un cliente que ya está implícito.
+   */
+  clienteId?: number;
+  /** US28 (FR-124): omitirlo (con `clienteId` presente) crea una salida SIN proyecto, que es un
+   *  caso de prueba propio de esta historia. */
+  proyectoId?: number | null;
   lineas: LineaSalidaDePrueba[];
   fechaSalida?: Date;
   observaciones?: string | null;
@@ -708,11 +717,22 @@ export interface OpcionesSalidaDePrueba {
   usuarioCreacionId?: number;
 }
 
+/** Cliente dueño de `proyectoId`, para el factory de salidas (US28). Falla ruidosamente si no
+ *  hay ninguno de los dos: una salida sin destino no es un escenario válido que probar. */
+async function clienteDelProyecto(prisma: PrismaService, proyectoId: number | null): Promise<number> {
+  if (proyectoId === null) {
+    throw new Error('crearSalidaDePrueba necesita clienteId cuando la salida no tiene proyecto');
+  }
+  const proyecto = await prisma.proyecto.findUniqueOrThrow({ where: { id: BigInt(proyectoId) } });
+  return Number(proyecto.clienteId);
+}
+
 /** Salida recién creada — campos mínimos que las suites necesitan para armar aserciones. */
 export interface SalidaDePruebaCreada {
   id: number;
   numero: number;
-  proyectoId: number;
+  clienteId: number;
+  proyectoId: number | null;
   estado: EstadoSalida;
 }
 
@@ -738,6 +758,11 @@ export async function crearSalidaDePrueba(
     UPDATE contadores SET valor = valor + 1 WHERE clave = 'salida' RETURNING valor;
   `;
 
+  // US28 (FR-124): el cliente se deduce del proyecto cuando no viene explícito — ver el TSDoc
+  // de `OpcionesSalidaDePrueba.clienteId`.
+  const proyectoId = opciones.proyectoId ?? null;
+  const clienteId = opciones.clienteId ?? (await clienteDelProyecto(prisma, proyectoId));
+
   const detallesCrear = opciones.lineas.map((linea) => {
     const precioUnitario = linea.precioUnitario ?? 1000;
     return {
@@ -753,7 +778,8 @@ export async function crearSalidaDePrueba(
     data: {
       numero,
       fechaSalida: opciones.fechaSalida ?? new Date('2026-01-10'),
-      proyectoId: BigInt(opciones.proyectoId),
+      clienteId: BigInt(clienteId),
+      proyectoId: proyectoId === null ? null : BigInt(proyectoId),
       observaciones: opciones.observaciones ?? null,
       estado: opciones.estado ?? 'PENDIENTE',
       valorTotal,
@@ -768,7 +794,8 @@ export async function crearSalidaDePrueba(
   return {
     id: Number(registro.id),
     numero: Number(registro.numero),
-    proyectoId: Number(registro.proyectoId),
+    clienteId: Number(registro.clienteId),
+    proyectoId: registro.proyectoId === null ? null : Number(registro.proyectoId),
     estado: registro.estado,
   };
 }

@@ -34,9 +34,12 @@ function aFechaInput(fechaIso: string): string {
 
 function aValoresFormulario(ingreso: IngresoConDetalles): DatosCrearIngreso {
   return {
-    numeroFactura: ingreso.numeroFactura,
-    fechaFactura: aFechaInput(ingreso.fechaFactura),
-    proveedorId: ingreso.proveedor.id,
+    // US29 (FR-126): los tres campos de la compra no existen en un ajuste. `undefined` es lo
+    // que el esquema espera ahí — mandarlos vacíos sería enviarlos.
+    tipo: ingreso.tipo,
+    numeroFactura: ingreso.numeroFactura ?? undefined,
+    fechaFactura: ingreso.fechaFactura ? aFechaInput(ingreso.fechaFactura) : undefined,
+    proveedorId: ingreso.proveedor?.id,
     fechaRecepcion: aFechaInput(ingreso.fechaRecepcion),
     observaciones: ingreso.observaciones ?? '',
     lineas: ingreso.detalles.map((detalle) => ({
@@ -98,8 +101,12 @@ export default async function PaginaDetalleIngreso({ params }: { params: Promise
       ) : (
         <div className="card gap-4 p-5">
           <dl className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', margin: 0 }}>
-            <DatoSoloLectura etiqueta="Proveedor" valor={ingreso.proveedor.nombre} />
-            <DatoSoloLectura etiqueta="Fecha de la factura" valor={formatoFecha(ingreso.fechaFactura)} />
+            {/* US29 (FR-126): un ajuste no tiene proveedor ni fecha de factura, y su ficha no
+                los inventa — las filas simplemente no están. */}
+            {ingreso.proveedor && <DatoSoloLectura etiqueta="Proveedor" valor={ingreso.proveedor.nombre} />}
+            {ingreso.fechaFactura && (
+              <DatoSoloLectura etiqueta="Fecha de la factura" valor={formatoFecha(ingreso.fechaFactura)} />
+            )}
             <DatoSoloLectura etiqueta="Fecha de recepción" valor={formatoFecha(ingreso.fechaRecepcion)} />
             <DatoSoloLectura etiqueta="Valor total" valor={formatoMoneda(ingreso.valorTotal)} />
             {ingreso.observaciones && <DatoSoloLectura etiqueta="Observaciones" valor={ingreso.observaciones} />}

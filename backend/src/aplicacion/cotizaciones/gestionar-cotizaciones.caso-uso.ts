@@ -113,20 +113,21 @@ export class CrearCotizacionCasoUso implements CasoDeUso<CotizacionEntrada, Coti
   /**
    * El proyecto tiene que existir, estar activo y pertenecer al cliente indicado.
    *
-   * La segunda mitad es propia de este módulo: `Salida` solo guarda el proyecto —el cliente se
-   * deduce— mientras que una cotización guarda los dos para poder listarse por cliente. Guardar
-   * dos referencias obliga a comprobar que concuerden, o el listado por cliente mostraría
-   * documentos cuyo proyecto es de otro.
+   * Hasta US28 la segunda mitad era propia de este módulo, porque `Salida` solo guardaba el
+   * proyecto y era imposible que los dos discreparan. Ahora la salida guarda también el cliente
+   * (FR-124) y la comprobación vale para los dos documentos, así que vive una sola vez en
+   * `validarDestinoSalida` — con el mismo error que este método lanzaba.
+   *
+   * Una cotización SÍ exige proyecto (FR-112): se ofrece para una obra concreta. Por eso pasa
+   * `entrada.proyectoId` sin admitir `null`, mientras que una salida puede omitirlo.
    */
   private async verificarDestino(entrada: CotizacionEntrada): Promise<void> {
-    await validarDestinoSalida(this.repositorioProyectos, this.repositorioClientes, entrada.proyectoId);
-
-    const proyecto = await this.repositorioProyectos.buscarPorId(entrada.proyectoId);
-    if (proyecto && proyecto.clienteId !== entrada.clienteId) {
-      throw new ErrorValidacionDominio('El proyecto no pertenece al cliente seleccionado', {
-        proyectoId: 'El proyecto seleccionado no pertenece a ese cliente',
-      });
-    }
+    await validarDestinoSalida(
+      this.repositorioProyectos,
+      this.repositorioClientes,
+      entrada.clienteId,
+      entrada.proyectoId,
+    );
   }
 }
 
@@ -155,13 +156,12 @@ export class ActualizarCotizacionCasoUso implements CasoDeUso<ActualizarCotizaci
     // Solo si CAMBIA de destino: una cotización cuyo proyecto se cerró después debe poder
     // corregirse en sus líneas sin obligar a cambiarle también el destinatario.
     if (entrada.proyectoId !== cotizacion.proyecto.id || entrada.clienteId !== cotizacion.cliente.id) {
-      await validarDestinoSalida(this.repositorioProyectos, this.repositorioClientes, entrada.proyectoId);
-      const proyecto = await this.repositorioProyectos.buscarPorId(entrada.proyectoId);
-      if (proyecto && proyecto.clienteId !== entrada.clienteId) {
-        throw new ErrorValidacionDominio('El proyecto no pertenece al cliente seleccionado', {
-          proyectoId: 'El proyecto seleccionado no pertenece a ese cliente',
-        });
-      }
+      await validarDestinoSalida(
+        this.repositorioProyectos,
+        this.repositorioClientes,
+        entrada.clienteId,
+        entrada.proyectoId,
+      );
     }
 
     await this.repositorio.actualizar(entrada.id, aDatosPersistencia(entrada), entrada.usuarioId);

@@ -193,7 +193,8 @@ export function ProductoForm({
             <input
               id="producto-editar-umbral"
               type="number"
-              step="0.01"
+              // US26 (FR-122): el umbral se compara contra el stock, así que es una cantidad.
+              step="1"
               min={0}
               className="input"
               aria-invalid={!!errors.umbralStockBajo}

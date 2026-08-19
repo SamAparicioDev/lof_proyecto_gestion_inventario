@@ -359,7 +359,9 @@ export function OrdenCompraForm({ productos, ordenId, valoresIniciales, proveedo
                     <td style={{ width: 130 }}>
                       <input
                         type="number"
-                        step="0.01"
+                        // US26 (FR-122): entera — las flechas suben de uno en uno y el navegador
+                        // rechaza los decimales antes de que el esquema tenga que hacerlo.
+                        step="1"
                         min={0}
                         className="input"
                         aria-label={`Cantidad de la línea ${indice + 1}`}

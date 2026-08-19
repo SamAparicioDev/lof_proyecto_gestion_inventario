@@ -17,8 +17,12 @@ export interface Salida {
   id: number;
   numero: number;
   fechaSalida: string;
-  /** El cliente se deriva del proyecto (data-model.md: guardar ambos duplicaría la verdad). */
-  proyectoId: number;
+  /** US28 (FR-124): destino obligatorio. Hasta esa historia NO viajaba — el navegador lo
+   *  deducía del proyecto—, y dejó de poder deducirse en cuanto el proyecto se volvió
+   *  opcional. */
+  clienteId: number;
+  /** US28 (FR-124): `null` en las entregas que no corresponden a una obra concreta. */
+  proyectoId: number | null;
   observaciones: string | null;
   estado: EstadoSalida;
   valorTotal: number;

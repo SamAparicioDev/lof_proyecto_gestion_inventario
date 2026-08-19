@@ -29,7 +29,11 @@ import { validarDisponibilidadLineas } from './validar-disponibilidad-lineas';
 /** Entrada: datos validados por `esquemaActualizarSalida` + auditoría (FR-045). */
 export interface ActualizarSalidaEntrada {
   readonly salidaId: number;
-  readonly proyectoId: number;
+  /** US28 (FR-124): el destino puede REASIGNARSE mientras la salida siga PENDIENTE, cliente
+   *  incluido — es el mismo esquema que crear, y editar sirve justo para corregir un destino
+   *  mal elegido. */
+  readonly clienteId: number;
+  readonly proyectoId: number | null;
   readonly fechaSalida: string;
   readonly observaciones: string | null;
   readonly lineas: readonly LineaCrearSalidaEntrada[];
@@ -55,7 +59,12 @@ export class ActualizarSalidaCasoUso implements CasoDeUso<ActualizarSalidaEntrad
       throw new EstadoInvalido('Solo una salida PENDIENTE puede editarse');
     }
 
-    await validarDestinoSalida(this.repositorioProyectos, this.repositorioClientes, entrada.proyectoId);
+    await validarDestinoSalida(
+      this.repositorioProyectos,
+      this.repositorioClientes,
+      entrada.clienteId,
+      entrada.proyectoId,
+    );
     await validarDisponibilidadLineas(
       this.repositorioProductos,
       this.repositorioSalidas,
@@ -66,6 +75,7 @@ export class ActualizarSalidaCasoUso implements CasoDeUso<ActualizarSalidaEntrad
     await this.repositorioSalidas.actualizar(
       entrada.salidaId,
       {
+        clienteId: entrada.clienteId,
         proyectoId: entrada.proyectoId,
         fechaSalida: new Date(entrada.fechaSalida),
         observaciones: entrada.observaciones,
