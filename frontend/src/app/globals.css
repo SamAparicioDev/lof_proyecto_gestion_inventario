@@ -310,6 +310,61 @@ select.input option { background: #232532; color: #e9e9ed; }
    arriba) la columna 2 no existe, así que sin este override `main` caía en una columna
    implícita fuera de la vista y la app quedaba SIN NAVEGACIÓN visible en mobile/tablet —
    bug real encontrado y corregido en la tanda de responsividad, 2026-08-11. */
+/* ============================================================================
+   US34 (FR-137) — que quepa en la pantalla que sea
+   ============================================================================
+   La aplicación se diseñó mirando 1920×1080. Lo que sigue la hace utilizable en los portátiles
+   reales (1366×768, 1280×800, 1024×768) sin tocar el bloque vendorizado de Nocturne: son capas
+   que redefinen, con el mismo criterio que usó el modo claro. */
+
+/* --- Diálogos que caben a lo alto ---------------------------------------------------------
+   El fallo más caro de los tres, y el que no se ve: `.dialog` no tenía altura máxima y el fondo
+   centra su contenido, así que en 768 px de alto un formulario largo (producto nuevo, ingreso,
+   corrección de cantidad) se salía por arriba y por abajo y sus botones quedaban inalcanzables.
+   La pantalla parecía correcta y simplemente no se podía guardar.
+
+   `align-items: start` en vez de centrado y desplazamiento en el propio fondo: así un diálogo más
+   alto que la ventana se recorre entero, botones incluidos. */
+.dialog-backdrop {
+  align-items: start;
+  overflow-y: auto;
+}
+.dialog {
+  /* El margen inferior deja aire para que el último botón no quede pegado al borde. */
+  margin: var(--space-4) auto;
+  max-height: calc(100vh - var(--space-4) * 4);
+  overflow-y: auto;
+}
+
+/* --- Tablas anchas: se desplazan ELLAS, nunca la página ------------------------------------
+   El contenedor `.overflow-x-auto` ya existía en casi todas; esto añade lo que faltaba: que la
+   primera columna —la que identifica la fila: SKU, número de documento, nombre— siga visible al
+   desplazarse. Una tabla de nueve columnas desplazada sin eso es una lista de cifras sin sujeto.
+
+   `background` explícito en la celda fija: sin él, el contenido que pasa por debajo se ve a través. */
+@media (max-width: 1400px) {
+  .overflow-x-auto .table th:first-child,
+  .overflow-x-auto .table td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--color-surface);
+  }
+}
+
+/* --- La barra lateral cede ancho antes de estorbar -----------------------------------------
+   224 px fijos hasta los 900 significaba, en un portátil de 1366, casi un sexto del ancho útil
+   ocupado por siete enlaces. Se estrecha por tramos en vez de desaparecer de golpe: el menú
+   sigue siendo un menú, con menos aire. */
+@media (max-width: 1400px) {
+  #shell { grid-template-columns: 196px 1fr !important; }
+  main { padding-left: 20px !important; padding-right: 20px !important; }
+}
+@media (max-width: 1150px) {
+  #shell { grid-template-columns: 168px 1fr !important; }
+  main { padding-left: 14px !important; padding-right: 14px !important; }
+}
+
 @media (max-width: 900px) {
   /* `#shell` es `min-h-screen` sin `grid-template-rows` explícito: en escritorio eso no
      importa porque `#sidebar` ya mide 100vh por su propio `h-screen`, así que no queda

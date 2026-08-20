@@ -34,6 +34,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { AsistenteModule } from './interfaces/http/asistente/asistente.module';
 import { ArranqueModule } from './infraestructura/arranque/arranque.module';
 import { PersistenciaModule } from './infraestructura/persistencia/persistencia.module';
 import { JwtAuthGuard } from './interfaces/http/comunes/guards/jwt-auth.guard';
@@ -64,6 +65,8 @@ import { UsuariosModule } from './interfaces/http/usuarios/usuarios.module';
     PersistenciaModule,
     // US30 (FR-129): asegura el usuario de respaldo al levantar, antes de atender tráfico.
     ArranqueModule,
+    // US33 (FR-133): asistente de consultas, solo lectura.
+    AsistenteModule,
     // Módulo de seguridad: estrategia JWT, /api/auth y cableado Hasheador/RepositorioUsuarios (T014/T016).
     AuthModule,
     // US1: alta de productos y ciclo completo de ingresos (T033).

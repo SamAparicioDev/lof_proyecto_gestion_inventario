@@ -83,94 +83,97 @@ export function TablaCategorias(): React.JSX.Element {
       )}
 
       <div className="card p-0">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Nombre</th>
-              <th>Descripción</th>
-              <th>Estado</th>
-              <th style={{ textAlign: 'right' }}>Productos</th>
-              <th aria-label="Acciones" />
-            </tr>
-          </thead>
-          <tbody>
-            {cargando && (
+        {/* US34 (FR-137): la tabla se desplaza DENTRO de su tarjeta — nunca la página. */}
+        <div className="overflow-x-auto">
+          <table className="table">
+            <thead>
               <tr>
-                <td colSpan={5}>Cargando categorías…</td>
+                <th>Nombre</th>
+                <th>Descripción</th>
+                <th>Estado</th>
+                <th style={{ textAlign: 'right' }}>Productos</th>
+                <th aria-label="Acciones" />
               </tr>
-            )}
-
-            {!cargando && categorias.length === 0 && (
-              <tr>
-                <td colSpan={5}>Todavía no hay categorías. Crea la primera para clasificar tus productos.</td>
-              </tr>
-            )}
-
-            {categorias.map((categoria) => {
-              const enUso = categoria.cantidadProductos > 0;
-              const trabajando = ocupada === categoria.id;
-              return (
-                <tr key={categoria.id}>
-                  <td>{categoria.nombre}</td>
-                  <td className="text-muted">{categoria.descripcion ?? '—'}</td>
-                  <td>
-                    <span className={categoria.estado === 'ACTIVA' ? 'tag tag-accent' : 'tag tag-neutral'}>
-                      {categoria.estado === 'ACTIVA' ? 'Activa' : 'Inactiva'}
-                    </span>
-                  </td>
-                  <td style={{ textAlign: 'right' }}>{categoria.cantidadProductos}</td>
-                  <td>
-                    <div className="flex flex-wrap justify-end gap-2">
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        disabled={trabajando}
-                        onClick={() => setEditando(categoria)}
-                      >
-                        <PencilSimple size={14} /> Editar
-                      </button>
-
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        disabled={trabajando}
-                        onClick={() =>
-                          void ejecutar(categoria.id, () =>
-                            cambiarEstadoCategoria(categoria.id, categoria.estado === 'ACTIVA' ? 'INACTIVA' : 'ACTIVA'),
-                          )
-                        }
-                      >
-                        {categoria.estado === 'ACTIVA' ? (
-                          <>
-                            <Prohibit size={14} /> Desactivar
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle size={14} /> Activar
-                          </>
-                        )}
-                      </button>
-
-                      <button
-                        type="button"
-                        className="btn btn-ghost"
-                        disabled={trabajando || enUso}
-                        title={
-                          enUso
-                            ? `No se puede eliminar: ${categoria.cantidadProductos} producto(s) la usan. Desactívala para dejar de ofrecerla.`
-                            : 'Eliminar la categoría'
-                        }
-                        onClick={() => void ejecutar(categoria.id, () => eliminarCategoria(categoria.id))}
-                      >
-                        <TrashSimple size={14} /> Eliminar
-                      </button>
-                    </div>
-                  </td>
+            </thead>
+            <tbody>
+              {cargando && (
+                <tr>
+                  <td colSpan={5}>Cargando categorías…</td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              )}
+
+              {!cargando && categorias.length === 0 && (
+                <tr>
+                  <td colSpan={5}>Todavía no hay categorías. Crea la primera para clasificar tus productos.</td>
+                </tr>
+              )}
+
+              {categorias.map((categoria) => {
+                const enUso = categoria.cantidadProductos > 0;
+                const trabajando = ocupada === categoria.id;
+                return (
+                  <tr key={categoria.id}>
+                    <td>{categoria.nombre}</td>
+                    <td className="text-muted">{categoria.descripcion ?? '—'}</td>
+                    <td>
+                      <span className={categoria.estado === 'ACTIVA' ? 'tag tag-accent' : 'tag tag-neutral'}>
+                        {categoria.estado === 'ACTIVA' ? 'Activa' : 'Inactiva'}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: 'right' }}>{categoria.cantidadProductos}</td>
+                    <td>
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          disabled={trabajando}
+                          onClick={() => setEditando(categoria)}
+                        >
+                          <PencilSimple size={14} /> Editar
+                        </button>
+
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          disabled={trabajando}
+                          onClick={() =>
+                            void ejecutar(categoria.id, () =>
+                              cambiarEstadoCategoria(categoria.id, categoria.estado === 'ACTIVA' ? 'INACTIVA' : 'ACTIVA'),
+                            )
+                          }
+                        >
+                          {categoria.estado === 'ACTIVA' ? (
+                            <>
+                              <Prohibit size={14} /> Desactivar
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle size={14} /> Activar
+                            </>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          disabled={trabajando || enUso}
+                          title={
+                            enUso
+                              ? `No se puede eliminar: ${categoria.cantidadProductos} producto(s) la usan. Desactívala para dejar de ofrecerla.`
+                              : 'Eliminar la categoría'
+                          }
+                          onClick={() => void ejecutar(categoria.id, () => eliminarCategoria(categoria.id))}
+                        >
+                          <TrashSimple size={14} /> Eliminar
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {(creando || editando) && (

@@ -78,6 +78,7 @@ const PERMISOS_DEL_SISTEMA = [
   { clave: 'inventario.ver', modulo: 'inventario', descripcion: 'Consultar el inventario, la ficha de un producto y su historial de movimientos.' },
   { clave: 'inventario.ver_costos', modulo: 'inventario', descripcion: 'Consultar el historial de cambios de costo de un producto.' },
   { clave: 'inventario.ajustar', modulo: 'inventario', descripcion: 'Corregir a mano la cantidad de un producto para cuadrar con el conteo físico, sin documento de entrada ni de salida. Permiso reservado: solo el super administrador lo concede o lo retira.' },
+  { clave: 'asistente.consultar', modulo: 'asistente', descripcion: 'Preguntarle al asistente sobre los datos del sistema. Es de solo lectura: cada consulta que hace por dentro respeta los permisos de quien pregunta.' },
 
   { clave: 'productos.ver', modulo: 'productos', descripcion: 'Consultar el catálogo de productos para seleccionarlos en documentos.' },
   { clave: 'productos.crear', modulo: 'productos', descripcion: 'Dar de alta productos en el catálogo.' },

@@ -625,6 +625,71 @@ Administrador —se rechaza— y repitiendo la operación como super administrad
 
 ---
 
+### User Story 33 - Preguntarle al inventario en español (Priority: P2)
+
+Los datos están, pero llegar a ellos exige saber qué pantalla abrir y qué filtros poner.
+"¿Cuánto cemento me queda?", "¿cuánto le vendí a Jumbo este mes?", "¿qué está por acabarse?" son
+preguntas de treinta segundos que hoy cuestan tres pantallas — y desde un celular en la bodega,
+más.
+
+**Why this priority**: no añade información nueva, acorta el camino a la que ya hay. Por eso
+mismo su valor depende por completo de que las cifras sean EXACTAS: un asistente que se equivoca
+una vez destruye la confianza en el sistema entero, no en la función.
+
+**SOLO LECTURA, y eso es una decisión, no una limitación**: el asistente no registra, no confirma,
+no anula y no corrige. Las últimas historias han ido casi enteras a cerrar las puertas por las
+que entraban datos falsos (FR-122, FR-124, FR-126, FR-130); dejar que un modelo origine documentos
+las reabriría todas a la vez, y con el agravante de que "¿quién registró esto?" tendría como
+respuesta "el asistente, porque entendió mal".
+
+**Independent Test**: Se prueba preguntando por el stock de un producto y comprobando que la
+cifra respondida es la MISMA que devuelve el endpoint de inventario, con su fuente citada.
+
+**Acceptance Scenarios**:
+
+1. **Given** una pregunta sobre existencias, **When** el asistente responde, **Then** la cifra
+   sale de una consulta real y el mensaje dice de dónde la sacó.
+2. **Given** una pregunta que exige varios pasos ("¿qué le entregué a Jumbo este mes?"), **Then**
+   el asistente encadena las consultas necesarias — resolver el cliente, luego su consumo — sin
+   que el usuario tenga que dar ids.
+3. **Given** un Operario que pregunta por costos o márgenes, **Then** recibe la misma respuesta que
+   recibiría en pantalla: no la tiene. El asistente ejerce EXACTAMENTE los permisos de quien
+   pregunta, nunca más.
+4. **Given** una pregunta que pide registrar, anular o modificar algo, **Then** el asistente lo
+   rechaza y explica dónde se hace a mano — no tiene ninguna herramienta de escritura que ofrecer.
+5. **Given** una pregunta cuyo dato no puede obtener, **Then** dice que no lo sabe. Nunca estima,
+   nunca completa de memoria.
+6. **Given** que el servicio del modelo no está configurado o falla, **Then** el asistente avisa
+   con claridad y el RESTO de la aplicación sigue funcionando igual.
+
+---
+
+### User Story 34 - Que quepa en la pantalla que sea (Priority: P2)
+
+La aplicación se diseñó mirando 1920×1080. En un portátil de 1366×68 —que es lo que tiene media
+oficina— las tablas de nueve columnas se salen, los diálogos no caben a lo alto y la barra lateral
+se come un cuarto del ancho útil.
+
+**Why this priority**: no es estética. Una tabla que desborda esconde columnas, y una columna
+escondida en un inventario es una cifra que alguien no ve antes de decidir.
+
+**Independent Test**: Se prueba recorriendo las pantallas principales a 1366×68, 1280×800 y
+1024×768 y comprobando que ninguna obliga a desplazamiento horizontal de página.
+
+**Acceptance Scenarios**:
+
+1. **Given** cualquier pantalla en 1366×768 o 1280×800, **Then** el contenido cabe a lo ancho: si
+   algo tiene que desplazarse, se desplaza DENTRO de su tabla, nunca la página entera.
+2. **Given** una tabla de muchas columnas, **Then** conserva visibles las que identifican la fila
+   al desplazarse, y ninguna queda cortada a la mitad.
+3. **Given** un diálogo en una pantalla baja (768 px de alto), **Then** cabe o se desplaza por
+   dentro, y sus botones de acción siempre quedan alcanzables.
+4. **Given** la barra lateral en pantallas estrechas, **Then** cede ancho al contenido en vez de
+   competir con él.
+5. **Given** un celular, **Then** todo sigue siendo usable — lo que ya funcionaba no se rompe.
+
+---
+
 ### Edge Cases
 
 - **Salida mayor al disponible**: debe rechazarse siempre, incluida la carrera entre dos usuarios simultáneos sobre el mismo producto (solo una confirmación puede ganar).
@@ -838,6 +903,11 @@ que recordar por separado.
 - **FR-130**: El inventario DEBE permitir CORREGIR la cantidad de un producto directamente, sin documento de entrada ni de salida: se escribe la cantidad contada y el MOTIVO. La corrección DEBE ejecutarse dentro de la transacción del servicio de stock (Principio I) y registrar UN movimiento de AJUSTE_ENTRADA o AJUSTE_SALIDA por la DIFERENCIA, con su motivo y su usuario. No es una excepción a la trazabilidad: es la corrección que el Principio II ya exigía, con su propio tipo de documento. Corregir a la MISMA cantidad se rechaza —un movimiento de cero no dice nada—, y la cantidad sigue las reglas de FR-122 (entera, nunca negativa).
 - **FR-131**: Esa capacidad DEBE vivir en un permiso propio (`inventario.ajustar`), parametrizable como cualquier otro y concedido de inicio al Administrador, pero RESERVADO: solo un super administrador puede concederlo o retirarlo a un rol. Escribir el stock a mano es la única operación que puede desmentir a todos los documentos a la vez, así que quién la tiene no se decide con el mismo permiso que se usa para repartir el resto.
 - **FR-132**: `roles.gestionar` —el permiso que habilita administrar la matriz de permisos— DEBE ser también un permiso RESERVADO (FR-131): solo un super administrador puede concederlo o retirarlo, tanto al EDITAR un rol como al CREARLO. Un Administrador conserva todo lo demás: gestiona usuarios, crea roles y mueve cualquier otra casilla. La razón de reservar precisamente esta es que es la única que se REPARTE A SÍ MISMA — quien puede concederla puede fabricar a otro administrador total, y desde ahí el reparto de responsabilidades ya no lo decide nadie. LIMITACIÓN CONOCIDA Y ACEPTADA: quien tenga `usuarios.gestionar` puede seguir ASIGNANDO a una persona un rol que ya lo lleva (p. ej. el Administrador). Cerrar eso obligaría a que nadie salvo el super administrador pudiera nombrar administradores, que es justo la operación diaria que esta historia dice conservar; lo que se cierra es la creación de capacidad nueva, no el uso de la existente.
+- **FR-133**: El sistema DEBE ofrecer un ASISTENTE DE CONSULTAS en español que responda preguntas sobre los datos existentes. Es de SOLO LECTURA por diseño: no dispone de ninguna operación de escritura, y una petición de registrar, confirmar, anular o corregir DEBE rechazarse indicando dónde se hace a mano. Lo que protege esa decisión es lo mismo que protegen FR-122, FR-124, FR-126 y FR-130: que ningún dato entre al sistema sin que una persona lo haya afirmado.
+- **FR-134**: El asistente DEBE ejercer EXACTAMENTE los permisos de quien pregunta. Cada consulta que hace por dentro pasa por las mismas comprobaciones que la pantalla equivalente, de modo que un Operario no obtiene por chat lo que no obtiene por menú. NUNCA DEBE consultar la base de datos por su cuenta: eso se saltaría `PermisosGuard` y convertiría el asistente en una fuga.
+- **FR-135**: Toda CIFRA de una respuesta DEBE provenir de una consulta real hecha en ese momento, y la respuesta DEBE citar de dónde sale. El asistente NO DEBE estimar, redondear de memoria ni completar un dato que no obtuvo: ante la duda, dice que no lo sabe. Un inventario vale lo que vale la confianza en sus números.
+- **FR-136**: El asistente DEBE degradar con elegancia: si el servicio del modelo no está configurado, falla o se agota, la pantalla lo dice en español y el RESTO de la aplicación sigue funcionando sin cambios. Es la primera pieza del sistema que depende de un servicio externo y no puede arrastrar al resto.
+- **FR-137**: La interfaz DEBE ser usable en pantallas desde 1024 px de ancho sin desplazamiento HORIZONTAL de página, y en alturas de 768 px sin que un diálogo deje sus botones fuera de alcance. Lo que exceda el ancho se desplaza DENTRO de su contenedor — una tabla ancha se desplaza sola, sin arrastrar la página. Las columnas que identifican una fila DEBEN seguir visibles al desplazarla.
 
 **Auditoría y trazabilidad (transversal)**
 

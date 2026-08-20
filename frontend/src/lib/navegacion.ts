@@ -62,6 +62,7 @@ import {
   Receipt,
   ShieldCheck,
   SlidersHorizontal,
+  Sparkle,
   UserGear,
   UsersThree,
 } from '@phosphor-icons/react/dist/ssr';
@@ -97,6 +98,9 @@ export const ELEMENTOS_NAVEGACION: ElementoNavegacion[] = [
   },
   { href: '/ingresos', etiqueta: 'Ingresos', icono: ArrowSquareIn, permiso: PERMISOS.INGRESOS_VER },
   { href: '/inventario', etiqueta: 'Inventario', icono: Package, permiso: PERMISOS.INVENTARIO_VER },
+  // US33: va junto a Inventario porque la mayoría de las preguntas son sobre existencias — es el
+  // atajo a lo que está justo encima, no un módulo aparte.
+  { href: '/asistente', etiqueta: 'Asistente', icono: Sparkle, permiso: PERMISOS.ASISTENTE_CONSULTAR },
   { href: '/cotizaciones', etiqueta: 'Cotizaciones', icono: Receipt, permiso: PERMISOS.COTIZACIONES_VER },
   { href: '/salidas', etiqueta: 'Salidas', icono: ArrowSquareOut, permiso: PERMISOS.SALIDAS_VER },
   {

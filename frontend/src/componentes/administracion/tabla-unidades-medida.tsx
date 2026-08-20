@@ -82,97 +82,100 @@ export function TablaUnidadesMedida(): React.JSX.Element {
       )}
 
       <div className="card p-0">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Nombre</th>
-              <th>Abreviatura</th>
-              <th>Estado</th>
-              <th style={{ textAlign: 'right' }}>Productos</th>
-              <th aria-label="Acciones" />
-            </tr>
-          </thead>
-          <tbody>
-            {cargando && (
+        {/* US34 (FR-137): la tabla se desplaza DENTRO de su tarjeta — nunca la página. */}
+        <div className="overflow-x-auto">
+          <table className="table">
+            <thead>
               <tr>
-                <td colSpan={5}>Cargando unidades de medida…</td>
+                <th>Nombre</th>
+                <th>Abreviatura</th>
+                <th>Estado</th>
+                <th style={{ textAlign: 'right' }}>Productos</th>
+                <th aria-label="Acciones" />
               </tr>
-            )}
+            </thead>
+            <tbody>
+              {cargando && (
+                <tr>
+                  <td colSpan={5}>Cargando unidades de medida…</td>
+                </tr>
+              )}
 
-            {!cargando && unidades.length === 0 && (
-              <tr>
-                <td colSpan={5}>
-                  Todavía no hay unidades de medida. Crea la primera para poder dar de alta
-                  productos.
-                </td>
-              </tr>
-            )}
-
-            {unidades.map((unidad) => {
-              const enUso = unidad.cantidadProductos > 0;
-              const trabajando = ocupado === unidad.id;
-              return (
-                <tr key={unidad.id}>
-                  <td>{unidad.nombre}</td>
-                  <td className="text-muted">{unidad.abreviatura}</td>
-                  <td>
-                    <span className={unidad.estado === 'ACTIVA' ? 'tag tag-accent' : 'tag tag-neutral'}>
-                      {unidad.estado === 'ACTIVA' ? 'Activa' : 'Inactiva'}
-                    </span>
-                  </td>
-                  <td style={{ textAlign: 'right' }}>{unidad.cantidadProductos}</td>
-                  <td>
-                    <div className="flex flex-wrap justify-end gap-2">
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        disabled={trabajando}
-                        onClick={() => setEditando(unidad)}
-                      >
-                        <PencilSimple size={14} /> Editar
-                      </button>
-
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        disabled={trabajando}
-                        onClick={() =>
-                          void ejecutar(unidad.id, () =>
-                            cambiarEstadoUnidadMedida(unidad.id, unidad.estado === 'ACTIVA' ? 'INACTIVA' : 'ACTIVA'),
-                          )
-                        }
-                      >
-                        {unidad.estado === 'ACTIVA' ? (
-                          <>
-                            <Prohibit size={14} /> Desactivar
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle size={14} /> Activar
-                          </>
-                        )}
-                      </button>
-
-                      <button
-                        type="button"
-                        className="btn btn-ghost"
-                        disabled={trabajando || enUso}
-                        title={
-                          enUso
-                            ? `No se puede eliminar: ${unidad.cantidadProductos} producto(s) la usan. Desactívala para dejar de ofrecerla.`
-                            : 'Eliminar la unidad de medida'
-                        }
-                        onClick={() => void ejecutar(unidad.id, () => eliminarUnidadMedida(unidad.id))}
-                      >
-                        <TrashSimple size={14} /> Eliminar
-                      </button>
-                    </div>
+              {!cargando && unidades.length === 0 && (
+                <tr>
+                  <td colSpan={5}>
+                    Todavía no hay unidades de medida. Crea la primera para poder dar de alta
+                    productos.
                   </td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              )}
+
+              {unidades.map((unidad) => {
+                const enUso = unidad.cantidadProductos > 0;
+                const trabajando = ocupado === unidad.id;
+                return (
+                  <tr key={unidad.id}>
+                    <td>{unidad.nombre}</td>
+                    <td className="text-muted">{unidad.abreviatura}</td>
+                    <td>
+                      <span className={unidad.estado === 'ACTIVA' ? 'tag tag-accent' : 'tag tag-neutral'}>
+                        {unidad.estado === 'ACTIVA' ? 'Activa' : 'Inactiva'}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: 'right' }}>{unidad.cantidadProductos}</td>
+                    <td>
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          disabled={trabajando}
+                          onClick={() => setEditando(unidad)}
+                        >
+                          <PencilSimple size={14} /> Editar
+                        </button>
+
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          disabled={trabajando}
+                          onClick={() =>
+                            void ejecutar(unidad.id, () =>
+                              cambiarEstadoUnidadMedida(unidad.id, unidad.estado === 'ACTIVA' ? 'INACTIVA' : 'ACTIVA'),
+                            )
+                          }
+                        >
+                          {unidad.estado === 'ACTIVA' ? (
+                            <>
+                              <Prohibit size={14} /> Desactivar
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle size={14} /> Activar
+                            </>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          disabled={trabajando || enUso}
+                          title={
+                            enUso
+                              ? `No se puede eliminar: ${unidad.cantidadProductos} producto(s) la usan. Desactívala para dejar de ofrecerla.`
+                              : 'Eliminar la unidad de medida'
+                          }
+                          onClick={() => void ejecutar(unidad.id, () => eliminarUnidadMedida(unidad.id))}
+                        >
+                          <TrashSimple size={14} /> Eliminar
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {(creando || editando) && (

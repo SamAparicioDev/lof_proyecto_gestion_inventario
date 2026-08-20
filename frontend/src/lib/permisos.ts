@@ -74,6 +74,10 @@ export const PERMISOS = {
 
   ROLES_GESTIONAR: 'roles.gestionar',
 
+  // US33 (FR-133): abre el asistente de consultas. NO concede acceso a datos — cada consulta que
+  // el asistente hace por dentro vuelve a comprobar su propio permiso en el servidor (FR-134).
+  ASISTENTE_CONSULTAR: 'asistente.consultar',
+
   // US15 — catálogos del módulo de Administración. `*_VER` lo tienen los tres roles (sin él no
   // se clasifica un producto ni se filtra); `*_GESTIONAR` es lo que abre la pantalla.
   CATEGORIAS_VER: 'categorias.ver',

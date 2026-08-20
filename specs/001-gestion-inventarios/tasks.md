@@ -677,6 +677,33 @@ Proveedores — MISMO patrón que categorías (FR-091), con dos diferencias que 
 **Checkpoint**: Las dos capacidades que pueden rehacer el sistema —escribir el stock y repartir permisos— solo las mueve el respaldo
 
 ---
+## Phase 36: User Story 33 - Asistente de consultas (Priority: P2)
+
+**Goal**: Responder en español preguntas sobre los datos que ya existen, sin tocar nada (FR-133…FR-136)
+
+**Independent Test**: Preguntar por el stock de un producto y comprobar que la cifra coincide con la del endpoint y viene citada (US33-AS1)
+
+- [x] T251 [US33] Puerto `ModeloConversacional` en aplicación + adaptador Claude en infraestructura (el bucle de herramientas vive en la aplicación: qué se puede consultar es negocio, no tecnología)
+- [x] T252 [US33] Registro de herramientas de SOLO LECTURA sobre los casos de uso existentes, cada una con el permiso que exige (FR-134)
+- [x] T253 [US33] Caso de uso, esquema compartido y `POST /api/asistente/consulta` con permiso `asistente.consultar`
+- [x] T254 [US33] Migración del permiso + degradación elegante cuando falta la clave del servicio (FR-136)
+- [x] T255 [US33] Frontend: pantalla de conversación con las fuentes citadas bajo cada respuesta
+- [x] T256 [P] [US33] Pruebas: el asistente no expone herramientas de escritura; un Operario no obtiene por chat lo que no obtiene por menú; sin clave configurada responde con aviso y no 500
+
+## Phase 37: User Story 34 - Que quepa en la pantalla que sea (Priority: P2)
+
+**Goal**: Que la aplicación sirva en portátiles de 1366×768 y 1280×800, no solo en 1920×1080 (FR-137)
+
+**Independent Test**: Recorrer las pantallas principales a 1366×768 y 1024×768 sin desplazamiento horizontal de página (US34-AS1)
+
+- [x] T257 [US34] Auditoría medida en el navegador a 1024/1280/1366/1920: qué desborda y por qué (no suposiciones)
+- [x] T258 [US34] Tablas: desplazamiento DENTRO del contenedor y columnas de identidad siempre visibles
+- [x] T259 [US34] Diálogos y barra lateral en pantallas bajas y estrechas
+- [x] T260 [US34] Verificación final en las cuatro resoluciones, con captura
+
+**Checkpoint**: Se le puede preguntar al inventario en español, y la aplicación cabe en la pantalla que cada quien tenga
+
+---
 
 ## Dependencies & Execution Order
 

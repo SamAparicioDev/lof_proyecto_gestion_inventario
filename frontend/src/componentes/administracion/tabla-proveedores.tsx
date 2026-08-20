@@ -87,106 +87,109 @@ export function TablaProveedores(): React.JSX.Element {
       )}
 
       <div className="card p-0">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Nombre</th>
-              <th>NIT</th>
-              <th>Contacto</th>
-              <th>Estado</th>
-              <th style={{ textAlign: 'right' }}>Ingresos</th>
-              <th aria-label="Acciones" />
-            </tr>
-          </thead>
-          <tbody>
-            {cargando && (
+        {/* US34 (FR-137): la tabla se desplaza DENTRO de su tarjeta — nunca la página. */}
+        <div className="overflow-x-auto">
+          <table className="table">
+            <thead>
               <tr>
-                <td colSpan={6}>Cargando proveedores…</td>
+                <th>Nombre</th>
+                <th>NIT</th>
+                <th>Contacto</th>
+                <th>Estado</th>
+                <th style={{ textAlign: 'right' }}>Ingresos</th>
+                <th aria-label="Acciones" />
               </tr>
-            )}
-
-            {!cargando && proveedores.length === 0 && (
-              <tr>
-                <td colSpan={6}>Todavía no hay proveedores. Crea el primero para registrar ingresos.</td>
-              </tr>
-            )}
-
-            {proveedores.map((proveedor) => {
-              const enUso = proveedor.cantidadIngresos > 0;
-              const trabajando = ocupado === proveedor.id;
-              const contacto = [proveedor.telefono, proveedor.email].filter(Boolean).join(' · ');
-              return (
-                <tr key={proveedor.id}>
-                  <td>
-                    {proveedor.nombre}
-                    {proveedor.esSistema && (
-                      <span className="tag tag-neutral" style={{ marginLeft: 8 }} title={MOTIVO_SISTEMA}>
-                        Del sistema
-                      </span>
-                    )}
-                  </td>
-                  <td className="text-muted">{proveedor.nit ?? '—'}</td>
-                  <td className="text-muted">{contacto === '' ? '—' : contacto}</td>
-                  <td>
-                    <span className={proveedor.estado === 'ACTIVO' ? 'tag tag-accent' : 'tag tag-neutral'}>
-                      {proveedor.estado === 'ACTIVO' ? 'Activo' : 'Inactivo'}
-                    </span>
-                  </td>
-                  <td style={{ textAlign: 'right' }}>{proveedor.cantidadIngresos}</td>
-                  <td>
-                    <div className="flex flex-wrap justify-end gap-2">
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        disabled={trabajando}
-                        onClick={() => setEditando(proveedor)}
-                      >
-                        <PencilSimple size={14} /> Editar
-                      </button>
-
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        disabled={trabajando}
-                        onClick={() =>
-                          void ejecutar(proveedor.id, () =>
-                            cambiarEstadoProveedor(proveedor.id, proveedor.estado === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO'),
-                          )
-                        }
-                      >
-                        {proveedor.estado === 'ACTIVO' ? (
-                          <>
-                            <Prohibit size={14} /> Desactivar
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle size={14} /> Activar
-                          </>
-                        )}
-                      </button>
-
-                      <button
-                        type="button"
-                        className="btn btn-ghost"
-                        disabled={trabajando || enUso || proveedor.esSistema}
-                        title={
-                          proveedor.esSistema
-                            ? MOTIVO_SISTEMA
-                            : enUso
-                              ? `No se puede eliminar: ${proveedor.cantidadIngresos} ingreso(s) lo usan. Desactívalo para dejar de ofrecerlo.`
-                              : 'Eliminar el proveedor'
-                        }
-                        onClick={() => void ejecutar(proveedor.id, () => eliminarProveedor(proveedor.id))}
-                      >
-                        <TrashSimple size={14} /> Eliminar
-                      </button>
-                    </div>
-                  </td>
+            </thead>
+            <tbody>
+              {cargando && (
+                <tr>
+                  <td colSpan={6}>Cargando proveedores…</td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              )}
+
+              {!cargando && proveedores.length === 0 && (
+                <tr>
+                  <td colSpan={6}>Todavía no hay proveedores. Crea el primero para registrar ingresos.</td>
+                </tr>
+              )}
+
+              {proveedores.map((proveedor) => {
+                const enUso = proveedor.cantidadIngresos > 0;
+                const trabajando = ocupado === proveedor.id;
+                const contacto = [proveedor.telefono, proveedor.email].filter(Boolean).join(' · ');
+                return (
+                  <tr key={proveedor.id}>
+                    <td>
+                      {proveedor.nombre}
+                      {proveedor.esSistema && (
+                        <span className="tag tag-neutral" style={{ marginLeft: 8 }} title={MOTIVO_SISTEMA}>
+                          Del sistema
+                        </span>
+                      )}
+                    </td>
+                    <td className="text-muted">{proveedor.nit ?? '—'}</td>
+                    <td className="text-muted">{contacto === '' ? '—' : contacto}</td>
+                    <td>
+                      <span className={proveedor.estado === 'ACTIVO' ? 'tag tag-accent' : 'tag tag-neutral'}>
+                        {proveedor.estado === 'ACTIVO' ? 'Activo' : 'Inactivo'}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: 'right' }}>{proveedor.cantidadIngresos}</td>
+                    <td>
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          disabled={trabajando}
+                          onClick={() => setEditando(proveedor)}
+                        >
+                          <PencilSimple size={14} /> Editar
+                        </button>
+
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          disabled={trabajando}
+                          onClick={() =>
+                            void ejecutar(proveedor.id, () =>
+                              cambiarEstadoProveedor(proveedor.id, proveedor.estado === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO'),
+                            )
+                          }
+                        >
+                          {proveedor.estado === 'ACTIVO' ? (
+                            <>
+                              <Prohibit size={14} /> Desactivar
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle size={14} /> Activar
+                            </>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          disabled={trabajando || enUso || proveedor.esSistema}
+                          title={
+                            proveedor.esSistema
+                              ? MOTIVO_SISTEMA
+                              : enUso
+                                ? `No se puede eliminar: ${proveedor.cantidadIngresos} ingreso(s) lo usan. Desactívalo para dejar de ofrecerlo.`
+                                : 'Eliminar el proveedor'
+                          }
+                          onClick={() => void ejecutar(proveedor.id, () => eliminarProveedor(proveedor.id))}
+                        >
+                          <TrashSimple size={14} /> Eliminar
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {(creando || editando) && (
