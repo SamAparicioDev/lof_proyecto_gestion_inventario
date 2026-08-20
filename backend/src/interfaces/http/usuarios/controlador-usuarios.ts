@@ -102,7 +102,11 @@ export class ControladorUsuarios {
     @Body(new PipeValidacionZod(esquemaCrearUsuario)) datos: DatosCrearUsuario,
     @UsuarioActual() usuarioActual: Usuario,
   ): Promise<{ id: number }> {
-    return this.crearUsuario.ejecutar({ ...datos, permisosDelActor: usuarioActual.rolAsignado.permisos });
+    return this.crearUsuario.ejecutar({
+      ...datos,
+      permisosDelActor: usuarioActual.rolAsignado.permisos,
+      actorEsSuperAdmin: usuarioActual.rolAsignado.esSuperAdmin,
+    });
   }
 
   /** `PUT /api/usuarios/:id` — edición de usuario (FR-005). */
@@ -117,6 +121,7 @@ export class ControladorUsuarios {
       usuarioId: id,
       ...datos,
       permisosDelActor: usuarioActual.rolAsignado.permisos,
+      actorEsSuperAdmin: usuarioActual.rolAsignado.esSuperAdmin,
     });
   }
 
@@ -132,6 +137,7 @@ export class ControladorUsuarios {
       usuarioId: id,
       passwordTemporal: datos.passwordTemporal,
       permisosDelActor: usuarioActual.rolAsignado.permisos,
+      actorEsSuperAdmin: usuarioActual.rolAsignado.esSuperAdmin,
     });
   }
 
@@ -143,7 +149,12 @@ export class ControladorUsuarios {
     @Body(new PipeValidacionZod(esquemaCambiarEstadoUsuario)) datos: DatosCambiarEstadoUsuario,
     @UsuarioActual() usuarioActual: Usuario,
   ): Promise<void> {
-    await this.cambiarEstadoUsuario.ejecutar({ usuarioId: id, estado: datos.estado, usuarioActualId: usuarioActual.id });
+    await this.cambiarEstadoUsuario.ejecutar({
+      usuarioId: id,
+      estado: datos.estado,
+      usuarioActualId: usuarioActual.id,
+      actorEsSuperAdmin: usuarioActual.rolAsignado.esSuperAdmin,
+    });
   }
 }
 

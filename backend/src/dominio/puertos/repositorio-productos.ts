@@ -140,6 +140,17 @@ export interface FiltrosListarTodosProductos {
   readonly categoriaId?: number;
 }
 
+/** Datos de una corrección de cantidad (US31, FR-130). `motivo` es obligatorio: sin documento
+ *  detrás, es lo único que justifica el movimiento (Principio II). */
+export interface DatosCorreccionCantidad {
+  readonly productoId: number;
+  /** Cantidad CONTADA, no la diferencia — ver `ServicioStock.aplicarCorreccion`. */
+  readonly cantidad: number;
+  readonly motivo: string;
+  /** Quién corrige — nunca un valor del cuerpo (FR-045). */
+  readonly usuarioId: number;
+}
+
 export interface RepositorioProductos {
   /** Busca un producto por id. `null` si no existe. */
   buscarPorId(id: number): Promise<Producto | null>;
@@ -186,6 +197,23 @@ export interface RepositorioProductos {
   actualizarCosto(id: number, costoNuevo: number, contexto: ContextoCambioCosto): Promise<boolean>;
 
   /** Cambia el estado (baja/alta lógica) de un producto — nunca DELETE (FR-012). */
+  /**
+   * Corrige la cantidad de un producto al valor CONTADO, sin documento de por medio (US31,
+   * FR-130). Operación ATÓMICA: bloquea la fila con `FOR UPDATE`, aplica
+   * `ServicioStock.aplicarCorreccion` e inserta el movimiento `AJUSTE_ENTRADA`/`AJUSTE_SALIDA`
+   * por la DIFERENCIA en la MISMA transacción (Principio I, research R4).
+   *
+   * Se expone como método del repositorio y no como "leer + guardar" desde el caso de uso por la
+   * misma razón que `recibir`/`confirmar`: entre leer el stock y escribirlo hay una ventana en la
+   * que otro movimiento puede colarse, y el resultado sería una corrección calculada sobre una
+   * cifra que ya no existía.
+   *
+   * @throws NoEncontrado si el producto no existe.
+   * @throws ErrorValidacionDominio si la cantidad contada es la que ya tenía (nada que corregir)
+   *   o es negativa — las dos reglas las decide el dominio, no este puerto.
+   */
+  corregirCantidad(datos: DatosCorreccionCantidad): Promise<void>;
+
   cambiarEstado(id: number, estado: EstadoProducto, usuarioModificacionId: number): Promise<void>;
 
   /**

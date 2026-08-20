@@ -38,6 +38,10 @@ import {
 } from '../comunes/proteccion-capacidad-administrativa';
 import { exigirQueNoConcedaPermisosQueNoTiene } from '../comunes/proteccion-escalada-permisos';
 import { EstadoInvalido, NoEncontrado } from '../../dominio/comunes/errores';
+import {
+  exigirQueNoSeaElRolDeRespaldo,
+  exigirQueNoToqueUnPermisoReservado,
+} from '../comunes/respaldo-del-sistema';
 import { PERMISOS_CRITICOS_DE_ADMINISTRACION, type ClavePermiso } from '../../dominio/entidades/permiso';
 import { REPOSITORIO_PERMISOS, type RepositorioPermisos } from '../../dominio/puertos/repositorio-permisos';
 import { REPOSITORIO_ROLES, type RepositorioRoles } from '../../dominio/puertos/repositorio-roles';
@@ -53,6 +57,10 @@ export interface ActualizarRolEntrada {
    *  (FR-058) — nunca un dato del cuerpo. Alimentan la regla anti-escalada
    *  (`comunes/proteccion-escalada-permisos.ts`). */
   readonly permisosDelActor: readonly ClavePermiso[];
+  /** US30 (FR-127): el respaldo del sistema tiene la lista de permisos VACÍA, así que las
+   *  reglas que comparan listas lo tratarían como al usuario con menos poder. Esta bandera es
+   *  la misma decisión que toma `PermisosGuard`, y por el mismo motivo. */
+  readonly actorEsSuperAdmin: boolean;
 }
 
 @Injectable()
@@ -72,10 +80,16 @@ export class ActualizarRolCasoUso implements CasoDeUso<ActualizarRolEntrada, voi
     // Anti-escalada ANTES que cualquier otra validación: sin esto, `roles.gestionar` era
     // auto-escalable (un rol con ese único permiso podía concederse los 30 en una petición).
     // Ver `comunes/proteccion-escalada-permisos.ts`.
+    // US30 (FR-128): el respaldo no se edita desde aquí, ni siquiera para "arreglarlo". Va antes
+    // que ninguna otra comprobación para que el mensaje explique lo que de verdad pasa.
+    exigirQueNoSeaElRolDeRespaldo(rol, 'editar');
+
+    const catalogo = await this.repositorioPermisos.listar();
     exigirQueNoConcedaPermisosQueNoTiene(
       entrada.permisoIds,
-      await this.repositorioPermisos.listar(),
+      catalogo,
       entrada.permisosDelActor,
+      entrada.actorEsSuperAdmin,
     );
 
     if (rol.esSistema && entrada.nombre !== rol.nombre) {
@@ -84,6 +98,11 @@ export class ActualizarRolCasoUso implements CasoDeUso<ActualizarRolEntrada, voi
           'su descripción y sus permisos.',
       );
     }
+
+    // US31 (FR-131): la casilla reservada solo la mueve un super administrador. Va DESPUÉS del
+    // rechazo por renombrar un rol del sistema: quien intenta las dos cosas a la vez recibe
+    // primero el error de lo que estaba cambiando a la vista, no el de una casilla que ni tocó.
+    exigirQueNoToqueUnPermisoReservado(rol.permisos, entrada.permisoIds, catalogo, entrada.actorEsSuperAdmin);
 
     for (const permiso of await this.permisosCriticosQueSeRetiran(rol.permisos, entrada.permisoIds)) {
       await exigirQueSigaHabiendoUnRolActivoQueConceda(

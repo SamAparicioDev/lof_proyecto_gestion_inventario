@@ -42,6 +42,10 @@ export interface CrearUsuarioEntrada {
   readonly rolId: number;
   /** Permisos efectivos de quien ejecuta el alta — del token/BD, NUNCA del cuerpo (FR-058). */
   readonly permisosDelActor: readonly ClavePermiso[];
+  /** US30 (FR-127): el respaldo del sistema tiene la lista de permisos VACÍA, así que las
+   *  reglas que comparan listas lo tratarían como al usuario con menos poder. Esta bandera es
+   *  la misma decisión que toma `PermisosGuard`, y por el mismo motivo. */
+  readonly actorEsSuperAdmin: boolean;
 }
 
 export interface CrearUsuarioSalida {
@@ -57,7 +61,12 @@ export class CrearUsuarioCasoUso implements CasoDeUso<CrearUsuarioEntrada, Crear
   ) {}
 
   async ejecutar(entrada: CrearUsuarioEntrada): Promise<CrearUsuarioSalida> {
-    await exigirRolAsignable(this.repositorioRoles, entrada.rolId, entrada.permisosDelActor);
+    await exigirRolAsignable(
+      this.repositorioRoles,
+      entrada.rolId,
+      entrada.permisosDelActor,
+      entrada.actorEsSuperAdmin,
+    );
 
     const passwordHash = await this.hasheador.hash(entrada.passwordTemporal);
     const usuario = await this.repositorioUsuarios.crear({

@@ -61,6 +61,15 @@ export interface PaginaRoles {
 
 export interface RepositorioRoles {
   /** Listado paginado de roles con sus permisos y su conteo de usuarios (`GET /api/roles`). */
+  /**
+   * El rol de RESPALDO (`es_super_admin`), o `null` si la base no lo tiene todavía (US30, FR-127).
+   *
+   * Se busca por la COLUMNA y nunca por el nombre: el nombre es una etiqueta para humanos y
+   * podría cambiarse; la columna la protege un índice único parcial y solo la base puede tocarla.
+   * Lo usa el arranque para saber a qué rol enganchar el usuario de respaldo (FR-129).
+   */
+  buscarRolDeRespaldo(): Promise<Rol | null>;
+
   listar(filtros: FiltrosListarRoles): Promise<PaginaRoles>;
 
   /** Rol con el detalle de sus permisos asignados (`GET /api/roles/:id`); `null` si no existe. */

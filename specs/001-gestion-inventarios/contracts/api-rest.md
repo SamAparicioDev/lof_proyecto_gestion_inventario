@@ -249,6 +249,26 @@ que se anotan aquí ANTES de que existan como código, no después:
 | `PUT /api/roles/:id/estado` | `roles.gestionar` | {estado: ACTIVO\|INACTIVO} | `204` (baja lógica, nunca DELETE) | `409` rol de sistema / mismo invariante de FR-057, para cualquiera de los dos permisos críticos |
 | `DELETE /api/roles/:id` | `roles.gestionar` | — | `204` | `409` rol de sistema, rol con usuarios asignados (mensaje indica cuántos), o último rol activo con un permiso crítico — FR-057 |
 
+**El rol de respaldo no se toca desde la API (US30, FR-127/FR-128)**:
+
+- `GET /api/roles` lo LISTA — esconderlo sería seguridad por oscuridad y además dejaría a un
+  administrador sin entender por qué hay un usuario que no puede editar — y lo marca con
+  `esSuperAdmin: true`; sus `permisos` se reportan como el catálogo completo.
+- `PUT /api/roles/:id`, `PUT /api/roles/:id/estado` y `DELETE /api/roles/:id` responden `409`
+  cuando el objetivo es él. `POST /api/roles` no puede crearlo: el campo no existe en el esquema.
+- `POST`/`PUT /api/usuarios` responden `400` en el campo `rolId` al intentar asignarlo — el
+  único camino es `UPDATE usuarios SET rol_id = ... ` en la base de datos.
+- `PUT /api/usuarios/:id`, `PUT /api/usuarios/:id/estado` y `PUT
+  /api/usuarios/:id/restablecer-password` responden `409` cuando el usuario OBJETIVO es super
+  administrador y quien ejecuta no lo es. Sin esta regla, bastaría con restablecerle la
+  contraseña para entrar como él, y todo lo anterior sobraría.
+- Un super administrador SIEMPRE pasa el guard, sin consultar `roles_permisos` (FR-127).
+
+**Permisos reservados (US31, FR-131)**: `PUT /api/roles/:id` responde `409` si el cambio AÑADE o
+QUITA un permiso reservado —hoy solo `inventario.ajustar`— y quien lo ejecuta no es super
+administrador. El resto del cuerpo se procesa con las reglas de siempre: la reserva acota
+QUIÉN puede mover esa casilla, no impide editar el rol.
+
 **Anotación T105 sobre el `DELETE`**: la tabla original enumeraba solo las dos primeras causas
 de `409`. Se agregó la tercera —el último rol activo con `roles.gestionar`— ANTES de escribir el
 caso de uso, porque eliminar al último rol que concede ese permiso es la forma más definitiva
@@ -567,6 +587,18 @@ que SC-013 se conserva sin tocar una sola aserción de autorización existente.
 | `GET /api/inventario/opciones-filtro` | A,G,O | — | `200` `{ categorias: {id, nombre}[], ubicaciones: string[] }` — **desde US15 las categorías salen del CATÁLOGO** (todas las activas, más las inactivas que algún producto siga usando, para que un listado filtrado por una categoría dada de baja siga siendo reproducible), no de un `DISTINCT` sobre productos (FR-088). `ubicaciones` sigue siendo el `DISTINCT` de texto libre de US13/FR-076 |
 | `GET /api/inventario/:productoId` | A,G,O | — | ficha del producto con cifras actuales (mismo shape que una fila) — `404` si no existe |
 | `GET /api/inventario/:productoId/movimientos` | A,G,O | {desde?, hasta?, pagina…} | página de movimientos (fecha, tipo, documento, cantidad, usuario, cliente/proyecto) |
+| `PUT /api/inventario/:productoId/cantidad` | permiso `inventario.ajustar` | `esquemaCorregirCantidad` {cantidad (entera ≥ 0), motivo (1…300)} | `204`; fija el stock en `cantidad` y registra UN movimiento por la DIFERENCIA (US31, FR-130) | `400` validación o cantidad igual a la actual; `403` sin permiso; `404` producto inexistente |
+
+**Corregir la cantidad no es una excepción a la trazabilidad (US31, FR-130)**: la operación corre
+dentro de la misma `UnidadDeTrabajo` con `FOR UPDATE` que usan `recibir` y `confirmar` (Principio
+I), y escribe un `movimientos_inventario` de tipo `AJUSTE_ENTRADA` o `AJUSTE_SALIDA` según el
+signo de la diferencia, con `documento_tipo = AJUSTE`, `documento_id = NULL` y el `motivo`
+obligatorio. Se envía la cantidad CONTADA, no la diferencia: es lo que la persona tiene delante
+al terminar de contar, y hacerle calcular el delta es pedirle justo la resta que se equivoca.
+Corregir a la misma cantidad responde `400`. Si la corrección deja el stock por debajo de lo
+comprometido por salidas PENDIENTE, la operación se acepta y esas salidas fallan al confirmarse
+con el mensaje de disponibilidad de siempre — la mercancía no está, y fingir lo contrario para
+que cuadre un documento es exactamente lo que el sistema no debe hacer.
 
 **El destino de una salida es el CLIENTE; el proyecto es opcional (US28, FR-124)**:
 

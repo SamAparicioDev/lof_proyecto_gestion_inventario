@@ -56,8 +56,34 @@ function usuarioConPermisos(permisos: ClavePermiso[], estado: EstadoUsuario = 'A
       nombre: 'Bodeguero',
       descripcion: 'Rol propio creado por el Administrador (US9-AS1)',
       esSistema: false,
+      esSuperAdmin: false,
       estado: 'ACTIVO',
       permisos,
+    },
+    estado,
+    debeCambiarPassword: false,
+  };
+}
+
+/**
+ * Super administrador de prueba (US30, FR-127) — con `permisos` VACÍO a propósito: es
+ * exactamente el estado en el que la base lo deja (no tiene filas en `roles_permisos`) y el que
+ * tendría cualquier rol después del accidente del que esta historia protege.
+ */
+function superAdministrador(estado: EstadoUsuario = 'ACTIVO'): Usuario {
+  return {
+    id: 99,
+    nombreCompleto: 'Respaldo del sistema',
+    email: 'respaldo@trazo.local',
+    login: 'superadmin',
+    rolAsignado: {
+      id: 99,
+      nombre: 'Super administrador',
+      descripcion: 'Respaldo del sistema',
+      esSistema: true,
+      esSuperAdmin: true,
+      estado: 'ACTIVO',
+      permisos: [],
     },
     estado,
     debeCambiarPassword: false,
@@ -167,5 +193,31 @@ describe('PermisosGuard', () => {
     );
 
     expect(guard.canActivate(contexto)).toBe(true);
+  });
+
+  describe('super administrador (US30, FR-127)', () => {
+    it('pasa cualquier permiso aunque su rol no tenga NINGUNO en la matriz', () => {
+      const contexto = contextoDePrueba(
+        ControladorFalso.prototype.confirmarSalida,
+        ControladorFalso,
+        superAdministrador(),
+      );
+
+      // La prueba entera está en el fixture: `permisos: []`. Si alguna vez la autorización del
+      // respaldo pasara a resolverse contra la matriz — "y de paso le sembramos todos los
+      // permisos, que es más simple" — esta línea fallaría, que es justo lo que se quiere: ese
+      // cambio reintroduce el bloqueo del que la historia protege.
+      expect(guard.canActivate(contexto)).toBe(true);
+    });
+
+    it('sigue necesitando estar ACTIVO: el respaldo evita el bloqueo por permisos, no la baja', () => {
+      const contexto = contextoDePrueba(
+        ControladorFalso.prototype.confirmarSalida,
+        ControladorFalso,
+        superAdministrador('INACTIVO'),
+      );
+
+      expect(() => guard.canActivate(contexto)).toThrow(ForbiddenException);
+    });
   });
 });

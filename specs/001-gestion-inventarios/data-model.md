@@ -51,6 +51,7 @@ sus referencias históricas permanecen (US6-AS2).
 | `nombre` | VARCHAR(50) | NOT NULL, **UNIQUE** (FR-055) |
 | `descripcion` | VARCHAR(200) | NULL |
 | `es_sistema` | BOOLEAN | NOT NULL DEFAULT false — `true` en los 3 roles semilla (Administrador/Gerente/Operario): NO se pueden eliminar ni renombrar (FR-057/FR-059) |
+| `es_super_admin` | BOOLEAN | NOT NULL DEFAULT false — `true` ÚNICAMENTE en el rol de respaldo (US30, FR-127). **Índice ÚNICO parcial** `WHERE es_super_admin` : no puede haber dos. Un rol así no se crea, edita, desactiva ni elimina desde la aplicación, y solo se ASIGNA con un `UPDATE` directo sobre `usuarios.rol_id` |
 | `estado` | ENUM `ACTIVO/INACTIVO` | NOT NULL DEFAULT ACTIVO (baja lógica, nunca DELETE) |
 
 Reglas (FR-057, todas verificadas en el caso de uso, no solo en la UI):
@@ -59,6 +60,16 @@ Reglas (FR-057, todas verificadas en el caso de uso, no solo en la UI):
 - No se puede quitar el permiso `roles.gestionar` del ÚLTIMO rol activo que lo tiene — misma
   familia de invariante que "un administrador no puede desactivarse a sí mismo" (US6): el
   sistema nunca queda sin quién lo administre.
+- **El rol `es_super_admin` no participa de `roles_permisos`** (US30, FR-127): sus filas serían
+  inútiles y peligrosas a la vez, porque sugerirían que borrarlas le quita capacidades. Su
+  autorización la decide el guard por la columna, y lo que el sistema le REPORTA como permisos
+  efectivos es el catálogo completo, resuelto en cada lectura. Vaciar `permisos` o
+  `roles_permisos` no lo afecta.
+- **Permisos RESERVADOS** (US31, FR-131): hoy solo `inventario.ajustar`. Se conceden y se retiran
+  como cualquier otro, pero Únicamente por un super administrador. La reserva vive en el código
+  (una lista en el dominio), no en una columna: es una propiedad del significado del permiso, no
+  un dato que alguien deba poder editar — si fuera editable, quitarle la reserva sería el primer
+  paso para saltarse la regla.
 
 ### permisos (US9)
 
@@ -433,8 +444,8 @@ en esta tabla.
 | `producto_id` | FK → productos | NOT NULL |
 | `cantidad` | DECIMAL(12,2) | NOT NULL, CHECK `> 0` (el signo lo define `tipo`), CHECK `= trunc(cantidad)` **NOT VALID** (US26, FR-122 — ver nota abajo) |
 | `stock_resultante` | DECIMAL(12,2) | NOT NULL (snapshot post-movimiento — facilita auditoría) |
-| `documento_tipo` | ENUM `INGRESO/SALIDA` | NOT NULL (FR-045) |
-| `documento_id` | BIGINT | NOT NULL (FK lógico al ingreso o salida) |
+| `documento_tipo` | ENUM `INGRESO/SALIDA/AJUSTE` | NOT NULL (FR-045). `AJUSTE` es la corrección hecha desde el inventario (US31, FR-130): no la respalda ningún documento, la respalda su motivo |
+| `documento_id` | BIGINT | NULL solo cuando `documento_tipo = AJUSTE` (FK lógico al ingreso o salida en los otros dos). **CHECK**: `(documento_tipo = 'AJUSTE') = (documento_id IS NULL)` — la base no admite un movimiento de ingreso/salida huérfano ni un ajuste que finja tener documento |
 | `proyecto_id` | FK → proyectos | NULL — se puebla cuando la salida que lo origina tiene proyecto (US28, FR-124: ya no siempre lo tiene; antes era NOT NULL de facto para `documento_tipo = SALIDA`, FR-042) |
 | `usuario_id` | FK → usuarios | NOT NULL (FR-045) |
 | `motivo` | TEXT | NULL (obligatorio en AJUSTE_*) |

@@ -45,9 +45,11 @@ const INCLUIR_CATEGORIA = {
 type ProductoPrisma = Prisma.ProductoGetPayload<{ include: typeof INCLUIR_CATEGORIA }>;
 import { Duplicado, NoEncontrado } from '../../dominio/comunes/errores';
 import type { EstadoProducto, Producto } from '../../dominio/entidades/producto';
+import { ServicioStock } from '../../dominio/servicios/servicio-stock';
 import type {
   ContextoCambioCosto,
   DatosActualizarProducto,
+  DatosCorreccionCantidad,
   DatosNuevoProducto,
   FiltrosListarProductos,
   FiltrosListarTodosProductos,
@@ -169,6 +171,59 @@ export class RepositorioProductosPrisma implements RepositorioProductos {
         },
       });
       return true;
+    });
+  }
+
+  /**
+   * Corrige la cantidad al valor contado (US31, FR-130) — mismo procedimiento atómico que
+   * `recibir`/`confirmar`: `FOR UPDATE` sobre la fila, regla de dominio pura, y persistencia del
+   * stock junto al movimiento en la MISMA transacción.
+   *
+   * El movimiento sale con `documentoTipo: 'AJUSTE'` y `documentoId: null`: no hay documento que
+   * lo respalde, y el `CHECK movimientos_documento_ajuste_check` de la base exige justamente esa
+   * combinación. Lo que lo justifica es el `motivo`, que viaja obligatorio desde el esquema.
+   *
+   * NO toca `ultimoCosto` ni escribe en `historial_costos_producto`: corregir CUÁNTAS unidades
+   * hay no dice nada sobre cuánto costó cada una. Mezclarlo inventaría un cambio de precio que
+   * nadie hizo, y el historial de costos dejaría de responder "¿por qué subió el costo?".
+   */
+  async corregirCantidad(datos: DatosCorreccionCantidad): Promise<void> {
+    await this.unidadDeTrabajo.ejecutar(async (tx) => {
+      const filas = await tx.$queryRaw<{ id: bigint; stock_actual: Prisma.Decimal; descripcion: string }[]>`
+        SELECT id, stock_actual, descripcion FROM productos WHERE id = ${BigInt(datos.productoId)} FOR UPDATE
+      `;
+      const fila = filas[0];
+      if (!fila) {
+        throw new NoEncontrado('El producto');
+      }
+
+      const correccion = new ServicioStock().aplicarCorreccion(
+        { id: datos.productoId, stockActual: fila.stock_actual.toNumber(), descripcion: fila.descripcion },
+        datos.cantidad,
+      );
+
+      await tx.producto.update({
+        where: { id: BigInt(datos.productoId) },
+        data: {
+          stockActual: correccion.stockActualNuevo,
+          fechaUltimoMovimiento: new Date(),
+          usuarioModificacionId: BigInt(datos.usuarioId),
+          fechaModificacion: new Date(),
+        },
+      });
+
+      await tx.movimientoInventario.create({
+        data: {
+          tipo: correccion.tipoMovimiento,
+          productoId: BigInt(datos.productoId),
+          cantidad: correccion.cantidadMovimiento,
+          stockResultante: correccion.stockActualNuevo,
+          documentoTipo: 'AJUSTE',
+          documentoId: null,
+          usuarioId: BigInt(datos.usuarioId),
+          motivo: datos.motivo,
+        },
+      });
     });
   }
 

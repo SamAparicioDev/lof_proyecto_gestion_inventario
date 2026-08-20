@@ -125,6 +125,7 @@ function crearUsuarioDePrueba(): UsuarioAutenticable {
       nombre: 'Operario',
       descripcion: 'Registro de entradas/salidas y consultas',
       esSistema: true,
+    esSuperAdmin: false,
       estado: 'ACTIVO',
       permisos: ['inventario.ver', 'ingresos.crear', 'salidas.crear'],
     },

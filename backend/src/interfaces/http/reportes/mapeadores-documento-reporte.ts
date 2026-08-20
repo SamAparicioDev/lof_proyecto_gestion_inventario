@@ -206,6 +206,9 @@ const ETIQUETA_TIPO_MOVIMIENTO: Record<string, string> = {
 const ETIQUETA_DOCUMENTO_TIPO: Record<string, string> = {
   INGRESO: 'Ingreso',
   SALIDA: 'Salida',
+  // US31 (FR-130): el ajuste no tiene documento, y `numero` ya trae el texto completo — su
+  // etiqueta es vacía para que la celda no diga "Ajuste Ajuste de inventario".
+  AJUSTE: '',
 };
 
 const COLUMNAS_REPORTE_MOVIMIENTOS: ColumnaDocumentoReporte[] = [
@@ -228,7 +231,7 @@ export function mapearMovimientosADocumento(reporte: ReporteMovimientos): Docume
   const filas = reporte.movimientos.map((movimiento) => ({
     fecha: formatoFechaSoloDia(movimiento.fecha),
     tipo: ETIQUETA_TIPO_MOVIMIENTO[movimiento.tipo] ?? movimiento.tipo,
-    documento: `${ETIQUETA_DOCUMENTO_TIPO[movimiento.documento.tipo] ?? movimiento.documento.tipo} ${movimiento.documento.numero}`,
+    documento: `${ETIQUETA_DOCUMENTO_TIPO[movimiento.documento.tipo] ?? movimiento.documento.tipo} ${movimiento.documento.numero}`.trim(),
     sku: movimiento.producto.sku,
     producto: movimiento.producto.descripcion,
     cantidad: movimiento.cantidad,

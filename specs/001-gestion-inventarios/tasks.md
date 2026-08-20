@@ -636,6 +636,34 @@ Proveedores — MISMO patrón que categorías (FR-091), con dos diferencias que 
 **Checkpoint**: Las cuatro reglas que la operación real pedía —cantidades enteras, soporte de entrega firmado, entrega sin obra y entrada sin factura— funcionan sin romper ningún documento anterior
 
 ---
+## Phase 33: User Story 30 - El super administrador, respaldo del sistema (Priority: P1)
+
+**Goal**: Que un error de administración no pueda dejar el sistema sin nadie que lo gobierne (FR-127…FR-129)
+
+**Independent Test**: Vaciar la matriz de permisos de todos los roles y comprobar que el super administrador sigue operando (US30-AS2)
+
+- [x] T237 [US30] Migración: `roles.es_super_admin` con índice único parcial y la fila del rol de respaldo
+- [x] T238 [US30] Dominio y guard: `Rol.esSuperAdmin`; `PermisosGuard` concede por rol sin consultar la matriz; el repositorio reporta el catálogo completo como permisos efectivos
+- [x] T239 [US30] Invariantes: el rol no se edita, desactiva, elimina ni asigna desde la API; a un usuario super administrador solo lo administra otro super administrador
+- [x] T240 [US30] Arranque: crea el usuario desde variables de entorno si no existe, y lo anota si faltan (nunca impide arrancar)
+- [x] T241 [US30] Frontend: el rol se ve marcado y sin acciones; el selector de usuarios no lo ofrece
+
+## Phase 34: User Story 31 - Corregir la cantidad desde el inventario (Priority: P2)
+
+**Goal**: Cuadrar con el conteo físico sin inventar documentos (FR-130/FR-131)
+
+**Independent Test**: Escribir la cantidad contada y ver el stock corregido con su movimiento por la diferencia (US31-AS1/AS2)
+
+- [x] T242 [US31] Migración: `AJUSTE` en `documento_tipo`, `documento_id` nullable con su CHECK, y el permiso `inventario.ajustar` concedido al Administrador
+- [x] T243 [US31] Dominio y repositorio: corrección dentro de la `UnidadDeTrabajo` con `FOR UPDATE`, movimiento por la diferencia con su motivo
+- [x] T244 [US31] Caso de uso, esquema y endpoint `PUT /api/inventario/:productoId/cantidad`
+- [x] T245 [US31] Permisos reservados: solo un super administrador añade o quita `inventario.ajustar` en `PUT /api/roles/:id`
+- [x] T246 [US31] Frontend: acción y diálogo en el inventario; casilla reservada en la pantalla de roles
+- [x] T247 [P] [US30/US31] Pruebas de integración: el respaldo sobrevive a la matriz vaciada y a los cuatro intentos de tocarlo; la corrección cuadra stock y movimiento en los dos sentidos y la reserva del permiso se respeta
+
+**Checkpoint**: El sistema tiene una llave de repuesto que no depende de sus propios datos, y el inventario se cuadra sin fabricar documentos
+
+---
 
 ## Dependencies & Execution Order
 

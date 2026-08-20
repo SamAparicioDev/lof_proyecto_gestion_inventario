@@ -90,7 +90,12 @@ async function rolesAsignables(): Promise<RolAsignado[]> {
     const pagina = await apiServidor<Paginado<RolListado>>(
       `/api/roles?estado=ACTIVO&pagina=1&porPagina=${ROLES_MAXIMOS}`,
     );
-    return pagina.datos.map((rol) => ({ id: rol.id, nombre: rol.nombre }));
+    // US30 (FR-128): el rol de respaldo NO se ofrece — no se asigna desde la aplicación, así que
+    // enseñarlo en el selector solo llevaría a un 400 con el rol ya elegido. Sigue siendo visible
+    // en /roles, donde se explica por qué.
+    return pagina.datos
+      .filter((rol) => !rol.esSuperAdmin)
+      .map((rol) => ({ id: rol.id, nombre: rol.nombre }));
   } catch {
     return [];
   }

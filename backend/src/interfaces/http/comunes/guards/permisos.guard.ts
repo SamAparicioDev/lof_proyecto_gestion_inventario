@@ -68,10 +68,25 @@ export class PermisosGuard implements CanActivate {
    * - `permisos` son CLAVES `modulo.accion` resueltas desde BD en esta misma petición; la
    *   comparación es exacta, sin comodines ni jerarquías: un permiso concede exactamente su
    *   operación y nada más (FR-056).
+   *
+   * ## La única excepción: el super administrador (US30, FR-127)
+   *
+   * Un rol con `esSuperAdmin` concede TODO, y se comprueba ANTES de mirar `permisos` — no
+   * después, ni sumando sus claves a la lista. La diferencia es exactamente el motivo por el
+   * que este rol existe: si sus capacidades salieran de filas en `roles_permisos`, vaciar esa
+   * tabla lo dejaría tan bloqueado como al resto, y el respaldo se rompería con la misma
+   * operación de la que protege. Aquí no se lee ningún dato administrable: se lee una columna
+   * que solo la base de datos puede cambiar.
+   *
+   * Sigue exigiendo sesión válida y usuario ACTIVO: el respaldo evita el bloqueo por permisos,
+   * no la autenticación.
    */
   private puede(usuario: Usuario | undefined, permisoRequerido: ClavePermiso): boolean {
     if (!usuario || usuario.estado !== 'ACTIVO') {
       return false;
+    }
+    if (usuario.rolAsignado.esSuperAdmin) {
+      return true;
     }
     return usuario.rolAsignado.permisos.includes(permisoRequerido);
   }

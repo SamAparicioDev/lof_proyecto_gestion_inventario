@@ -42,7 +42,7 @@
  * correcta al crear/editar una salida — simplemente ya NUNCA debe formar parte de la
  * revalidación atómica de `confirmar`.
  */
-import { DisponibilidadInsuficiente, NoEncontrado } from '../comunes/errores';
+import { DisponibilidadInsuficiente, ErrorValidacionDominio, NoEncontrado } from '../comunes/errores';
 
 /** Estado de stock de un producto ya bloqueado (`SELECT ... FOR UPDATE`) por el llamador —
  *  usado por `aplicarEntrada`, `aplicarReversaEntrada` Y `aplicarSalida` (las tres operan
@@ -75,6 +75,19 @@ export interface MovimientoStockGenerado {
   readonly stockResultante: number;
 }
 
+/**
+ * Resultado de CORREGIR la cantidad de un producto (US31, FR-130): qué stock persistir y qué
+ * movimiento insertar. Un solo producto y un solo movimiento, a diferencia de las operaciones por
+ * líneas — una corrección es siempre sobre un producto concreto que alguien acaba de contar.
+ */
+export interface ResultadoCorreccionStock {
+  readonly stockActualNuevo: number;
+  /** `AJUSTE_ENTRADA` si el conteo superó al registrado, `AJUSTE_SALIDA` si fue menor. */
+  readonly tipoMovimiento: 'AJUSTE_ENTRADA' | 'AJUSTE_SALIDA';
+  /** SIEMPRE positiva: el signo lo lleva `tipoMovimiento`, igual que en el resto de la tabla. */
+  readonly cantidadMovimiento: number;
+}
+
 /** Resultado de aplicar un conjunto de líneas: qué actualizar en `productos` y qué insertar
  *  en `movimientos_inventario`, en el mismo orden que las líneas de entrada. */
 export interface ResultadoAplicarStock {
@@ -101,6 +114,49 @@ export class ServicioStock {
     lineas: readonly LineaMovimientoStock[],
   ): ResultadoAplicarStock {
     return this.acumularLineas(productos, lineas, (stockPrevio, cantidad) => stockPrevio + cantidad);
+  }
+
+  /**
+   * Corrige la cantidad de UN producto al valor CONTADO (US31, FR-130) — la operación del
+   * inventario que cuadra el sistema con la bodega cuando el conteo físico no coincide.
+   *
+   * Recibe la cantidad contada, no la diferencia: es lo que la persona tiene delante al terminar
+   * de contar, y pedirle el delta es pedirle justo la resta en la que se equivoca. La diferencia
+   * la calcula esta función, y con su signo decide el tipo de movimiento.
+   *
+   * Reglas que verifica, ambas de negocio y por eso aquí y no en el adaptador:
+   *
+   * - **No se corrige a la misma cantidad**: un movimiento de cero no dice nada y ensucia el
+   *   historial del producto, que es justo donde alguien va a buscar por qué cambió una cifra.
+   * - **No se corrige a un valor negativo**: Principio I, la última línea la tiene el `CHECK` de
+   *   la base, pero el rechazo con mensaje en español se da aquí.
+   *
+   * Lo que NO verifica, deliberadamente: que el resultado siga cubriendo lo COMPROMETIDO por
+   * salidas PENDIENTE. Si el conteo dice que hay menos de lo prometido, el sistema debe reflejar
+   * lo que hay — esas salidas fallarán al confirmarse con el mensaje de disponibilidad de
+   * siempre, que es la respuesta correcta. Bloquear la corrección para que cuadre un documento
+   * sería mantener el inventario mintiendo a favor de una promesa.
+   *
+   * Implementa: FR-130.
+   */
+  aplicarCorreccion(producto: InfoProductoStock, cantidadContada: number): ResultadoCorreccionStock {
+    if (cantidadContada < 0) {
+      throw new ErrorValidacionDominio('La cantidad no puede ser negativa', {
+        cantidad: 'La cantidad no puede ser negativa',
+      });
+    }
+
+    const diferencia = cantidadContada - producto.stockActual;
+    if (diferencia === 0) {
+      const mensaje = `El producto ya tiene ${cantidadContada} en existencia: no hay nada que corregir`;
+      throw new ErrorValidacionDominio(mensaje, { cantidad: mensaje });
+    }
+
+    return {
+      stockActualNuevo: cantidadContada,
+      tipoMovimiento: diferencia > 0 ? 'AJUSTE_ENTRADA' : 'AJUSTE_SALIDA',
+      cantidadMovimiento: Math.abs(diferencia),
+    };
   }
 
   /**

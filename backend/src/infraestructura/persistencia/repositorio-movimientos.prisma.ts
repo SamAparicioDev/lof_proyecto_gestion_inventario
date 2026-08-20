@@ -180,6 +180,8 @@ function mapearDocumentoTipoADominio(documentoTipo: DocumentoTipoPrisma): Docume
       return 'INGRESO';
     case 'SALIDA':
       return 'SALIDA';
+    case 'AJUSTE':
+      return 'AJUSTE';
     default: {
       const valorInesperado: never = documentoTipo;
       throw new Error(`Tipo de documento de Prisma sin mapeo al dominio: ${String(valorInesperado)}`);

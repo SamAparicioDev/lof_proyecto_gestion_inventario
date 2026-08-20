@@ -24,6 +24,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { CasoDeUso } from '../comunes/caso-de-uso';
 import { NoEncontrado } from '../../dominio/comunes/errores';
+import { exigirQueElObjetivoNoSeaElRespaldo } from '../comunes/respaldo-del-sistema';
 import type { ClavePermiso } from '../../dominio/entidades/permiso';
 import { HASHEADOR, type Hasheador } from '../../dominio/puertos/hasheador';
 import { REPOSITORIO_USUARIOS, type RepositorioUsuarios } from '../../dominio/puertos/repositorio-usuarios';
@@ -35,6 +36,10 @@ export interface RestablecerPasswordUsuarioEntrada {
   readonly passwordTemporal: string;
   /** Permisos efectivos de quien restablece — del token/BD, NUNCA del cuerpo (FR-058). */
   readonly permisosDelActor: readonly ClavePermiso[];
+  /** US30 (FR-127): el respaldo del sistema tiene la lista de permisos VACÍA, así que las
+   *  reglas que comparan listas lo tratarían como al usuario con menos poder. Esta bandera es
+   *  la misma decisión que toma `PermisosGuard`, y por el mismo motivo. */
+  readonly actorEsSuperAdmin: boolean;
 }
 
 @Injectable()
@@ -49,7 +54,20 @@ export class RestablecerPasswordUsuarioCasoUso implements CasoDeUso<RestablecerP
     if (!usuarioExistente) {
       throw new NoEncontrado('El usuario');
     }
-    exigirQueElObjetivoNoTengaMasPermisos(usuarioExistente.rolAsignado, entrada.permisosDelActor);
+    // US30 (FR-128): esta es LA puerta que había que cerrar. `exigirQueElObjetivoNoTengaMasPermisos`
+    // no la cubre — compara listas de permisos, y la del respaldo está vacía, así que el usuario
+    // más poderoso del sistema parece el más inofensivo. Sin esta línea, cualquiera con
+    // `usuarios.gestionar` le fija una contraseña temporal y entra como él.
+    exigirQueElObjetivoNoSeaElRespaldo(
+      usuarioExistente.rolAsignado,
+      entrada.actorEsSuperAdmin,
+      'restablecer la contraseña',
+    );
+    exigirQueElObjetivoNoTengaMasPermisos(
+      usuarioExistente.rolAsignado,
+      entrada.permisosDelActor,
+      entrada.actorEsSuperAdmin,
+    );
 
     const passwordHash = await this.hasheador.hash(entrada.passwordTemporal);
     await this.repositorioUsuarios.actualizarPassword(entrada.usuarioId, passwordHash, true);

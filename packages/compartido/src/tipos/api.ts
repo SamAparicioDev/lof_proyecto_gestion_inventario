@@ -87,5 +87,15 @@ export interface PerfilSesion {
    * un botón con esta lista no protege nada; el backend responde 403 igual.
    */
   permisos: string[];
+  /**
+   * `true` si el rol es el RESPALDO del sistema (US30, FR-127). Dos usos distintos, y ninguno es
+   * control de acceso:
+   *
+   * - La pantalla de roles lo consulta para saber si puede mover una casilla RESERVADA (FR-131).
+   * - `permisos` llega con el CATÁLOGO COMPLETO cuando esto es `true`, porque el rol de respaldo
+   *   no tiene filas en la matriz y la interfaz, leyendo solo esa lista, le ocultaría todo a
+   *   quien más puede. El servidor lo resuelve así en el propio endpoint del perfil.
+   */
+  esSuperAdmin: boolean;
   debeCambiarPassword: boolean;
 }

@@ -121,6 +121,10 @@ class RepositorioCategoriasFalso implements RepositorioCategorias {
   async cambiarEstado(): Promise<void> {
     throw new Error('no usado en estas pruebas');
   }
+  /** US31: la carga masiva no corrige cantidades a mano — registra un ingreso (FR-106). */
+  async corregirCantidad(): Promise<void> {
+    throw new Error('no usado en estas pruebas');
+  }
   async contarProductos(): Promise<number> {
     throw new Error('no usado en estas pruebas');
   }
@@ -174,6 +178,10 @@ class RepositorioProveedoresFalso implements RepositorioProveedores {
   async cambiarEstado(): Promise<void> {
     throw new Error('no usado en estas pruebas');
   }
+  /** US31: la carga masiva no corrige cantidades a mano — registra un ingreso (FR-106). */
+  async corregirCantidad(): Promise<void> {
+    throw new Error('no usado en estas pruebas');
+  }
   async contarIngresos(): Promise<number> {
     throw new Error('no usado en estas pruebas');
   }
@@ -217,6 +225,10 @@ class RepositorioUnidadesMedidaFalso implements RepositorioUnidadesMedida {
   async cambiarEstado(): Promise<void> {
     throw new Error('no usado en estas pruebas');
   }
+  /** US31: la carga masiva no corrige cantidades a mano — registra un ingreso (FR-106). */
+  async corregirCantidad(): Promise<void> {
+    throw new Error('no usado en estas pruebas');
+  }
   async contarProductos(): Promise<number> {
     throw new Error('no usado en estas pruebas');
   }
@@ -240,6 +252,11 @@ class RepositorioProductosFalso implements RepositorioProductos {
 
   async buscarPorSku(sku: string): Promise<Producto | null> {
     return this.productosPorSku.get(sku) ?? null;
+  }
+
+  /** US31: la carga masiva no corrige cantidades a mano — registra un ingreso (FR-106). */
+  async corregirCantidad(): Promise<void> {
+    throw new Error('no usado en estas pruebas');
   }
 
   async crear(datos: DatosNuevoProducto): Promise<Producto> {

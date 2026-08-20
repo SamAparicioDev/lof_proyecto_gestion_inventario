@@ -38,6 +38,10 @@ export interface CrearRolEntrada {
   readonly descripcion?: string;
   readonly permisoIds: readonly number[];
   readonly permisosDelActor: readonly ClavePermiso[];
+  /** US30 (FR-127): el respaldo del sistema tiene la lista de permisos VACÍA, así que las
+   *  reglas que comparan listas lo tratarían como al usuario con menos poder. Esta bandera es
+   *  la misma decisión que toma `PermisosGuard`, y por el mismo motivo. */
+  readonly actorEsSuperAdmin: boolean;
 }
 
 export interface CrearRolSalida {
@@ -56,6 +60,7 @@ export class CrearRolCasoUso implements CasoDeUso<CrearRolEntrada, CrearRolSalid
       entrada.permisoIds,
       await this.repositorioPermisos.listar(),
       entrada.permisosDelActor,
+      entrada.actorEsSuperAdmin,
     );
 
     const rol = await this.repositorioRoles.crear({

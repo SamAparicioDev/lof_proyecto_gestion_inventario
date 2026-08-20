@@ -56,6 +56,7 @@ import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { FilePdf, FileXls, Printer } from '@phosphor-icons/react/dist/ssr';
 import {
+  type DocumentoTipoMovimiento,
   esquemaFiltroReporteMovimientos,
   type Cliente,
   type FiltroReporteMovimientos,
@@ -88,6 +89,17 @@ const ETIQUETA_DOCUMENTO_TIPO: Record<'INGRESO' | 'SALIDA', string> = {
   INGRESO: 'Ingreso',
   SALIDA: 'Salida',
 };
+
+/**
+ * Cómo se lee la celda "Documento" de una fila del reporte.
+ *
+ * Un AJUSTE (US31, FR-130) no tiene documento: el servidor manda el texto completo —"Ajuste de
+ * inventario"— en `numero`, así que anteponerle su tipo daría "Ajuste Ajuste de inventario".
+ */
+function textoDocumento(documento: { tipo: DocumentoTipoMovimiento; numero: string }): string {
+  if (documento.tipo === 'AJUSTE') return documento.numero;
+  return `${ETIQUETA_DOCUMENTO_TIPO[documento.tipo]} ${documento.numero}`;
+}
 
 /** `esquemaFiltroReporteMovimientos` (`@trazo/compartido`) acepta `undefined` como "sin
  *  filtro", pero un `<select>` vacío entrega `''`. Los campos de fecha ya no lo necesitan:
@@ -412,7 +424,7 @@ export function PanelReporteMovimientos({ clientes }: { clientes: Cliente[] }) {
                           <TipoMovimientoTag tipo={movimiento.tipo} />
                         </td>
                         <td className="text-muted">
-                          {ETIQUETA_DOCUMENTO_TIPO[movimiento.documento.tipo]} {movimiento.documento.numero}
+                          {textoDocumento(movimiento.documento)}
                         </td>
                         <td>{movimiento.producto.sku}</td>
                         <td>{movimiento.producto.descripcion}</td>

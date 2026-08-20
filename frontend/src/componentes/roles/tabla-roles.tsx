@@ -121,7 +121,10 @@ export function TablaRoles({ roles, catalogo }: { roles: RolListado[]; catalogo:
                     <td>
                       <div className="flex flex-wrap items-center gap-2">
                         <span>{rol.nombre}</span>
-                        {rol.esSistema && <span className="tag tag-outline">Del sistema</span>}
+                        {rol.esSistema && !rol.esSuperAdmin && (
+                          <span className="tag tag-outline">Del sistema</span>
+                        )}
+                        {rol.esSuperAdmin && <span className="tag tag-outline">Respaldo del sistema</span>}
                       </div>
                       {rol.descripcion && (
                         <div className="text-muted" style={{ fontSize: 12, marginTop: 2 }}>
@@ -130,7 +133,11 @@ export function TablaRoles({ roles, catalogo }: { roles: RolListado[]; catalogo:
                       )}
                     </td>
                     <td>
-                      {rol.permisos.length} {rol.permisos.length === 1 ? 'permiso' : 'permisos'}
+                      {/* US30 (FR-127): el respaldo NO tiene filas en la matriz y aun así lo
+                          concede todo. Mostrar "0 permisos" sería mentir sobre lo que puede. */}
+                      {rol.esSuperAdmin
+                        ? 'Todos, por diseño'
+                        : `${rol.permisos.length} ${rol.permisos.length === 1 ? 'permiso' : 'permisos'}`}
                     </td>
                     <td>
                       {rol.cantidadUsuarios} {rol.cantidadUsuarios === 1 ? 'usuario' : 'usuarios'}
@@ -140,9 +147,18 @@ export function TablaRoles({ roles, catalogo }: { roles: RolListado[]; catalogo:
                     </td>
                     <td>
                       <div className="flex flex-wrap gap-2">
-                        <button type="button" className="btn btn-secondary" onClick={() => setRolEditando(rol)}>
-                          Editar permisos
-                        </button>
+                        {/* US30 (FR-128): el respaldo no se edita, no se desactiva y no se
+                            elimina desde aquí. Se explica en vez de dejar botones que el
+                            servidor rechazaría con un 409. */}
+                        {rol.esSuperAdmin ? (
+                          <span className="text-muted" style={{ fontSize: 12 }}>
+                            Solo se administra desde la base de datos
+                          </span>
+                        ) : (
+                          <button type="button" className="btn btn-secondary" onClick={() => setRolEditando(rol)}>
+                            Editar permisos
+                          </button>
+                        )}
                         {!rol.esSistema && (
                           <>
                             <button type="button" className="btn btn-ghost" onClick={() => abrirCambioEstado(rol)}>

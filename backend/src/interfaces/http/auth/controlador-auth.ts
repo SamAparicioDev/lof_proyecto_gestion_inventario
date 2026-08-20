@@ -25,6 +25,7 @@ import { ActualizarMiPerfilCasoUso } from '../../../aplicacion/usuarios/actualiz
 import { CambiarMiPasswordCasoUso } from '../../../aplicacion/usuarios/cambiar-mi-password.caso-uso';
 import type { Usuario } from '../../../dominio/entidades/usuario';
 import { HASHEADOR, type Hasheador } from '../../../dominio/puertos/hasheador';
+import { REPOSITORIO_PERMISOS, type RepositorioPermisos } from '../../../dominio/puertos/repositorio-permisos';
 import { REPOSITORIO_USUARIOS, type RepositorioUsuarios } from '../../../dominio/puertos/repositorio-usuarios';
 import { fijarCookieSesion, limpiarCookieSesion } from '../../../infraestructura/seguridad/cookie-sesion';
 import { PipeValidacionZod } from '../comunes/pipe-validacion-zod';
@@ -51,6 +52,7 @@ export class ControladorAuth {
     private readonly jwtService: JwtService,
     private readonly cambiarMiPassword: CambiarMiPasswordCasoUso,
     private readonly actualizarMiPerfil: ActualizarMiPerfilCasoUso,
+    @Inject(REPOSITORIO_PERMISOS) private readonly repositorioPermisos: RepositorioPermisos,
   ) {}
 
   /**
@@ -105,14 +107,22 @@ export class ControladorAuth {
    * autoridad sigue siendo el guard, ocultar UI no es control de acceso (FR-003).
    */
   @Get('perfil')
-  perfil(@UsuarioActual() usuario: Usuario): PerfilSesion {
+  async perfil(@UsuarioActual() usuario: Usuario): Promise<PerfilSesion> {
     return {
       id: usuario.id,
       nombreCompleto: usuario.nombreCompleto,
       email: usuario.email,
       login: usuario.login,
       rol: { id: usuario.rolAsignado.id, nombre: usuario.rolAsignado.nombre },
-      permisos: [...usuario.rolAsignado.permisos],
+      // US30 (FR-127): el respaldo no tiene filas en la matriz, así que su lista está vacía. Si
+      // se enviara tal cual, la interfaz le ocultaría TODO justo a quien más puede — y la
+      // pantalla en blanco parecería el bloqueo del que esta historia protege. Se resuelve aquí,
+      // en el único endpoint que alimenta la UI, y no en el guard: la autorización del respaldo
+      // sigue decidiéndose por su columna, nunca por esta lista.
+      esSuperAdmin: usuario.rolAsignado.esSuperAdmin,
+      permisos: usuario.rolAsignado.esSuperAdmin
+        ? (await this.repositorioPermisos.listar()).map((permiso) => permiso.clave)
+        : [...usuario.rolAsignado.permisos],
       debeCambiarPassword: usuario.debeCambiarPassword,
     };
   }

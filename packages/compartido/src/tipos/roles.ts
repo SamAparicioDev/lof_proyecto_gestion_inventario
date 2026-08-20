@@ -50,6 +50,9 @@ export interface RolDetalle {
   esSistema: boolean;
   estado: EstadoRol;
   permisos: ClavePermiso[];
+  /** US30 (FR-127): el rol de respaldo. Viene con `permisos` VACÍO y aun así lo concede todo — su
+   *  autorización no sale de la matriz. La pantalla lo pinta como protegido, sin acciones. */
+  esSuperAdmin: boolean;
 }
 
 /**

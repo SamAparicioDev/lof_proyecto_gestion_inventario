@@ -37,6 +37,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { CasoDeUso } from '../comunes/caso-de-uso';
 import { guardiaDeCapacidadAdministrativa } from '../comunes/proteccion-capacidad-administrativa';
 import { NoEncontrado } from '../../dominio/comunes/errores';
+import { exigirQueElObjetivoNoSeaElRespaldo } from '../comunes/respaldo-del-sistema';
 import type { ClavePermiso } from '../../dominio/entidades/permiso';
 import { REPOSITORIO_ROLES, type RepositorioRoles } from '../../dominio/puertos/repositorio-roles';
 import { REPOSITORIO_USUARIOS, type RepositorioUsuarios } from '../../dominio/puertos/repositorio-usuarios';
@@ -50,6 +51,10 @@ export interface ActualizarUsuarioEntrada {
   readonly rolId: number;
   /** Permisos efectivos de quien ejecuta la edición — del token/BD, NUNCA del cuerpo (FR-058). */
   readonly permisosDelActor: readonly ClavePermiso[];
+  /** US30 (FR-127): el respaldo del sistema tiene la lista de permisos VACÍA, así que las
+   *  reglas que comparan listas lo tratarían como al usuario con menos poder. Esta bandera es
+   *  la misma decisión que toma `PermisosGuard`, y por el mismo motivo. */
+  readonly actorEsSuperAdmin: boolean;
 }
 
 @Injectable()
@@ -64,7 +69,16 @@ export class ActualizarUsuarioCasoUso implements CasoDeUso<ActualizarUsuarioEntr
     if (!usuarioExistente) {
       throw new NoEncontrado('El usuario');
     }
-    await exigirRolAsignable(this.repositorioRoles, entrada.rolId, entrada.permisosDelActor);
+    // US30 (FR-128): editar al respaldo incluye poder cambiarle el rol, que es la forma directa
+    // de anularlo. Se comprueba sobre el rol que el usuario TIENE, no sobre el que se le envía.
+    exigirQueElObjetivoNoSeaElRespaldo(usuarioExistente.rolAsignado, entrada.actorEsSuperAdmin, 'editar');
+
+    await exigirRolAsignable(
+      this.repositorioRoles,
+      entrada.rolId,
+      entrada.permisosDelActor,
+      entrada.actorEsSuperAdmin,
+    );
 
     await this.repositorioUsuarios.actualizar(
       entrada.usuarioId,

@@ -46,6 +46,7 @@ import { cambiarEstadoProducto } from '@/lib/api/productos';
 import { ErrorApi } from '@/lib/api/cliente';
 import { formatoCantidadConUnidad, formatoFechaHora } from '@/lib/formato';
 import { mensajeListadoVacio } from '@/lib/filtros';
+import { DialogoCorregirCantidad } from './dialogo-corregir-cantidad';
 import { PERMISOS } from '@/lib/permisos';
 import { usePuede } from '@/lib/sesion';
 import { AlertaStockBajo } from './alerta-stock-bajo';
@@ -74,10 +75,14 @@ export function TablaInventario({ filas, hayFiltros }: { filas: FilaInventario[]
   const router = useRouter();
   const puedeEditar = usePuede(PERMISOS.PRODUCTOS_EDITAR);
   const puedeCambiarEstado = usePuede(PERMISOS.PRODUCTOS_CAMBIAR_ESTADO);
+  // US31 (FR-130/FR-131): corregir el stock a mano es una capacidad aparte de editar la ficha —
+  // toca las CIFRAS, no los datos del producto — y por eso tiene su propio permiso reservado.
+  const puedeAjustar = usePuede(PERMISOS.INVENTARIO_AJUSTAR);
   const [filaEditando, setFilaEditando] = useState<FilaInventario | null>(null);
+  const [filaCorrigiendo, setFilaCorrigiendo] = useState<FilaInventario | null>(null);
   const [productoCambiando, setProductoCambiando] = useState<number | null>(null);
   const [errorEstado, setErrorEstado] = useState<string | null>(null);
-  const hayAcciones = puedeEditar || puedeCambiarEstado;
+  const hayAcciones = puedeEditar || puedeCambiarEstado || puedeAjustar;
   const columnas = hayAcciones ? 9 : 8;
 
   async function alternarEstado(fila: FilaInventario): Promise<void> {
@@ -160,6 +165,15 @@ export function TablaInventario({ filas, hayFiltros }: { filas: FilaInventario[]
                               Editar
                             </button>
                           )}
+                          {puedeAjustar && (
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              onClick={() => setFilaCorrigiendo(fila)}
+                            >
+                              Corregir cantidad
+                            </button>
+                          )}
                           {puedeCambiarEstado && (
                             <button
                               type="button"
@@ -185,6 +199,18 @@ export function TablaInventario({ filas, hayFiltros }: { filas: FilaInventario[]
         </div>
       </div>
 
+      {filaCorrigiendo && (
+        <DialogoCorregirCantidad
+          fila={filaCorrigiendo}
+          alCerrar={() => setFilaCorrigiendo(null)}
+          alGuardar={() => {
+            setFilaCorrigiendo(null);
+            // Mismo patrón que `alternarEstado`: el Server Component padre vuelve a pedir los
+            // datos y la tabla se repinta con el stock ya corregido.
+            router.refresh();
+          }}
+        />
+      )}
       {filaEditando && (
         <ProductoForm
           productoId={filaEditando.producto.id}

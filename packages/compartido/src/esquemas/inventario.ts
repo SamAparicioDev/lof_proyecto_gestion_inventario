@@ -11,7 +11,7 @@
  * FR-023 (búsqueda por SKU/descripción) y FR-024 (historial de movimientos por producto).
  */
 import { z } from 'zod';
-import { esquemaCantidadFiltro, esquemaPaginacion, esquemaTextoFiltro } from './comunes';
+import { MENSAJE_CANTIDAD_ENTERA, esquemaCantidadFiltro, esquemaPaginacion, esquemaTextoFiltro } from './comunes';
 
 /**
  * Coerciona un query param booleano opcional: llega como string (`?soloStockBajo=true`) o
@@ -98,3 +98,32 @@ export type FiltroMovimientos = z.infer<typeof esquemaFiltroMovimientos>;
  */
 export const esquemaFiltroHistorialCostos = z.object({}).merge(esquemaPaginacion);
 export type FiltroHistorialCostos = z.infer<typeof esquemaFiltroHistorialCostos>;
+
+/**
+ * Body de `PUT /api/inventario/:productoId/cantidad` (US31, FR-130) — corregir el stock para
+ * cuadrar con el conteo físico, sin documento de por medio.
+ *
+ * Se envía la cantidad CONTADA, no la diferencia: es lo que la persona tiene delante al terminar
+ * de contar, y pedirle el delta es pedirle justo la resta en la que se equivoca. El servidor
+ * calcula la diferencia y con su signo decide el tipo de movimiento.
+ *
+ * `motivo` es obligatorio y no un texto de cortesía: sin factura ni salida detrás, es lo único
+ * que justifica el movimiento (Principio II — las correcciones se hacen con movimientos de ajuste
+ * que TAMBIÉN quedan registrados). Los 300 caracteres son los de `motivo_anulacion`, por
+ * coherencia con los demás motivos del sistema.
+ */
+export const esquemaCorregirCantidad = z.object({
+  cantidad: z
+    .number({ required_error: 'La cantidad es obligatoria', invalid_type_error: 'La cantidad debe ser un número' })
+    // US26 (FR-122): entera, como toda cantidad del sistema.
+    .int(MENSAJE_CANTIDAD_ENTERA)
+    // A diferencia de las líneas de un documento, SÍ admite 0: "conté y no hay ninguno" es un
+    // resultado legítimo del conteo, y prohibirlo obligaría a inventar una salida para vaciar.
+    .min(0, 'La cantidad no puede ser negativa'),
+  motivo: z
+    .string({ required_error: 'El motivo es obligatorio' })
+    .trim()
+    .min(1, 'El motivo es obligatorio')
+    .max(300, 'El motivo no puede superar 300 caracteres'),
+});
+export type DatosCorregirCantidad = z.infer<typeof esquemaCorregirCantidad>;

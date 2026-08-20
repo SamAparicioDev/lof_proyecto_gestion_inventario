@@ -25,6 +25,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { CasoDeUso } from '../comunes/caso-de-uso';
 import { guardiaDeCapacidadAdministrativa } from '../comunes/proteccion-capacidad-administrativa';
 import { EstadoInvalido } from '../../dominio/comunes/errores';
+import { exigirQueElObjetivoNoSeaElRespaldo } from '../comunes/respaldo-del-sistema';
 import type { EstadoUsuario } from '../../dominio/entidades/usuario';
 import { REPOSITORIO_USUARIOS, type RepositorioUsuarios } from '../../dominio/puertos/repositorio-usuarios';
 
@@ -34,6 +35,10 @@ export interface CambiarEstadoUsuarioEntrada {
   readonly estado: EstadoUsuario;
   /** Id del usuario autenticado que ejecuta la mutación — nunca confiar en un valor del body. */
   readonly usuarioActualId: number;
+  /** US30 (FR-127): el respaldo del sistema tiene la lista de permisos VACÍA, así que las
+   *  reglas que comparan listas lo tratarían como al usuario con menos poder. Esta bandera es
+   *  la misma decisión que toma `PermisosGuard`, y por el mismo motivo. */
+  readonly actorEsSuperAdmin: boolean;
 }
 
 @Injectable()
@@ -43,6 +48,13 @@ export class CambiarEstadoUsuarioCasoUso implements CasoDeUso<CambiarEstadoUsuar
   async ejecutar(entrada: CambiarEstadoUsuarioEntrada): Promise<void> {
     if (entrada.estado === 'INACTIVO' && entrada.usuarioId === entrada.usuarioActualId) {
       throw new EstadoInvalido('No puedes desactivar tu propio usuario mientras tienes la sesión activa.');
+    }
+
+    // US30 (FR-128): desactivar al respaldo lo deja fuera igual que quitarle el rol — el guard
+    // exige usuario ACTIVO también para él. Se lee su rol ANTES de escribir.
+    const objetivo = await this.repositorioUsuarios.buscarPorId(entrada.usuarioId);
+    if (objetivo) {
+      exigirQueElObjetivoNoSeaElRespaldo(objetivo.rolAsignado, entrada.actorEsSuperAdmin, 'desactivar ni reactivar');
     }
 
     await this.repositorioUsuarios.cambiarEstado(

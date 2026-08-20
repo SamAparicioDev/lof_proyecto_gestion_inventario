@@ -77,6 +77,7 @@ interface UsuarioSemilla {
 const PERMISOS_DEL_SISTEMA = [
   { clave: 'inventario.ver', modulo: 'inventario', descripcion: 'Consultar el inventario, la ficha de un producto y su historial de movimientos.' },
   { clave: 'inventario.ver_costos', modulo: 'inventario', descripcion: 'Consultar el historial de cambios de costo de un producto.' },
+  { clave: 'inventario.ajustar', modulo: 'inventario', descripcion: 'Corregir a mano la cantidad de un producto para cuadrar con el conteo físico, sin documento de entrada ni de salida. Permiso reservado: solo el super administrador lo concede o lo retira.' },
 
   { clave: 'productos.ver', modulo: 'productos', descripcion: 'Consultar el catálogo de productos para seleccionarlos en documentos.' },
   { clave: 'productos.crear', modulo: 'productos', descripcion: 'Dar de alta productos en el catálogo.' },
@@ -180,8 +181,13 @@ const PERMISOS_OPERARIO = [
 ] as const;
 
 /** Permisos que el rol GERENTE NO tiene: la administración del sistema es del Administrador
- *  (hoy, `@Roles('ADMINISTRADOR')` a nivel de clase en `ControladorUsuarios`). */
-const PERMISOS_EXCLUSIVOS_ADMINISTRADOR = ['usuarios.gestionar', 'roles.gestionar'] as const;
+ *  (hoy, `@Roles('ADMINISTRADOR')` a nivel de clase en `ControladorUsuarios`).
+ *
+ *  `inventario.ajustar` (US31, FR-131) se suma a la lista por un motivo distinto de los otros
+ *  dos: no es "administración del sistema", es la única operación capaz de desmentir a todos los
+ *  documentos a la vez. Nace solo en el Administrador y, a diferencia del resto, moverlo de rol
+ *  no lo decide `roles.gestionar`: solo un super administrador puede concederlo o retirarlo. */
+const PERMISOS_EXCLUSIVOS_ADMINISTRADOR = ['usuarios.gestionar', 'roles.gestionar', 'inventario.ajustar'] as const;
 
 /**
  * ════════════════════════════════════════════════════════════════════════════════════════
@@ -198,6 +204,7 @@ const PERMISOS_EXCLUSIVOS_ADMINISTRADOR = ['usuarios.gestionar', 'roles.gestiona
  * |----------------------------|---|---|---|--------------------------------------------------------------------|
  * | inventario.ver             | ✔ | ✔ | ✔ | GET /api/inventario · /:productoId · /:productoId/movimientos       |
  * | inventario.ver_costos      | ✔ | ✔ | — | GET /api/inventario/:productoId/historial-costos (US12)             |
+ * | inventario.ajustar         | ✔ | — | — | PUT /api/inventario/:productoId/cantidad (US31 — RESERVADO)          |
  * | productos.ver              | ✔ | ✔ | ✔ | GET /api/productos                                                 |
  * | productos.crear            | ✔ | ✔ | ✔ | POST /api/productos                                                |
  * | productos.editar           | ✔ | ✔ | — | PUT /api/productos/:id                                             |

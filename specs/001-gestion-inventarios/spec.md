@@ -531,6 +531,67 @@ No todo lo que entra a la bodega viene con factura: un conteo físico que aparec
 
 ---
 
+### User Story 30 - Un respaldo que nadie pueda perder: el super administrador (Priority: P1)
+
+Ya pasó: un administrador tocó la matriz de permisos y el sistema se quedó sin nadie que pudiera
+volver a repartirlos. Los invariantes de FR-057 cubren el caso obvio —quitarle `roles.gestionar`
+al último rol que lo tiene—, pero cubren *ese* caso, no todos los que se le pueden ocurrir a una
+persona con prisa un viernes. Y cuando ocurre, la única salida es entrar a la base de datos, que
+es exactamente el momento en el que uno quisiera tener una llave de repuesto.
+
+**Why this priority**: es la única historia cuyo valor se mide en que NUNCA haga falta. El costo
+de no tenerla no es una funcionalidad ausente: es un sistema inoperable con datos dentro.
+
+**Independent Test**: Se prueba vaciando por completo la matriz de permisos de todos los roles y
+comprobando que el super administrador sigue pudiendo entrar y rehacerla.
+
+**Acceptance Scenarios**:
+
+1. **Given** un super administrador, **When** ejerce cualquier operación del sistema, **Then** el
+   servidor se la concede por su ROL, sin consultar la matriz de permisos.
+2. **Given** que alguien borra todos los permisos de todos los roles, **When** el super
+   administrador entra, **Then** conserva todas sus capacidades y puede reasignarlos.
+3. **Given** un administrador con `roles.gestionar`, **When** intenta editar, renombrar,
+   desactivar o eliminar el rol de super administrador, **Then** se rechaza.
+4. **Given** un administrador con `usuarios.gestionar`, **When** intenta ASIGNAR el rol de super
+   administrador a alguien —incluido él mismo—, **Then** se rechaza: la única vía es la base de
+   datos.
+5. **Given** un usuario que YA es super administrador, **When** un administrador intenta
+   desactivarlo, cambiarle el rol o restablecerle la contraseña, **Then** se rechaza — si no,
+   bastaría con fijarle una contraseña conocida para entrar como él.
+6. **Given** un despliegue nuevo, **When** arranca con las variables de entorno del super
+   administrador, **Then** el usuario queda creado; si ya existía, no se toca nada.
+
+---
+
+### User Story 31 - Corregir la cantidad desde el inventario (Priority: P2)
+
+Cuando el conteo físico no cuadra, hoy hay que fabricar un documento: un ingreso para lo que
+sobra y una salida —con cliente— para lo que falta. Inventar un cliente para justificar una
+merma es exactamente el tipo de dato falso que US29 vino a eliminar en la entrada.
+
+**Why this priority**: cierra el mismo hueco que US29 pero en los dos sentidos, y sin pedir un
+documento que no existe.
+
+**Independent Test**: Se prueba escribiendo la cantidad contada en el inventario y comprobando
+que el stock queda en ese número y que el movimiento registra la diferencia con su motivo.
+
+**Acceptance Scenarios**:
+
+1. **Given** un producto con 40 unidades y un conteo de 47, **When** se corrige a 47 con un
+   motivo, **Then** el stock queda en 47 y se registra UN movimiento de AJUSTE_ENTRADA por 7.
+2. **Given** un producto con 40 unidades y un conteo de 33, **Then** el movimiento es de
+   AJUSTE_SALIDA por 7 — la corrección funciona en los dos sentidos.
+3. **Given** una corrección sin motivo, **Then** se rechaza: sin documento detrás, el motivo es
+   lo único que justifica el movimiento.
+4. **Given** la misma cantidad que ya tenía, **Then** se rechaza en vez de registrar un
+   movimiento de cero, que ensuciaría el historial sin decir nada.
+5. **Given** un rol sin el permiso, **Then** ni ve la acción ni puede invocarla directamente.
+6. **Given** un administrador (no super), **When** intenta conceder o retirar ese permiso a un
+   rol, **Then** se rechaza: es un permiso reservado al super administrador.
+
+---
+
 ### Edge Cases
 
 - **Salida mayor al disponible**: debe rechazarse siempre, incluida la carrera entre dos usuarios simultáneos sobre el mismo producto (solo una confirmación puede ganar).
@@ -542,6 +603,8 @@ No todo lo que entra a la bodega viene con factura: un conteo físico que aparec
 - **Reporte sin datos en el período**: muestra estado vacío claro, sin errores; la exportación produce un archivo válido con encabezados y sin filas.
 - **Cantidades con decimales** (US26): se rechazan al capturarlas —toda cantidad es entera y positiva (FR-122)—, pero las ya registradas antes de la regla se siguen leyendo y sumando tal cual: la restricción mira hacia adelante.
 - **Salida sin proyecto** (US28): el cliente sigue siendo obligatorio; lo entregado sin proyecto suma en el consumo del cliente bajo "Sin proyecto" y no aparece en ningún reporte por proyecto.
+- **Corrección de cantidad desde el inventario** (US31): no lleva documento, pero sí motivo, usuario y un movimiento por la DIFERENCIA. Si la corrección deja el stock por debajo de lo comprometido por salidas PENDIENTE, esas salidas fallan al confirmarse con el mensaje de disponibilidad de siempre — es la respuesta correcta: la mercancía no está.
+- **Sistema sin nadie que administre** (US30): el super administrador conserva sus capacidades aunque la matriz de permisos quede vacía, porque no se resuelve contra ella.
 - **Ajuste de inventario** (US29): no lleva factura ni proveedor, pero sí motivo y número propio; sus movimientos son de AJUSTE DE ENTRADA para que no se confundan con una compra en el reporte de movimientos.
 - **Sesión expirada a mitad de un formulario**: al reintentar guardar, el sistema pide autenticarse de nuevo sin perder la información capturada o indicando claramente que debe recapturarse.
 - **Salida pendiente cuya disponibilidad desaparece** (otro usuario consumió el stock): al intentar confirmarla, se rechaza indicando el disponible actual.
@@ -736,6 +799,11 @@ que recordar por separado.
 - **FR-124**: Una salida DEBE estar vinculada obligatoriamente a un CLIENTE; el PROYECTO es OPCIONAL — hay entregas que son del cliente y no de una obra, y forzar un proyecto inventado corrompe el reporte de consumo (FR-039). La regla de destino válido (FR-038) aplica siempre al cliente y, cuando se elige proyecto, también a él y a su pertenencia a ese cliente. Las salidas registradas antes de esta historia conservan su proyecto.
 - **FR-125**: El reporte de consumo de un CLIENTE DEBE incluir lo entregado sin proyecto, agrupado aparte bajo "Sin proyecto" y sumado en el total del cliente; el reporte por PROYECTO trae solo lo de ese proyecto. Omitir ese consumo o repartirlo entre las obras falsearía las dos preguntas que el reporte responde.
 - **FR-126**: Un ingreso DEBE poder registrarse como AJUSTE DE INVENTARIO: sin número ni fecha de factura y sin proveedor, con MOTIVO obligatorio y con un correlativo propio que lo identifique (`AJU-000001`). Al recibirse DEBE generar movimientos de AJUSTE DE ENTRADA, no de ENTRADA, para que el historial distinga una compra de una corrección. El ingreso de tipo FACTURA mantiene TODAS sus reglas actuales: número único obligatorio, fecha de factura y proveedor.
+- **FR-127**: DEBE existir un rol SUPER ADMINISTRADOR cuya autorización NO se resuelva contra la matriz `roles_permisos`, sino contra su propia condición de rol: el servidor le concede cualquier permiso por SER ese rol. Es la diferencia entre un respaldo y una copia del problema — un rol "con todos los permisos" se queda sin ninguno en cuanto alguien vacía la matriz, que es justo el accidente del que protege.
+- **FR-128**: El rol super administrador NO DEBE poder crearse, renombrarse, editarse, desactivarse ni eliminarse desde la aplicación, ni ASIGNARSE a ningún usuario por la API: su única vía de asignación es la base de datos. Tampoco DEBE poder administrarse a un usuario que ya lo tenga —cambiarle el rol o el estado, restablecerle la contraseña— salvo por otro super administrador; de lo contrario bastaría con fijarle una contraseña conocida para entrar como él, y el respaldo dejaría de serlo.
+- **FR-129**: El despliegue DEBE poder crear el usuario super administrador sin intervención manual y sin que su contraseña viva en el repositorio: se toma de variables de entorno del servidor al arrancar. Si el usuario ya existe NO se toca (ni su contraseña ni su rol), y si las variables no están, el arranque continúa y lo deja anotado — un sistema que no arranca por falta de una llave de repuesto es peor que uno sin ella.
+- **FR-130**: El inventario DEBE permitir CORREGIR la cantidad de un producto directamente, sin documento de entrada ni de salida: se escribe la cantidad contada y el MOTIVO. La corrección DEBE ejecutarse dentro de la transacción del servicio de stock (Principio I) y registrar UN movimiento de AJUSTE_ENTRADA o AJUSTE_SALIDA por la DIFERENCIA, con su motivo y su usuario. No es una excepción a la trazabilidad: es la corrección que el Principio II ya exigía, con su propio tipo de documento. Corregir a la MISMA cantidad se rechaza —un movimiento de cero no dice nada—, y la cantidad sigue las reglas de FR-122 (entera, nunca negativa).
+- **FR-131**: Esa capacidad DEBE vivir en un permiso propio (`inventario.ajustar`), parametrizable como cualquier otro y concedido de inicio al Administrador, pero RESERVADO: solo un super administrador puede concederlo o retirarlo a un rol. Escribir el stock a mano es la única operación que puede desmentir a todos los documentos a la vez, así que quién la tiene no se decide con el mismo permiso que se usa para repartir el resto.
 
 **Auditoría y trazabilidad (transversal)**
 
@@ -745,7 +813,7 @@ que recordar por separado.
 
 ### Key Entities
 
-- **Usuario**: persona que opera el sistema; nombre completo, email, login, rol (Administrador/Gerente/Operario), estado activo/inactivo, fecha de creación. Referenciado por todos los registros que crea o autoriza.
+- **Usuario**: persona que opera el sistema; nombre completo, email, login, rol (Administrador/Gerente/Operario, más los roles propios de US9 y el SUPER ADMINISTRADOR de US30), estado activo/inactivo, fecha de creación. Referenciado por todos los registros que crea o autoriza.
 - **Producto**: artículo almacenable; SKU único, descripción, categoría (referencia OPCIONAL al catálogo de categorías, US15), ubicación en almacén, umbral de stock bajo, estado. Su stock se deriva de los movimientos.
 - **Categoría**: clasificación de productos administrada como catálogo (US15); nombre único ignorando mayúsculas y espacios, descripción opcional, estado activa/inactiva. Nunca se elimina si está en uso: se desactiva, para no despojar de su clasificación a los productos que la referencian.
 - **Proveedor**: empresa o persona a la que se compra la mercancía, administrada como catálogo (US15, FR-091); nombre único ignorando mayúsculas y espacios, datos de contacto opcionales (NIT, teléfono, email), estado activo/inactivo, y una marca de "del sistema" para el proveedor que usa la carga masiva (FR-093). Referenciado de forma OBLIGATORIA por cada ingreso.

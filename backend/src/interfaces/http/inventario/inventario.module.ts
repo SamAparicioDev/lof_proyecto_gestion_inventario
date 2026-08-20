@@ -15,6 +15,7 @@
  * precio, FR-072).
  */
 import { Module } from '@nestjs/common';
+import { CorregirCantidadCasoUso } from '../../../aplicacion/inventario/corregir-cantidad.caso-uso';
 import { FichaProductoCasoUso } from '../../../aplicacion/inventario/ficha-producto.caso-uso';
 import { HistorialCostosProductoCasoUso } from '../../../aplicacion/inventario/historial-costos-producto.caso-uso';
 import { HistorialProductoCasoUso } from '../../../aplicacion/inventario/historial-producto.caso-uso';
@@ -28,6 +29,7 @@ import { ControladorInventario } from './controlador-inventario';
   controllers: [ControladorInventario],
   providers: [
     ListarInventarioCasoUso,
+    CorregirCantidadCasoUso,
     OpcionesFiltroInventarioCasoUso,
     FichaProductoCasoUso,
     HistorialProductoCasoUso,

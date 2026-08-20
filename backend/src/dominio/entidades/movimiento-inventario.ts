@@ -19,8 +19,15 @@
  *  SALIDA/AJUSTE_SALIDA restan). Las anulaciones se registran como AJUSTE_* (FR-019/FR-032). */
 export type TipoMovimientoInventario = 'ENTRADA' | 'SALIDA' | 'AJUSTE_ENTRADA' | 'AJUSTE_SALIDA';
 
-/** Documento de origen del movimiento — FK lógico a `Ingreso.id` o `Salida.id` según este campo. */
-export type DocumentoTipoMovimiento = 'INGRESO' | 'SALIDA';
+/**
+ * Documento de origen del movimiento — FK lógico a `Ingreso.id` o `Salida.id` según este campo.
+ *
+ * `AJUSTE` (US31, FR-130) es el único que NO tiene documento: es la corrección de cantidad hecha
+ * desde el inventario para cuadrar con el conteo físico. Lo que la respalda es su `motivo`, que
+ * la aplicación exige — por eso `documentoId` es `null` exactamente en este caso, y la base lo
+ * fuerza como equivalencia (`movimientos_documento_ajuste_check`).
+ */
+export type DocumentoTipoMovimiento = 'INGRESO' | 'SALIDA' | 'AJUSTE';
 
 export interface MovimientoInventario {
   readonly id: number;
@@ -31,7 +38,8 @@ export interface MovimientoInventario {
   /** Snapshot de `stock_actual` inmediatamente después de este movimiento (auditoría). */
   readonly stockResultante: number;
   readonly documentoTipo: DocumentoTipoMovimiento;
-  readonly documentoId: number;
+  /** `null` Únicamente cuando `documentoTipo === 'AJUSTE'` (US31, FR-130). */
+  readonly documentoId: number | null;
   /** `null` salvo cuando `documentoTipo === 'SALIDA'` (FR-042: todo movimiento de salida
    *  queda vinculado a su proyecto para el reporte de consumo). */
   readonly proyectoId: number | null;

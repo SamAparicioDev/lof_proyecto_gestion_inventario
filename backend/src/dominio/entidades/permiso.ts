@@ -54,6 +54,33 @@ export const PERMISOS_CRITICOS_DE_ADMINISTRACION: readonly ClavePermiso[] = [
   PERMISO_GESTION_USUARIOS,
 ];
 
+/**
+ * Permiso que habilita CORREGIR a mano la cantidad de un producto (US31, FR-130). Tiene nombre
+ * propio porque es el único RESERVADO (ver `PERMISOS_RESERVADOS`).
+ */
+export const PERMISO_AJUSTAR_INVENTARIO: ClavePermiso = 'inventario.ajustar';
+
+/**
+ * Permisos que solo un SUPER ADMINISTRADOR puede conceder o retirar a un rol (US31, FR-131).
+ *
+ * Por qué existe la categoría: escribir el stock a mano es la única operación del sistema que
+ * puede desmentir a todos los documentos a la vez. Un ingreso mal registrado se anula y deja
+ * rastro; una cantidad escrita a mano reemplaza el resultado de toda la historia de movimientos
+ * de ese producto. Quién puede hacer eso no debería decidirse con el mismo permiso que reparte
+ * todo lo demás — si `roles.gestionar` bastara, cualquiera que lo tenga podría concedérselo.
+ *
+ * Por qué vive en el código y no en una columna: es una propiedad del SIGNIFICADO del permiso,
+ * no un dato de operación. Si fuera editable, quitarle la reserva sería el primer paso para
+ * saltarse la regla, y la protección solo detendría a quien no supiera dónde mirar.
+ *
+ * La comprueba `ActualizarRolCasoUso` sobre la DIFERENCIA entre los permisos que el rol tenía y
+ * los que se le envían: un cuerpo que no toca la casilla pasa sin más, tenga quien lo mande el
+ * rango que tenga.
+ *
+ * Implementa: FR-131.
+ */
+export const PERMISOS_RESERVADOS: readonly ClavePermiso[] = [PERMISO_AJUSTAR_INVENTARIO];
+
 /** Permiso del catálogo del sistema (FR-056). */
 export interface Permiso {
   readonly id: number;

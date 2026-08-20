@@ -41,6 +41,7 @@ import {
   exigirQueSigaHabiendoUnRolActivoQueConceda,
 } from '../comunes/proteccion-capacidad-administrativa';
 import { EstadoInvalido, NoEncontrado } from '../../dominio/comunes/errores';
+import { exigirQueNoSeaElRolDeRespaldo } from '../comunes/respaldo-del-sistema';
 import { PERMISOS_CRITICOS_DE_ADMINISTRACION } from '../../dominio/entidades/permiso';
 import type { EstadoRol } from '../../dominio/entidades/rol';
 import { REPOSITORIO_ROLES, type RepositorioRoles } from '../../dominio/puertos/repositorio-roles';
@@ -60,6 +61,8 @@ export class CambiarEstadoRolCasoUso implements CasoDeUso<CambiarEstadoRolEntrad
     if (!rol) {
       throw new NoEncontrado('El rol');
     }
+
+    exigirQueNoSeaElRolDeRespaldo(rol, 'activar ni desactivar');
 
     if (rol.esSistema) {
       throw new EstadoInvalido(

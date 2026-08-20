@@ -58,6 +58,16 @@ type RolConPermisosYConteo = Prisma.RolGetPayload<{ include: typeof INCLUIR_PERM
 export class RepositorioRolesPrisma implements RepositorioRoles {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** El rol de respaldo, buscado por su COLUMNA — nunca por nombre (US30, FR-127). El índice
+   *  único parcial garantiza que como mucho hay uno. */
+  async buscarRolDeRespaldo(): Promise<Rol | null> {
+    const registro = await this.prisma.rol.findFirst({
+      where: { esSuperAdmin: true },
+      include: INCLUIR_PERMISOS_DEL_ROL,
+    });
+    return registro ? aRolDominio(registro) : null;
+  }
+
   async listar(filtros: FiltrosListarRoles): Promise<PaginaRoles> {
     const where = construirWhereListarRoles(filtros);
     const [registros, total] = await this.prisma.$transaction([
@@ -185,6 +195,7 @@ export function aRolDominio(registro: RolConPermisos): Rol {
     nombre: registro.nombre,
     descripcion: registro.descripcion,
     esSistema: registro.esSistema,
+    esSuperAdmin: registro.esSuperAdmin,
     estado: mapearEstado(registro.estado),
     permisos: registro.permisos.map((fila) => fila.permiso.clave),
   };

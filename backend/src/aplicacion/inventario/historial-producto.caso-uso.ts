@@ -27,6 +27,7 @@
  */
 import { Inject, Injectable } from '@nestjs/common';
 import type { CasoDeUso } from '../comunes/caso-de-uso';
+import { idsDeDocumento, textoDocumentoMovimiento } from '../comunes/documento-de-movimiento';
 import type {
   DocumentoTipoMovimiento,
   MovimientoInventario,
@@ -56,7 +57,8 @@ export interface MovimientoHistorialProducto {
   readonly cantidad: number;
   readonly stockResultante: number;
   readonly documentoTipo: DocumentoTipoMovimiento;
-  readonly documentoId: number;
+  /** `null` en los AJUSTE (US31, FR-130): no hay documento que referenciar. */
+  readonly documentoId: number | null;
   /** Número de factura (INGRESO) o número de salida (SALIDA); el id crudo si el documento
    *  original ya no se encuentra. */
   readonly numeroDocumento: string;
@@ -107,7 +109,7 @@ export class HistorialProductoCasoUso implements CasoDeUso<HistorialProductoEntr
         stockResultante: movimiento.stockResultante,
         documentoTipo: movimiento.documentoTipo,
         documentoId: movimiento.documentoId,
-        numeroDocumento: numerosDocumento.get(claveDocumento(movimiento)) ?? String(movimiento.documentoId),
+        numeroDocumento: textoDocumentoMovimiento(movimiento, numerosDocumento),
         usuarioId: movimiento.usuarioId,
         usuarioNombre: nombresUsuario.get(movimiento.usuarioId) ?? `Usuario N.º ${movimiento.usuarioId}`,
         proyectoId: movimiento.proyectoId,
@@ -125,8 +127,8 @@ export class HistorialProductoCasoUso implements CasoDeUso<HistorialProductoEntr
   /** Números de factura/salida en lote: un `buscarPorId` por id ÚNICO de cada tipo de
    *  documento, en paralelo — nunca uno por movimiento individual. */
   private async resolverNumerosDocumento(movimientos: readonly MovimientoInventario[]): Promise<Map<string, string>> {
-    const idsIngreso = idsUnicos(movimientos.filter((m) => m.documentoTipo === 'INGRESO').map((m) => m.documentoId));
-    const idsSalida = idsUnicos(movimientos.filter((m) => m.documentoTipo === 'SALIDA').map((m) => m.documentoId));
+    const idsIngreso = idsUnicos(idsDeDocumento(movimientos, 'INGRESO'));
+    const idsSalida = idsUnicos(idsDeDocumento(movimientos, 'SALIDA'));
 
     const [ingresos, salidas] = await Promise.all([
       Promise.all(idsIngreso.map((id) => this.repositorioIngresos.buscarPorId(id))),
@@ -179,9 +181,3 @@ function idsUnicos(ids: readonly number[]): number[] {
   return [...new Set(ids)];
 }
 
-/** Clave compuesta `documentoTipo:documentoId` — dos tipos de documento pueden compartir el
- *  mismo `documentoId` numérico (un `Ingreso.id=5` y una `Salida.id=5` son documentos
- *  distintos), así que el mapa de números de documento no puede indexar solo por id. */
-function claveDocumento(movimiento: Pick<MovimientoInventario, 'documentoTipo' | 'documentoId'>): string {
-  return `${movimiento.documentoTipo}:${movimiento.documentoId}`;
-}

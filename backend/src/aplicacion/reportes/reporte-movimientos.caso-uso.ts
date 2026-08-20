@@ -38,6 +38,11 @@
  */
 import { Inject, Injectable } from '@nestjs/common';
 import type { CasoDeUso } from '../comunes/caso-de-uso';
+import {
+  claveDocumentoMovimiento,
+  idsDeDocumento,
+  textoDocumentoMovimiento,
+} from '../comunes/documento-de-movimiento';
 import type { Cliente } from '../../dominio/entidades/cliente';
 import type {
   DocumentoTipoMovimiento,
@@ -184,25 +189,21 @@ export class ReporteMovimientosCasoUso implements CasoDeUso<ReporteMovimientosEn
    *  independientes). Mismo criterio de "un id único por llamada, emparejado dentro del `map`"
    *  que `resolverUsuarios`: ninguno de los dos puertos expone lectura en lote. */
   private async resolverDocumentos(movimientos: readonly MovimientoInventario[]): Promise<Map<string, string>> {
-    const idsIngreso = [
-      ...new Set(movimientos.filter((movimiento) => movimiento.documentoTipo === 'INGRESO').map((movimiento) => movimiento.documentoId)),
-    ];
-    const idsSalida = [
-      ...new Set(movimientos.filter((movimiento) => movimiento.documentoTipo === 'SALIDA').map((movimiento) => movimiento.documentoId)),
-    ];
+    const idsIngreso = [...new Set(idsDeDocumento(movimientos, 'INGRESO'))];
+    const idsSalida = [...new Set(idsDeDocumento(movimientos, 'SALIDA'))];
 
     const [paresIngreso, paresSalida] = await Promise.all([
       Promise.all(
         idsIngreso.map(async (id): Promise<readonly [string, string] | null> => {
           const ingreso = await this.repositorioIngresos.buscarPorId(id);
           // US29 (FR-126): `AJU-000042` cuando el movimiento viene de un ajuste.
-          return ingreso ? ([claveDocumento('INGRESO', id), identificadorIngreso(ingreso)] as const) : null;
+          return ingreso ? ([claveDocumentoMovimiento('INGRESO', id), identificadorIngreso(ingreso)] as const) : null;
         }),
       ),
       Promise.all(
         idsSalida.map(async (id): Promise<readonly [string, string] | null> => {
           const salida = await this.repositorioSalidas.buscarPorId(id);
-          return salida ? ([claveDocumento('SALIDA', id), String(salida.numero)] as const) : null;
+          return salida ? ([claveDocumentoMovimiento('SALIDA', id), String(salida.numero)] as const) : null;
         }),
       ),
     ]);
@@ -243,10 +244,6 @@ export class ReporteMovimientosCasoUso implements CasoDeUso<ReporteMovimientosEn
   }
 }
 
-/** Clave compuesta para el mapa de documentos resueltos — ver TSDoc de `resolverDocumentos`. */
-function claveDocumento(tipo: DocumentoTipoMovimiento, id: number): string {
-  return `${tipo}:${id}`;
-}
 
 /** Descarta los pares `[id, valor]` cuyo `buscarPorId` no encontró nada (`null`) — helper
  *  compartido por los cuatro resolvers de lote de esta clase. */
@@ -274,7 +271,7 @@ function construirFila(
     cantidad: movimiento.cantidad,
     documento: {
       tipo: movimiento.documentoTipo,
-      numero: documentos.get(claveDocumento(movimiento.documentoTipo, movimiento.documentoId)) ?? `N.º ${movimiento.documentoId}`,
+      numero: textoDocumentoMovimiento(movimiento, documentos),
     },
     producto: producto
       ? { sku: producto.sku, descripcion: producto.descripcion }

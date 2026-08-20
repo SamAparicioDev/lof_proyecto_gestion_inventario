@@ -9,6 +9,8 @@
  *
  * Invariantes de negocio que protegen a la organización de quedarse sin quién la administre
  * (FR-057) — se verifican en los casos de uso de `aplicacion/roles/` (T105), no aquí:
+ * - un rol con `esSuperAdmin = true` no se edita, desactiva, elimina ni asigna desde la API
+ *   (US30, FR-128): es el respaldo, y la única vía para asignarlo es la base de datos;
  * - un rol con `esSistema = true` no se elimina ni se renombra;
  * - un rol con usuarios asignados no se elimina (se desactiva);
  * - no se puede quitar `roles.gestionar` del ÚLTIMO rol activo que lo tiene.
@@ -30,6 +32,18 @@ export interface Rol {
   readonly descripcion: string | null;
   /** `true` en Administrador/Gerente/Operario — sembrados por la migración (FR-059). */
   readonly esSistema: boolean;
+  /**
+   * `true` SOLO en el rol de respaldo (US30, FR-127). Su autorización no se resuelve contra
+   * `permisos`: `PermisosGuard` le concede cualquier permiso por esta bandera, y por eso el rol
+   * no tiene filas en `roles_permisos` — un rol "con todos los permisos" se quedaría sin ninguno
+   * en cuanto alguien vaciara la matriz, que es justo el accidente del que protege.
+   *
+   * Consecuencia deliberada: `permisos` viene VACÍO para este rol, y eso no significa que no
+   * pueda nada. Ninguna decisión de autorización debe leerse de esa lista sin mirar antes esta
+   * bandera — el guard es el único sitio que lo hace, y la sesión recibe el catálogo completo
+   * para que la interfaz sepa qué ofrecer (`GET /api/auth/perfil`).
+   */
+  readonly esSuperAdmin: boolean;
   readonly estado: EstadoRol;
   readonly permisos: readonly ClavePermiso[];
 }

@@ -27,17 +27,20 @@
  * ficha del producto) y FR-058 (la autorización se resuelve contra el permiso efectivo del
  * rol, nunca contra un nombre de rol fijo en el código).
  */
-import { Controller, Get, Param, ParseIntPipe, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseIntPipe, Put, Query } from '@nestjs/common';
 import {
+  esquemaCorregirCantidad,
   esquemaFiltroHistorialCostos,
   esquemaFiltroInventario,
   esquemaFiltroMovimientos,
+  type DatosCorregirCantidad,
   type FiltroHistorialCostos,
   type FiltroInventario,
   type FiltroMovimientos,
   type OpcionesFiltroInventario,
   type Paginado,
 } from '@trazo/compartido';
+import { CorregirCantidadCasoUso } from '../../../aplicacion/inventario/corregir-cantidad.caso-uso';
 import { FichaProductoCasoUso } from '../../../aplicacion/inventario/ficha-producto.caso-uso';
 import type { FilaInventario } from '../../../aplicacion/inventario/fila-inventario';
 import {
@@ -50,8 +53,10 @@ import {
 } from '../../../aplicacion/inventario/historial-producto.caso-uso';
 import { ListarInventarioCasoUso } from '../../../aplicacion/inventario/listar-inventario.caso-uso';
 import { OpcionesFiltroInventarioCasoUso } from '../../../aplicacion/inventario/opciones-filtro-inventario.caso-uso';
+import type { Usuario } from '../../../dominio/entidades/usuario';
 import { PipeValidacionZod } from '../comunes/pipe-validacion-zod';
 import { RequierePermiso } from '../comunes/requiere-permiso.decorator';
+import { UsuarioActual } from '../comunes/usuario-actual.decorator';
 
 @Controller('inventario')
 export class ControladorInventario {
@@ -61,6 +66,7 @@ export class ControladorInventario {
     private readonly fichaProducto: FichaProductoCasoUso,
     private readonly historialProducto: HistorialProductoCasoUso,
     private readonly historialCostosProducto: HistorialCostosProductoCasoUso,
+    private readonly corregirCantidadCasoUso: CorregirCantidadCasoUso,
   ) {}
 
   /** `GET /api/inventario?buscar=&soloStockBajo=&categoria=&ubicacion=&estado=&disponibleMin=&disponibleMax=`
@@ -136,6 +142,32 @@ export class ControladorInventario {
    *
    * Permiso propio `inventario.ver_costos` (A,G) — ver TSDoc de la clase.
    */
+  /**
+   * `PUT /api/inventario/:productoId/cantidad` — corrige el stock al valor CONTADO (US31,
+   * FR-130), sin documento de entrada ni de salida.
+   *
+   * Exige `inventario.ajustar`, un permiso RESERVADO (FR-131): existe aparte de `inventario.ver`
+   * porque escribir el stock a mano es la única operación capaz de desmentir a todos los
+   * documentos a la vez, y solo un super administrador puede concedérselo a un rol.
+   *
+   * `204` sin cuerpo: la pantalla recarga el inventario, que es donde se ve el resultado.
+   */
+  @Put(':productoId/cantidad')
+  @RequierePermiso('inventario.ajustar')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async corregirCantidad(
+    @Param('productoId', ParseIntPipe) productoId: number,
+    @Body(new PipeValidacionZod(esquemaCorregirCantidad)) datos: DatosCorregirCantidad,
+    @UsuarioActual() usuarioActual: Usuario,
+  ): Promise<void> {
+    await this.corregirCantidadCasoUso.ejecutar({
+      productoId,
+      cantidad: datos.cantidad,
+      motivo: datos.motivo,
+      usuarioId: usuarioActual.id,
+    });
+  }
+
   @Get(':productoId/historial-costos')
   @RequierePermiso('inventario.ver_costos')
   async historialCostos(

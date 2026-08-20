@@ -39,6 +39,7 @@
  * (nadie puede repartir la capacidad de administrar el sistema saltándose sus invariantes).
  */
 import { ErrorValidacionDominio } from '../../dominio/comunes/errores';
+import { exigirQueElRolSeaAsignable } from '../comunes/respaldo-del-sistema';
 import type { ClavePermiso } from '../../dominio/entidades/permiso';
 import type { Rol } from '../../dominio/entidades/rol';
 import type { RepositorioRoles } from '../../dominio/puertos/repositorio-roles';
@@ -60,12 +61,19 @@ export async function exigirRolAsignable(
   repositorioRoles: RepositorioRoles,
   rolId: number,
   permisosDelActor: readonly ClavePermiso[],
+  actorEsSuperAdmin = false,
 ): Promise<Rol> {
   const rol = await repositorioRoles.buscarPorId(rolId);
   if (!rol) {
     throw new ErrorValidacionDominio(MENSAJE_ROL_INEXISTENTE, { rolId: MENSAJE_ROL_INEXISTENTE });
   }
-  exigirQueNoConcedaMasDeLoQueTiene(rol, permisosDelActor);
+  // US30 (FR-128): el respaldo NO se asigna por la API — ni por un administrador ni por otro
+  // super administrador. La única vía es la base de datos, y eso es justo lo que lo hace fiable:
+  // ninguna sesión comprometida puede repartirlo.
+  exigirQueElRolSeaAsignable(rol);
+  if (!actorEsSuperAdmin) {
+    exigirQueNoConcedaMasDeLoQueTiene(rol, permisosDelActor);
+  }
   return rol;
 }
 
@@ -104,7 +112,11 @@ function exigirQueNoConcedaMasDeLoQueTiene(rol: Rol, permisosDelActor: readonly 
 export function exigirQueElObjetivoNoTengaMasPermisos(
   rolDelObjetivo: Rol,
   permisosDelActor: readonly ClavePermiso[],
+  actorEsSuperAdmin = false,
 ): void {
+  if (actorEsSuperAdmin) {
+    return;
+  }
   const permisosQueNoTienes = rolDelObjetivo.permisos.filter((permiso) => !permisosDelActor.includes(permiso));
   if (permisosQueNoTienes.length === 0) {
     return;

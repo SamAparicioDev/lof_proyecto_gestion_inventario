@@ -34,6 +34,9 @@
 export const PERMISOS = {
   INVENTARIO_VER: 'inventario.ver',
   INVENTARIO_VER_COSTOS: 'inventario.ver_costos',
+  // US31 (FR-131): permiso RESERVADO — habilita escribir el stock a mano, y solo un super
+  // administrador puede concedérselo a un rol.
+  INVENTARIO_AJUSTAR: 'inventario.ajustar',
 
   PRODUCTOS_CREAR: 'productos.crear',
   PRODUCTOS_EDITAR: 'productos.editar',

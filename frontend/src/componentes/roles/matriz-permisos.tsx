@@ -47,9 +47,24 @@ interface PropiedadesMatrizPermisos {
   onCambiar: (seleccionados: number[]) => void;
   /** Deshabilita toda la matriz mientras el diálogo está enviando. */
   deshabilitada?: boolean;
+  /**
+   * Claves de permiso RESERVADAS que esta sesión no puede mover (US31, FR-131). Se pintan igual
+   * que las demás — con su estado real — pero bloqueadas y con la razón al lado: esconderlas
+   * dejaría al Administrador sin entender por qué un rol concede algo que él no ve en la lista.
+   *
+   * Vacío para un super administrador, que sí puede moverlas. Esto es UX: el servidor rechaza el
+   * cambio igual aunque alguien fuerce la casilla (FR-003).
+   */
+  reservadas?: readonly string[];
 }
 
-export function MatrizPermisos({ catalogo, seleccionados, onCambiar, deshabilitada = false }: PropiedadesMatrizPermisos) {
+export function MatrizPermisos({
+  catalogo,
+  seleccionados,
+  onCambiar,
+  deshabilitada = false,
+  reservadas = [],
+}: PropiedadesMatrizPermisos) {
   const marcados = new Set(seleccionados);
 
   function alternarPermiso(id: number, marcado: boolean): void {
@@ -90,6 +105,7 @@ export function MatrizPermisos({ catalogo, seleccionados, onCambiar, deshabilita
           grupo={grupo}
           marcados={marcados}
           deshabilitada={deshabilitada}
+          reservadas={reservadas}
           onAlternarPermiso={alternarPermiso}
           onAlternarModulo={alternarModulo}
         />
@@ -102,12 +118,14 @@ function GrupoModulo({
   grupo,
   marcados,
   deshabilitada,
+  reservadas,
   onAlternarPermiso,
   onAlternarModulo,
 }: {
   grupo: ModuloPermisos;
   marcados: Set<number>;
   deshabilitada: boolean;
+  reservadas: readonly string[];
   onAlternarPermiso: (id: number, marcado: boolean) => void;
   onAlternarModulo: (grupo: ModuloPermisos, marcado: boolean) => void;
 }) {
@@ -153,7 +171,7 @@ function GrupoModulo({
             <input
               type="checkbox"
               checked={marcados.has(permiso.id)}
-              disabled={deshabilitada}
+              disabled={deshabilitada || reservadas.includes(permiso.clave)}
               onChange={(evento: ChangeEvent<HTMLInputElement>) => onAlternarPermiso(permiso.id, evento.target.checked)}
               style={{ marginTop: 3 }}
             />

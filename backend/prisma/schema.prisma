@@ -208,6 +208,9 @@ enum TipoIngreso {
 enum DocumentoTipo {
   INGRESO
   SALIDA
+  /// US31 (FR-130): corrección de cantidad hecha desde el inventario. No la respalda ningún
+  /// documento — la respalda su `motivo`, que la aplicación exige.
+  AJUSTE
 
   @@map("documento_tipo")
 }
@@ -238,11 +241,17 @@ enum OrigenCambioCosto {
  * nunca DELETE — un rol eliminado dejaría usuarios sin rol.
  */
 model Rol {
-  id          BigInt    @id @default(autoincrement())
-  nombre      String    @unique @db.VarChar(50)
-  descripcion String?   @db.VarChar(200)
-  esSistema   Boolean   @default(false) @map("es_sistema")
-  estado      EstadoRol @default(ACTIVO)
+  id           BigInt    @id @default(autoincrement())
+  nombre       String    @unique @db.VarChar(50)
+  descripcion  String?   @db.VarChar(200)
+  esSistema    Boolean   @default(false) @map("es_sistema")
+  /// US30 (FR-127): rol de RESPALDO. Su autorización NO se resuelve contra `roles_permisos` —
+  /// `PermisosGuard` le concede cualquier permiso por esta columna —, y por eso el rol no tiene
+  /// filas en esa tabla: un rol "con todos los permisos" se quedaría sin ninguno en cuanto
+  /// alguien la vaciara, que es justo el accidente del que protege. Índice único parcial: nunca
+  /// dos. Solo se asigna con un UPDATE directo sobre `usuarios.rol_id`.
+  esSuperAdmin Boolean   @default(false) @map("es_super_admin")
+  estado       EstadoRol @default(ACTIVO)
 
   usuarios Usuario[]
   permisos RolPermiso[]
@@ -921,8 +930,11 @@ model MovimientoInventario {
   documentoTipo   DocumentoTipo  @map("documento_tipo")
   /**
    * FK lógico (no declarado a nivel de BD) al `Ingreso.id` o `Salida.id` según documentoTipo.
+   * NULL Únicamente cuando `documentoTipo = AJUSTE` (US31, FR-130): esa corrección no nace de
+   * ningún documento. El `CHECK movimientos_documento_ajuste_check` lo expresa como equivalencia
+   * — ni un ingreso/salida huérfano ni un ajuste que finja tener documento.
    */
-  documentoId     BigInt         @map("documento_id")
+  documentoId     BigInt?        @map("documento_id")
   proyectoId      BigInt?        @map("proyecto_id")
   proyecto        Proyecto?      @relation(fields: [proyectoId], references: [id])
   usuarioId       BigInt         @map("usuario_id")

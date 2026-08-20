@@ -1,7 +1,7 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 1.1.0 → 2.0.0 (MAJOR: el Principio II deja de exigir proyecto en toda salida)
+Version change: 2.0.0 → 2.1.0 (MINOR: el Principio III gana el rol de respaldo del sistema)
 Modified principles (v2.0.0, 2026-08-18 — decisión explícita del dueño del proyecto):
   - II. Trazabilidad Total → el destino obligatorio de una salida es el CLIENTE; el proyecto
     pasa a ser opcional (antes: "vinculada obligatoriamente a un cliente y a un proyecto
@@ -27,8 +27,18 @@ Templates requiring updates:
   - specs/001-gestion-inventarios/contracts/api-rest.md ✅ salidas, ingresos y export de salida
 Follow-up TODOs: ninguno
 
+Enmienda v2.1.0 (2026-08-19 — decisión explícita del dueño del proyecto, tras un incidente
+real de bloqueo administrativo):
+  - III. Control de Acceso por Roles → se añade el SUPER ADMINISTRADOR, rol de respaldo cuya
+    autorización NO se resuelve contra la matriz de permisos y que solo puede asignarse desde la
+    base de datos (FR-127/FR-128). Es MINOR y no MAJOR: no redefine ninguna regla anterior — los
+    tres roles siguen existiendo con el mismo significado y toda ruta se sigue autorizando en el
+    servidor. Lo que añade es una salida de emergencia para el caso en que la propia matriz de
+    permisos quede inservible, que ya ocurrió.
+
 Historial: v1.0.0 ratificada 2026-08-10 (5 principios iniciales); v1.1.0 el 2026-08-10
-(Principio VI, arquitectura hexagonal); v2.0.0 el 2026-08-18 (proyecto opcional en salidas).
+(Principio VI, arquitectura hexagonal); v2.0.0 el 2026-08-18 (proyecto opcional en salidas);
+v2.1.0 el 2026-08-19 (rol de respaldo).
 -->
 
 # Trazo Constitution
@@ -88,10 +98,24 @@ El acceso al sistema DEBE estar controlado por autenticación y roles.
 
 - Roles del sistema: **Administrador** (gestión total, incluidos usuarios), **Gerente**
   (operación completa de inventario, clientes, proyectos y reportes) y **Operario**
-  (registro de entradas/salidas y consultas básicas).
+  (registro de entradas/salidas y consultas básicas). Desde US9 se pueden crear roles propios
+  con su matriz de permisos.
+- **Super administrador (respaldo del sistema, v2.1.0)**: un rol cuya autorización NO se resuelve
+  contra la matriz `roles_permisos` sino contra su propia condición de rol, y que SOLO puede
+  asignarse desde la base de datos. No se crea, edita, desactiva ni elimina desde la aplicación,
+  y a un usuario que lo tenga solo puede administrarlo otro super administrador. Existe porque un
+  respaldo que se pueda romper con la misma operación de la que protege no es un respaldo: si sus
+  capacidades vinieran de filas en una tabla, vaciar esa tabla lo dejaría tan bloqueado como al
+  resto. Esto NO relaja el principio — la autorización sigue verificándose en el servidor en
+  cada petición; lo que cambia es contra qué se compara para este único rol.
 - Toda ruta/endpoint del sistema DEBE verificar autenticación y autorización en el
   servidor; ocultar botones en la interfaz no constituye control de acceso.
-- Las contraseñas DEBEN almacenarse con hash criptográfico (nunca en texto plano).
+- Las contraseñas DEBEN almacenarse con hash criptográfico (nunca en texto plano) y NUNCA
+  DEBEN vivir en el repositorio: las credenciales del super administrador se toman de variables
+  de entorno del servidor al desplegar (FR-129).
+- Las capacidades que pueden desmentir a los documentos —hoy solo corregir el stock a mano,
+  FR-130— viven en permisos RESERVADOS: parametrizables como cualquier otro, pero solo el super
+  administrador los concede o los retira (FR-131).
 - Los usuarios se desactivan, no se eliminan, para preservar la integridad referencial
   del historial de movimientos (Principio II).
 
@@ -213,4 +237,4 @@ tecnología.
 - **Revisión de cumplimiento**: cada `plan.md` debe pasar el Constitution Check; cada
   revisión de código debe verificar los principios I–IV en el código tocado.
 
-**Version**: 2.0.0 | **Ratified**: 2026-08-10 | **Last Amended**: 2026-08-18
+**Version**: 2.1.0 | **Ratified**: 2026-08-10 | **Last Amended**: 2026-08-19

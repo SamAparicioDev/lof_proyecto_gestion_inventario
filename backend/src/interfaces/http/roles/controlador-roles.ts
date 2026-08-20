@@ -108,7 +108,11 @@ export class ControladorRoles {
     @Body(new PipeValidacionZod(esquemaCrearRol)) datos: DatosCrearRol,
     @UsuarioActual() usuarioActual: Usuario,
   ): Promise<{ id: number }> {
-    return this.crearRol.ejecutar({ ...datos, permisosDelActor: usuarioActual.rolAsignado.permisos });
+    return this.crearRol.ejecutar({
+      ...datos,
+      permisosDelActor: usuarioActual.rolAsignado.permisos,
+      actorEsSuperAdmin: usuarioActual.rolAsignado.esSuperAdmin,
+    });
   }
 
   /** `PUT /api/roles/:id` — nombre, descripción y matriz COMPLETA de permisos (FR-055/FR-057). */
@@ -123,6 +127,7 @@ export class ControladorRoles {
       rolId: id,
       ...datos,
       permisosDelActor: usuarioActual.rolAsignado.permisos,
+      actorEsSuperAdmin: usuarioActual.rolAsignado.esSuperAdmin,
     });
   }
 
@@ -157,6 +162,9 @@ function aRolDetalleApi(rol: Rol): RolDetalle {
     nombre: rol.nombre,
     descripcion: rol.descripcion,
     esSistema: rol.esSistema,
+    // US30 (FR-127): la pantalla lo necesita para pintarlo como protegido y para saber si quien
+    // mira puede mover una casilla reservada (FR-131).
+    esSuperAdmin: rol.esSuperAdmin,
     estado: rol.estado,
     permisos: [...rol.permisos],
   };

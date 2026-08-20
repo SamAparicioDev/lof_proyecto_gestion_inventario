@@ -42,9 +42,21 @@ import {
 } from '@trazo/compartido';
 import { actualizarRol, crearRol } from '@/lib/api/roles';
 import { ErrorApi } from '@/lib/api/cliente';
+import { PERMISOS } from '@/lib/permisos';
+import { useUsuario } from '@/lib/sesion';
 import { MatrizPermisos } from './matriz-permisos';
 
 const MENSAJE_ERROR_RED = 'No fue posible comunicarse con el servidor. Intenta de nuevo.';
+
+/**
+ * Permisos RESERVADOS (US31, FR-131): solo un super administrador los concede o los retira.
+ *
+ * La lista replica la del dominio (`PERMISOS_RESERVADOS` en
+ * `backend/src/dominio/entidades/permiso.ts`) — el backend no puede importar código del
+ * frontend, así que ambos lados la escriben. El servidor es el que manda: quien fuerce la
+ * casilla desde el navegador recibe un `409` igual (FR-003).
+ */
+const PERMISOS_RESERVADOS: readonly string[] = [PERMISOS.INVENTARIO_AJUSTAR];
 
 /** Campos de formulario a los que tiene sentido anclar un error de `ErrorApi.campos`. */
 const CAMPOS_VALIDOS = new Set<keyof DatosCrearRol>(['nombre', 'descripcion', 'permisoIds']);
@@ -62,6 +74,10 @@ export function RolForm({ catalogo, rol, onCerrar, onGuardado }: PropiedadesRolF
   const editando = rol !== undefined;
   const [errorGeneral, setErrorGeneral] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+  // US31 (FR-131): un super administrador sí puede mover la casilla reservada; el resto la ve
+  // con su estado real pero bloqueada, con la razón al lado (es UX — el servidor decide).
+  const perfil = useUsuario();
+  const reservadasParaEstaSesion = perfil.esSuperAdmin ? [] : PERMISOS_RESERVADOS;
   const [permisoIds, setPermisoIds] = useState<number[]>(() => idsDePermisosDelRol(catalogo, rol));
 
   const {
@@ -185,6 +201,7 @@ export function RolForm({ catalogo, rol, onCerrar, onGuardado }: PropiedadesRolF
             seleccionados={permisoIds}
             onCambiar={setPermisoIds}
             deshabilitada={enviando}
+            reservadas={reservadasParaEstaSesion}
           />
 
           {errorGeneral && (

@@ -83,8 +83,9 @@ export interface CambioCostoProducto {
 /** Máquina simple de un movimiento de inventario (data-model.md `movimientos_inventario`). */
 export type TipoMovimientoInventario = 'ENTRADA' | 'SALIDA' | 'AJUSTE_ENTRADA' | 'AJUSTE_SALIDA';
 
-/** Documento de origen de un movimiento — determina cómo se resuelve `numeroDocumento`. */
-export type DocumentoTipoMovimiento = 'INGRESO' | 'SALIDA';
+/** Documento de origen de un movimiento — determina cómo se resuelve `numeroDocumento`.
+ *  `AJUSTE` (US31, FR-130) no tiene documento: es la corrección hecha desde el inventario. */
+export type DocumentoTipoMovimiento = 'INGRESO' | 'SALIDA' | 'AJUSTE';
 
 /** Fila de `GET /api/inventario/:productoId/movimientos` — movimiento ya enriquecido con
  *  nombres legibles (no ids crudos) por `HistorialProductoCasoUso` (FR-024/FR-045). */
@@ -95,8 +96,10 @@ export interface MovimientoHistorialProducto {
   cantidad: number;
   stockResultante: number;
   documentoTipo: DocumentoTipoMovimiento;
-  documentoId: number;
-  /** Número de factura (INGRESO) o número de salida (SALIDA); el id crudo si el documento ya no existe. */
+  /** `null` en los AJUSTE (US31): esa corrección no nació de ningún documento. */
+  documentoId: number | null;
+  /** Número de factura (INGRESO) o de salida (SALIDA); `"Ajuste de inventario"` en los AJUSTE;
+   *  el id crudo si el documento ya no existe. */
   numeroDocumento: string;
   usuarioId: number;
   /** `nombreCompleto` de quien ejecutó el movimiento; `"Usuario N.º {id}"` si no se encuentra. */

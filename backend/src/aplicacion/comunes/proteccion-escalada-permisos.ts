@@ -44,7 +44,13 @@ export function exigirQueNoConcedaPermisosQueNoTiene(
   permisoIdsSolicitados: readonly number[],
   catalogo: readonly Permiso[],
   permisosDelActor: readonly ClavePermiso[],
+  actorEsSuperAdmin = false,
 ): void {
+  // US30 (FR-127): el respaldo concede cualquier permiso, y su lista está vacía a propósito —
+  // sin esta salida, la regla anti-escalada le impediría crear un rol con un solo permiso.
+  if (actorEsSuperAdmin) {
+    return;
+  }
   const solicitados = catalogo.filter((permiso) => permisoIdsSolicitados.includes(permiso.id));
   const queNoTiene = solicitados
     .map((permiso) => permiso.clave)
