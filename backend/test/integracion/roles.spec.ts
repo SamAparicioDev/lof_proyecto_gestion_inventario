@@ -117,6 +117,23 @@ describe('Roles y permisos — /api/roles y /api/permisos (T109)', () => {
     return iniciarSesion(servidor(), admin.login, admin.password);
   }
 
+  /**
+   * Sesión del SUPER ADMINISTRADOR (US30/US32). El rol de respaldo lo siembra la migración y solo
+   * se asigna desde la base, que es justo lo que hace esta función: el mismo camino que un
+   * operador real. Hace falta aquí porque desde US32 `roles.gestionar` es un permiso RESERVADO y
+   * un Administrador ya no puede moverlo — los invariantes de FR-057 sobre esa casilla solo se
+   * pueden ejercer desde este rol.
+   */
+  async function sesionDeSuperAdministrador(): Promise<string> {
+    const usuario = await crearUsuarioDePrueba(contexto, { rol: 'ADMINISTRADOR' });
+    const respaldo = await contexto.prisma.rol.findFirstOrThrow({ where: { esSuperAdmin: true } });
+    await contexto.prisma.usuario.update({
+      where: { id: BigInt(usuario.id) },
+      data: { rolId: respaldo.id },
+    });
+    return iniciarSesion(servidor(), usuario.login, usuario.password);
+  }
+
   describe('SC-012 — un rol propio concede EXACTAMENTE sus permisos', () => {
     it(
       'un usuario con el rol "Bodeguero" (inventario + ingresos) hace lo concedido y recibe 403 en ' +
@@ -240,7 +257,10 @@ describe('Roles y permisos — /api/roles y /api/permisos (T109)', () => {
       'no se puede quitar el permiso de gestión de roles al ÚLTIMO rol activo que lo tiene: la edición ' +
         'se rechaza con 409 y la matriz del rol queda intacta',
       async () => {
-        const cookieAdmin = await sesionDeAdministrador();
+        // US32 (FR-132): `roles.gestionar` es un permiso RESERVADO, así que un Administrador ya
+        // no puede desmarcarlo — recibiría el 409 de la reserva y esta prueba dejaría de cubrir el
+        // invariante de FR-057. Se ejerce desde el único rol que hoy puede moverlo.
+        const cookieAdmin = await sesionDeSuperAdministrador();
         const administradorId = await idDelRolAdministrador();
         const permisosAntes = await contexto.prisma.rolPermiso.count({ where: { rolId: BigInt(administradorId) } });
 
@@ -264,7 +284,10 @@ describe('Roles y permisos — /api/roles y /api/permisos (T109)', () => {
     );
 
     it('sí se puede quitar ese permiso cuando OTRO rol activo también lo concede (el invariante no es un bloqueo ciego)', async () => {
-      const cookieAdmin = await sesionDeAdministrador();
+      // US32 (FR-132): quitar `roles.gestionar` es mover una casilla reservada, así que quien lo
+      // ejerce es el super administrador. Lo que la prueba comprueba sigue siendo lo de siempre:
+      // que el invariante de FR-057 no bloquea cuando queda otro rol activo que lo concede.
+      const cookieAdmin = await sesionDeSuperAdministrador();
       const copia = await crearRolDePrueba(contexto.prisma, [PERMISO_GESTION_ROLES], 'Gestión delegada');
 
       const respuesta = await request(servidor())

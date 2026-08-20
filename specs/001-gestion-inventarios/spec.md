@@ -592,6 +592,39 @@ que el stock queda en ese número y que el movimiento registra la diferencia con
 
 ---
 
+### User Story 32 - El permiso que reparte permisos (Priority: P2)
+
+US31 dejó el mecanismo montado —permisos RESERVADOS que solo el super administrador mueve— y con
+él a la vista se ve el que faltaba: `roles.gestionar`, el permiso que habilita administrar la
+matriz de permisos. Mientras un Administrador pueda concederlo, puede fabricar a otro
+administrador total, y la separación de responsabilidades depende de que nadie lo haga por
+descuido.
+
+Lo que NO cambia: administrar usuarios, crear roles, y marcar o desmarcar cualquier otra casilla
+sigue siendo trabajo del Administrador. Solo esa casilla —la de repartir permisos— queda bajo
+llave.
+
+**Why this priority**: cierra el último camino por el que la capacidad de administrar el sistema
+se reparte sola. Es un cambio de una línea en la lista de reservados, y esa es justamente la
+señal de que el mecanismo de US31 estaba bien puesto.
+
+**Independent Test**: Se prueba intentando conceder `roles.gestionar` a un rol siendo
+Administrador —se rechaza— y repitiendo la operación como super administrador.
+
+**Acceptance Scenarios**:
+
+1. **Given** un Administrador editando un rol, **When** intenta MARCAR o DESMARCAR la casilla de
+   "Administrar roles y los permisos de cada rol", **Then** se rechaza.
+2. **Given** un Administrador, **When** CREA un rol nuevo incluyendo ese permiso, **Then** se
+   rechaza también — si no, bastaría con crear el rol en vez de editarlo.
+3. **Given** un Administrador, **When** edita cualquier otra casilla del mismo rol, **Then**
+   funciona con normalidad: la reserva acota UNA casilla, no la pantalla.
+4. **Given** un Administrador, **When** da de alta, edita o desactiva usuarios, **Then** funciona
+   igual que siempre.
+5. **Given** el super administrador, **When** concede o retira ese permiso, **Then** funciona.
+
+---
+
 ### Edge Cases
 
 - **Salida mayor al disponible**: debe rechazarse siempre, incluida la carrera entre dos usuarios simultáneos sobre el mismo producto (solo una confirmación puede ganar).
@@ -804,6 +837,7 @@ que recordar por separado.
 - **FR-129**: El despliegue DEBE poder crear el usuario super administrador sin intervención manual y sin que su contraseña viva en el repositorio: se toma de variables de entorno del servidor al arrancar. Si el usuario ya existe NO se toca (ni su contraseña ni su rol), y si las variables no están, el arranque continúa y lo deja anotado — un sistema que no arranca por falta de una llave de repuesto es peor que uno sin ella.
 - **FR-130**: El inventario DEBE permitir CORREGIR la cantidad de un producto directamente, sin documento de entrada ni de salida: se escribe la cantidad contada y el MOTIVO. La corrección DEBE ejecutarse dentro de la transacción del servicio de stock (Principio I) y registrar UN movimiento de AJUSTE_ENTRADA o AJUSTE_SALIDA por la DIFERENCIA, con su motivo y su usuario. No es una excepción a la trazabilidad: es la corrección que el Principio II ya exigía, con su propio tipo de documento. Corregir a la MISMA cantidad se rechaza —un movimiento de cero no dice nada—, y la cantidad sigue las reglas de FR-122 (entera, nunca negativa).
 - **FR-131**: Esa capacidad DEBE vivir en un permiso propio (`inventario.ajustar`), parametrizable como cualquier otro y concedido de inicio al Administrador, pero RESERVADO: solo un super administrador puede concederlo o retirarlo a un rol. Escribir el stock a mano es la única operación que puede desmentir a todos los documentos a la vez, así que quién la tiene no se decide con el mismo permiso que se usa para repartir el resto.
+- **FR-132**: `roles.gestionar` —el permiso que habilita administrar la matriz de permisos— DEBE ser también un permiso RESERVADO (FR-131): solo un super administrador puede concederlo o retirarlo, tanto al EDITAR un rol como al CREARLO. Un Administrador conserva todo lo demás: gestiona usuarios, crea roles y mueve cualquier otra casilla. La razón de reservar precisamente esta es que es la única que se REPARTE A SÍ MISMA — quien puede concederla puede fabricar a otro administrador total, y desde ahí el reparto de responsabilidades ya no lo decide nadie. LIMITACIÓN CONOCIDA Y ACEPTADA: quien tenga `usuarios.gestionar` puede seguir ASIGNANDO a una persona un rol que ya lo lleva (p. ej. el Administrador). Cerrar eso obligaría a que nadie salvo el super administrador pudiera nombrar administradores, que es justo la operación diaria que esta historia dice conservar; lo que se cierra es la creación de capacidad nueva, no el uso de la existente.
 
 **Auditoría y trazabilidad (transversal)**
 

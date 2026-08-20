@@ -116,7 +116,7 @@ export class RepositorioUsuariosPrisma implements RepositorioUsuarios {
       where: { id: BigInt(id) },
       include: INCLUIR_ROL_CON_PERMISOS,
     });
-    return registro ? aUsuarioDominio(registro) : null;
+    return registro ? this.conPermisosEfectivos(aUsuarioDominio(registro)) : null;
   }
 
   async buscarConCredencialesPorId(id: number): Promise<UsuarioAutenticable | null> {
@@ -132,6 +132,37 @@ export class RepositorioUsuariosPrisma implements RepositorioUsuarios {
       where: { id: BigInt(id) },
       data: { passwordHash, debeCambiarPassword },
     });
+  }
+
+  /**
+   * Resuelve los permisos EFECTIVOS de un usuario (US30, FR-127).
+   *
+   * Para todo el mundo son los de su rol, tal como salieron de `roles_permisos`. Para el SUPER
+   * ADMINISTRADOR son el catálogo completo: su rol no tiene filas en esa tabla —a propósito, ver
+   * `Rol.esSuperAdmin`— y devolver una lista vacía haciía que todo lo que DERIVA de ella lo
+   * tratara como al usuario con menos poder del sistema. El panel de control fue el primero en
+   * caer: dejaba entrar al respaldo y le mostraba "tu rol no incluye ninguna de las cifras de
+   * este panel".
+   *
+   * Se resuelve AQUÍ y no en cada consumidor porque consumidores va a haber más, y acordarse de
+   * mirar la bandera en cada uno es exactamente la clase de disciplina que falla una vez y deja
+   * un agujero silencioso.
+   *
+   * La consulta extra solo ocurre para el respaldo — un único usuario que se usa en emergencias.
+   *
+   * IMPORTANTE: esto NO es de dónde sale su autorización. `PermisosGuard` concede por la COLUMNA
+   * antes de mirar lista alguna, así que si alguien vaciara `permisos` esta función devolvería un
+   * arreglo vacío y el respaldo seguiría pudiendo todo. La lista es para lo que se MUESTRA.
+   */
+  private async conPermisosEfectivos(usuario: Usuario): Promise<Usuario> {
+    if (!usuario.rolAsignado.esSuperAdmin) {
+      return usuario;
+    }
+    const catalogo = await this.prisma.permiso.findMany({ select: { clave: true } });
+    return {
+      ...usuario,
+      rolAsignado: { ...usuario.rolAsignado, permisos: catalogo.map((permiso) => permiso.clave) },
+    };
   }
 
   async listar(filtros: FiltrosListarUsuarios): Promise<PaginaUsuarios> {
@@ -166,7 +197,7 @@ export class RepositorioUsuariosPrisma implements RepositorioUsuarios {
         },
         include: INCLUIR_ROL_CON_PERMISOS,
       });
-      return aUsuarioDominio(registro);
+      return this.conPermisosEfectivos(aUsuarioDominio(registro));
     } catch (error) {
       throw traducirErrorAltaUsuario(error);
     }

@@ -664,6 +664,19 @@ Proveedores — MISMO patrón que categorías (FR-091), con dos diferencias que 
 **Checkpoint**: El sistema tiene una llave de repuesto que no depende de sus propios datos, y el inventario se cuadra sin fabricar documentos
 
 ---
+## Phase 35: User Story 32 - El permiso que reparte permisos (Priority: P2)
+
+**Goal**: Que la capacidad de administrar permisos deje de repartirse sola (FR-132)
+
+**Independent Test**: Un Administrador no puede conceder ni retirar `roles.gestionar`; el super administrador sí (US32-AS1/AS5)
+
+- [x] T248 [US32] `roles.gestionar` entra en `PERMISOS_RESERVADOS`; la reserva se aplica también al CREAR un rol, no solo al editarlo
+- [x] T249 [US32] Frontend: la casilla queda bloqueada para quien no es super administrador, con la razón al lado
+- [x] T250 [P] [US32] Pruebas de integración: rechazo al conceder y al retirar, rechazo al crear un rol con él, y que editar el resto del rol y gestionar usuarios siguen funcionando
+
+**Checkpoint**: Las dos capacidades que pueden rehacer el sistema —escribir el stock y repartir permisos— solo las mueve el respaldo
+
+---
 
 ## Dependencies & Execution Order
 

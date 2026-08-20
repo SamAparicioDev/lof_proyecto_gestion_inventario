@@ -56,7 +56,7 @@ const MENSAJE_ERROR_RED = 'No fue posible comunicarse con el servidor. Intenta d
  * frontend, así que ambos lados la escriben. El servidor es el que manda: quien fuerce la
  * casilla desde el navegador recibe un `409` igual (FR-003).
  */
-const PERMISOS_RESERVADOS: readonly string[] = [PERMISOS.INVENTARIO_AJUSTAR];
+const PERMISOS_RESERVADOS: readonly string[] = [PERMISOS.INVENTARIO_AJUSTAR, PERMISOS.ROLES_GESTIONAR];
 
 /** Campos de formulario a los que tiene sentido anclar un error de `ErrorApi.campos`. */
 const CAMPOS_VALIDOS = new Set<keyof DatosCrearRol>(['nombre', 'descripcion', 'permisoIds']);

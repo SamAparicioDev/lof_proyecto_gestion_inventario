@@ -12,7 +12,9 @@
  *    quinta, que es la que se olvida: restablecerle la contraseña a quien ya lo tiene.
  *  - **La corrección de cantidad es atómica y deja rastro**: stock y movimiento se comprueban
  *    contra las tablas, no contra la respuesta del endpoint.
- *  - **La reserva del permiso** (FR-131) sobre `PUT /api/roles/:id`.
+ *  - **La reserva de los dos permisos** (FR-131/FR-132) sobre `PUT /api/roles/:id` y
+ *    `POST /api/roles`, incluido lo que un Administrador SÍ sigue pudiendo hacer — una reserva
+ *    que de paso rompiera la operación diaria sería peor que la ausencia de reserva.
  *
  * REQUIERE ENTORNO LOCAL con PostgreSQL vivo (`DATABASE_URL_TEST` en `backend/.env`).
  */
@@ -31,7 +33,7 @@ interface CuerpoError {
   error: { mensaje: string; campos?: Record<string, string> | null };
 }
 
-describe('Respaldo del sistema y corrección de inventario (US30/US31, T247)', () => {
+describe('Respaldo del sistema, corrección de inventario y permisos reservados (US30…US32)', () => {
   let contexto: AppDePrueba;
 
   beforeAll(async () => {
@@ -119,6 +121,24 @@ describe('Respaldo del sistema y corrección de inventario (US30/US31, T247)', (
       const totalPermisos = await contexto.prisma.permiso.count();
       expect(perfil.body.permisos).toHaveLength(totalPermisos);
       expect(await contexto.prisma.rolPermiso.count({ where: { rol: { esSuperAdmin: true } } })).toBe(0);
+    });
+
+    it('el panel de control le llega COMPLETO, no vacío (defecto reportado el 2026-08-19)', async () => {
+      const superAdmin = await crearSuperAdmin();
+      const cookie = await iniciarSesion(servidor(), superAdmin.login, superAdmin.password);
+
+      const panel = await request(servidor()).get('/api/panel').set('Cookie', cookie);
+      expect(panel.status).toBe(200);
+
+      // El fallo real: `ResumenPanelCasoUso` recorta sus secciones leyendo `rolAsignado.permisos`,
+      // y la del respaldo está vacía a propósito. El guard lo dejaba entrar y la pantalla le decía
+      // "tu rol no incluye ninguna de las cifras de este panel" — que es exactamente el bloqueo
+      // del que esta historia protege, con otra cara. Lo mismo le pasaría a cualquier consumidor
+      // futuro que derive algo de esa lista, y por eso la resolución vive en el repositorio.
+      expect(panel.body.inventario).toBeDefined();
+      expect(panel.body.pendientes).toBeDefined();
+      expect(panel.body.consumoMes).toBeDefined();
+      expect(panel.body.movimientosRecientes).toBeDefined();
     });
 
     it('un Administrador no puede editar, desactivar ni eliminar el rol de respaldo (FR-128, US30-AS3)', async () => {
@@ -320,6 +340,146 @@ describe('Respaldo del sistema y corrección de inventario (US30/US31, T247)', (
         await request(servidor())
           .put(`/api/roles/${rolGerente.id}`)
           .set('Cookie', cookieSuper)
+          .send({ nombre: 'Gerente', permisoIds: idsGerente });
+      }
+    });
+  });
+  // ==========================================================================================
+  // US32 — el permiso que reparte permisos (FR-132)
+  // ==========================================================================================
+  describe('permiso que reparte permisos (US32)', () => {
+    /** Ids del catálogo por clave — el cuerpo del contrato viaja con ids, no con claves. */
+    async function idsDePermisos(claves: readonly string[]): Promise<number[]> {
+      const permisos = await contexto.prisma.permiso.findMany({ where: { clave: { in: [...claves] } } });
+      return permisos.map((permiso) => Number(permiso.id));
+    }
+
+    it('un Administrador no puede CONCEDER `roles.gestionar` a otro rol (US32-AS1)', async () => {
+      const admin = await crearUsuarioDePrueba(contexto, { rol: 'ADMINISTRADOR' });
+      const cookie = await iniciarSesion(servidor(), admin.login, admin.password);
+
+      const rolGerente = await contexto.prisma.rol.findFirstOrThrow({ where: { nombre: 'Gerente' } });
+      const permisosGerente = await contexto.prisma.rolPermiso.findMany({
+        where: { rolId: rolGerente.id },
+        select: { permisoId: true },
+      });
+      const idsGerente = permisosGerente.map((fila) => Number(fila.permisoId));
+      const [idGestionRoles] = await idsDePermisos(['roles.gestionar']);
+
+      const intento = await request(servidor())
+        .put(`/api/roles/${rolGerente.id}`)
+        .set('Cookie', cookie)
+        .send({ nombre: 'Gerente', permisoIds: [...idsGerente, idGestionRoles] });
+      expect(intento.status).toBe(409);
+      expect((intento.body as CuerpoError).error.mensaje).toContain('roles.gestionar');
+
+      // Y nada se guardó: el Gerente sigue sin poder repartir permisos.
+      const sigueSinTenerlo = await contexto.prisma.rolPermiso.count({
+        where: { rolId: rolGerente.id, permisoId: BigInt(idGestionRoles as number) },
+      });
+      expect(sigueSinTenerlo).toBe(0);
+    });
+
+    it('tampoco puede RETIRÁRSELO a un rol que lo tiene (US32-AS1, el otro sentido)', async () => {
+      const admin = await crearUsuarioDePrueba(contexto, { rol: 'ADMINISTRADOR' });
+      const cookie = await iniciarSesion(servidor(), admin.login, admin.password);
+
+      const rolAdministrador = await contexto.prisma.rol.findFirstOrThrow({ where: { nombre: 'Administrador' } });
+      const permisos = await contexto.prisma.rolPermiso.findMany({
+        where: { rolId: rolAdministrador.id },
+        select: { permisoId: true },
+      });
+      const [idGestionRoles] = await idsDePermisos(['roles.gestionar']);
+      const sinGestionRoles = permisos
+        .map((fila) => Number(fila.permisoId))
+        .filter((id) => id !== idGestionRoles);
+
+      const intento = await request(servidor())
+        .put(`/api/roles/${rolAdministrador.id}`)
+        .set('Cookie', cookie)
+        .send({ nombre: 'Administrador', permisoIds: sinGestionRoles });
+      expect(intento.status).toBe(409);
+      expect((intento.body as CuerpoError).error.mensaje).toContain('roles.gestionar');
+    });
+
+    it('no puede CREAR un rol que lo incluya — si no, bastaría con crearlo (US32-AS2)', async () => {
+      const admin = await crearUsuarioDePrueba(contexto, { rol: 'ADMINISTRADOR' });
+      const cookie = await iniciarSesion(servidor(), admin.login, admin.password);
+      const ids = await idsDePermisos(['roles.gestionar', 'inventario.ver']);
+
+      const intento = await request(servidor())
+        .post('/api/roles')
+        .set('Cookie', cookie)
+        .send({ nombre: 'Administrador paralelo', permisoIds: ids });
+      expect(intento.status).toBe(409);
+      expect(await contexto.prisma.rol.count({ where: { nombre: 'Administrador paralelo' } })).toBe(0);
+    });
+
+    it('lo que SÍ sigue pudiendo: crear roles, editarlos y gestionar usuarios (US32-AS3/AS4)', async () => {
+      const admin = await crearUsuarioDePrueba(contexto, { rol: 'ADMINISTRADOR' });
+      const cookie = await iniciarSesion(servidor(), admin.login, admin.password);
+      const idsNormales = await idsDePermisos(['inventario.ver', 'ingresos.ver', 'clientes.ver']);
+
+      const creado = await request(servidor())
+        .post('/api/roles')
+        .set('Cookie', cookie)
+        .send({ nombre: 'Consulta', descripcion: 'Solo mirar', permisoIds: idsNormales });
+      expect(creado.status).toBe(201);
+
+      const editado = await request(servidor())
+        .put(`/api/roles/${creado.body.id}`)
+        .set('Cookie', cookie)
+        .send({ nombre: 'Consulta', permisoIds: await idsDePermisos(['inventario.ver']) });
+      expect(editado.status).toBe(204);
+
+      const usuario = await request(servidor()).post('/api/usuarios').set('Cookie', cookie).send({
+        nombreCompleto: 'Persona de consulta',
+        email: 'consulta@lof.local',
+        login: 'consulta.us32',
+        passwordTemporal: 'ClaveTemporal#123',
+        rolId: creado.body.id,
+      });
+      expect(usuario.status).toBe(201);
+
+      expect(
+        (
+          await request(servidor())
+            .put(`/api/usuarios/${usuario.body.id}/estado`)
+            .set('Cookie', cookie)
+            .send({ estado: 'INACTIVO' })
+        ).status,
+      ).toBe(204);
+    });
+
+    it('el super administrador sí lo concede y lo retira (US32-AS5)', async () => {
+      const superAdmin = await crearSuperAdmin();
+      const cookie = await iniciarSesion(servidor(), superAdmin.login, superAdmin.password);
+
+      const rolGerente = await contexto.prisma.rol.findFirstOrThrow({ where: { nombre: 'Gerente' } });
+      const permisosGerente = await contexto.prisma.rolPermiso.findMany({
+        where: { rolId: rolGerente.id },
+        select: { permisoId: true },
+      });
+      const idsGerente = permisosGerente.map((fila) => Number(fila.permisoId));
+      const [idGestionRoles] = await idsDePermisos(['roles.gestionar']);
+
+      try {
+        const concedido = await request(servidor())
+          .put(`/api/roles/${rolGerente.id}`)
+          .set('Cookie', cookie)
+          .send({ nombre: 'Gerente', permisoIds: [...idsGerente, idGestionRoles] });
+        expect(concedido.status).toBe(204);
+
+        const retirado = await request(servidor())
+          .put(`/api/roles/${rolGerente.id}`)
+          .set('Cookie', cookie)
+          .send({ nombre: 'Gerente', permisoIds: idsGerente });
+        expect(retirado.status).toBe(204);
+      } finally {
+        // `roles_permisos` es estado compartido entre suites: se devuelve como estaba.
+        await request(servidor())
+          .put(`/api/roles/${rolGerente.id}`)
+          .set('Cookie', cookie)
           .send({ nombre: 'Gerente', permisoIds: idsGerente });
       }
     });

@@ -82,6 +82,22 @@ describe('Capacidad de administración del sistema — FR-057 (revisión adversa
   }
 
   /** Ids del catálogo para las claves indicadas — el cuerpo de `/api/roles` viaja por id. */
+  /**
+   * Sesión del SUPER ADMINISTRADOR (US30). Desde US32 (FR-132) `roles.gestionar` es un permiso
+   * RESERVADO: un Administrador ya no puede concederlo ni retirarlo, así que los escenarios de
+   * FR-057 que giran alrededor de ESA casilla solo se pueden montar desde este rol. Los que giran
+   * alrededor de `usuarios.gestionar` siguen siendo cosa del Administrador, y así se quedan.
+   *
+   * El rol lo siembra la migración; asignarlo con un UPDATE directo es la única vía que el sistema
+   * admite (FR-128), y por eso es también la que usa la prueba.
+   */
+  async function sesionDeSuperAdministrador(): Promise<string> {
+    const usuario = await crearUsuarioDePrueba(contexto, { rol: 'ADMINISTRADOR' });
+    const respaldo = await contexto.prisma.rol.findFirstOrThrow({ where: { esSuperAdmin: true } });
+    await contexto.prisma.usuario.update({ where: { id: BigInt(usuario.id) }, data: { rolId: respaldo.id } });
+    return iniciarSesion(servidor(), usuario.login, usuario.password);
+  }
+
   async function idsDePermisos(claves: readonly string[]): Promise<number[]> {
     const filas = await contexto.prisma.permiso.findMany({
       where: { clave: { in: [...claves] } },
@@ -245,8 +261,15 @@ describe('Capacidad de administración del sistema — FR-057 (revisión adversa
       'crear un rol con `roles.gestionar` y sin usuarios NO habilita quitarle ese permiso al rol que sí tiene gente ' +
         '(409, matriz intacta)',
       async () => {
-        const admin = await crearUsuarioDePrueba(contexto, { rol: 'ADMINISTRADOR' });
-        const cookie = await iniciarSesion(servidor(), admin.login, admin.password);
+        // US32 (FR-132): crear un rol CON `roles.gestionar` y quitárselo al Administrador son las
+        // dos operaciones reservadas. Se ejercen desde el super administrador para que lo que la
+        // prueba comprueba siga siendo el hallazgo de FR-057 —que un rol sin usuarios no cuenta
+        // como suplente— y no la reserva, que ya tiene sus propias pruebas.
+        const cookie = await sesionDeSuperAdministrador();
+        // El escenario original tenía un Administrador ACTIVO encima del rol Administrador: es lo
+        // que hace del rol huérfano un suplente FALSO y no simplemente el único que queda. Se
+        // conserva tal cual; lo único que cambió es quién ejecuta la edición reservada.
+        await crearUsuarioDePrueba(contexto, { rol: 'ADMINISTRADOR' });
         const permisosAntes = await permisosDelAdministrador();
 
         // PASO 1 del hallazgo: un rol activo más que concede el permiso… pero sin nadie encima.
@@ -274,8 +297,10 @@ describe('Capacidad de administración del sistema — FR-057 (revisión adversa
     );
 
     it('con el rol suplente YA ASIGNADO a un usuario activo, la misma edición sí se permite (204)', async () => {
-      const admin = await crearUsuarioDePrueba(contexto, { rol: 'ADMINISTRADOR' });
-      const cookie = await iniciarSesion(servidor(), admin.login, admin.password);
+      // Misma razón que arriba: quitarle `roles.gestionar` al Administrador es mover una casilla
+      // reservada (US32). El rol suplente se crea con `crearRolDePrueba` (directo en la base), que
+      // no pasa por la API y por tanto no toca la reserva.
+      const cookie = await sesionDeSuperAdministrador();
       const suplente = await crearRolDePrueba(contexto.prisma, [PERMISO_GESTION_ROLES, PERMISO_GESTION_USUARIOS], 'Gestión delegada real');
       await crearUsuarioDePrueba(contexto, { rolId: suplente.id });
 

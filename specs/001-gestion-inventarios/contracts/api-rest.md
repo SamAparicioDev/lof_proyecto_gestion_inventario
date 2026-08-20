@@ -264,10 +264,22 @@ que se anotan aquí ANTES de que existan como código, no después:
   contraseña para entrar como él, y todo lo anterior sobraría.
 - Un super administrador SIEMPRE pasa el guard, sin consultar `roles_permisos` (FR-127).
 
-**Permisos reservados (US31, FR-131)**: `PUT /api/roles/:id` responde `409` si el cambio AÑADE o
-QUITA un permiso reservado —hoy solo `inventario.ajustar`— y quien lo ejecuta no es super
-administrador. El resto del cuerpo se procesa con las reglas de siempre: la reserva acota
-QUIÉN puede mover esa casilla, no impide editar el rol.
+**Permisos reservados (US31/US32, FR-131/FR-132)**: `PUT /api/roles/:id` responde `409` si el
+cambio AÑADE o QUITA un permiso reservado y quien lo ejecuta no es super administrador;
+`POST /api/roles` responde `409` si el rol nuevo incluye uno — sin eso, la reserva se saltaría
+creando el rol en vez de editándolo. El resto del cuerpo se procesa con las reglas de siempre: la
+reserva acota QUIÉN puede mover esa casilla, no impide administrar el rol.
+
+Los reservados son dos:
+
+| Permiso | Por qué |
+|---|---|
+| `inventario.ajustar` | Escribir el stock a mano es la única operación capaz de desmentir a todos los documentos a la vez (FR-130) |
+| `roles.gestionar` | Es el único permiso que se REPARTE A SÍ MISMO: quien puede concederlo puede fabricar a otro administrador total (FR-132) |
+
+La lista vive en el código (`PERMISOS_RESERVADOS`, dominio) y no en una columna: es una propiedad
+del significado de cada permiso, no un dato de operación — si fuera editable, quitarle la reserva
+sería el primer paso para saltarse la regla.
 
 **Anotación T105 sobre el `DELETE`**: la tabla original enumeraba solo las dos primeras causas
 de `409`. Se agregó la tercera —el último rol activo con `roles.gestionar`— ANTES de escribir el

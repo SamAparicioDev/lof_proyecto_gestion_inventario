@@ -21,7 +21,12 @@
  * no se asigna, no se administra a quien lo tiene) y FR-131 (permisos reservados).
  */
 import { EstadoInvalido, ErrorValidacionDominio } from '../../dominio/comunes/errores';
-import { PERMISOS_RESERVADOS, type ClavePermiso, type Permiso } from '../../dominio/entidades/permiso';
+import {
+  PERMISOS_RESERVADOS,
+  RAZON_DE_LA_RESERVA,
+  type ClavePermiso,
+  type Permiso,
+} from '../../dominio/entidades/permiso';
 import type { Rol } from '../../dominio/entidades/rol';
 
 /**
@@ -114,9 +119,11 @@ export function exigirQueNoToqueUnPermisoReservado(
     return;
   }
 
-  const mensaje =
-    `Solo un super administrador puede conceder o retirar ${tocados.join(', ')}. ` +
-    'Es un permiso reservado: habilita escribir el stock a mano, que es la única operación capaz ' +
-    'de desmentir a todos los documentos a la vez.';
-  throw new EstadoInvalido(mensaje);
+  const explicados = tocados
+    .map((clave) => `${clave} (${RAZON_DE_LA_RESERVA[clave] ?? 'permiso reservado'})`)
+    .join('; ');
+  throw new EstadoInvalido(
+    `Solo un super administrador puede conceder o retirar ${explicados}. ` +
+      'Puedes seguir editando el resto de este rol con normalidad.',
+  );
 }

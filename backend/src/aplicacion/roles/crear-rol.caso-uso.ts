@@ -26,6 +26,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { CasoDeUso } from '../comunes/caso-de-uso';
 import { exigirQueNoConcedaPermisosQueNoTiene } from '../comunes/proteccion-escalada-permisos';
+import { exigirQueNoToqueUnPermisoReservado } from '../comunes/respaldo-del-sistema';
 import type { ClavePermiso } from '../../dominio/entidades/permiso';
 import { REPOSITORIO_PERMISOS, type RepositorioPermisos } from '../../dominio/puertos/repositorio-permisos';
 import { REPOSITORIO_ROLES, type RepositorioRoles } from '../../dominio/puertos/repositorio-roles';
@@ -56,12 +57,17 @@ export class CrearRolCasoUso implements CasoDeUso<CrearRolEntrada, CrearRolSalid
   ) {}
 
   async ejecutar(entrada: CrearRolEntrada): Promise<CrearRolSalida> {
+    const catalogo = await this.repositorioPermisos.listar();
     exigirQueNoConcedaPermisosQueNoTiene(
       entrada.permisoIds,
-      await this.repositorioPermisos.listar(),
+      catalogo,
       entrada.permisosDelActor,
       entrada.actorEsSuperAdmin,
     );
+    // US32 (FR-132): la reserva alcanza al ALTA. Sin esto bastaría con CREAR el rol con el
+    // permiso reservado en vez de añadírselo después, y la protección solo detendría a quien
+    // eligiera el camino más largo. "Lo que tenía" un rol que no existe es el conjunto vacío.
+    exigirQueNoToqueUnPermisoReservado([], entrada.permisoIds, catalogo, entrada.actorEsSuperAdmin);
 
     const rol = await this.repositorioRoles.crear({
       nombre: entrada.nombre,
