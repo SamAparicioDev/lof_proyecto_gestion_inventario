@@ -38,6 +38,13 @@ const ETIQUETA_MODULO: Record<string, string> = {
   reportes: 'Reportes',
   usuarios: 'Usuarios',
   roles: 'Roles y permisos',
+  categorias: 'Categorías',
+  proveedores: 'Proveedores',
+  unidades_medida: 'Unidades de medida',
+  ordenes_compra: 'Órdenes de compra',
+  cotizaciones: 'Cotizaciones',
+  asistente: 'Asistente',
+  notificaciones: 'Avisos',
 };
 
 interface PropiedadesMatrizPermisos {
