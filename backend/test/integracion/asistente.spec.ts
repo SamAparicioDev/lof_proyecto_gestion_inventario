@@ -2,13 +2,17 @@
  * Prueba de integración del ASISTENTE (T256, US33) — la ruta real contra la aplicación montada.
  *
  * Lo que SOLO se puede ver aquí, y que las unitarias no cubren: que el endpoint existe con su
- * permiso, que exige sesión, y sobre todo que **sin `ANTHROPIC_API_KEY` responde 200 con un aviso
+ * permiso, que exige sesión, y sobre todo que **sin clave del proveedor responde 200 con un aviso
  * en lugar de 500** (FR-136). Ese es el escenario de producción antes de configurar la clave, y es
  * exactamente el que no se puede probar con dobles: hay que atravesar el controlador, el filtro de
  * errores y la serialización.
  *
- * El entorno de pruebas no define la clave a propósito — si algún día la definiera, esta suite
- * empezaría a llamar a la API de verdad, y eso se nota en la primera corrida.
+ * La suite APAGA el proveedor a propósito: retira las variables de entorno antes de construir la
+ * aplicación (el adaptador las lee en su constructor) y las devuelve al terminar. Sin eso, la
+ * prueba dependería de si la máquina donde corre tiene clave configurada: con clave llamaría a la
+ * API de verdad en cada corrida — gastando cuota y heredando sus 503 transitorios como fallos
+ * falsos— y sin clave pasaría por casualidad. Una prueba cuyo escenario lo decide el entorno no
+ * prueba nada.
  */
 import request from 'supertest';
 import { NOMBRE_COOKIE_SESION } from '../../src/infraestructura/seguridad/cookie-sesion';
@@ -17,12 +21,28 @@ import { cerrarAppDePrueba, crearAppDePrueba, crearUsuarioDePrueba, truncarTabla
 describe('Asistente de consultas — /api/asistente (T256, US33)', () => {
   let contexto: AppDePrueba;
 
+  /** Las tres variables que el adaptador consulta para decidir si hay servicio configurado. */
+  const VARIABLES_DEL_PROVEEDOR = ['API_KEY_GOOGLE_AI_STUDIO', 'GEMINI_API_KEY', 'GOOGLE_AI_API_KEY'] as const;
+  const valoresOriginales = new Map<string, string | undefined>();
+
   beforeAll(async () => {
+    for (const nombre of VARIABLES_DEL_PROVEEDOR) {
+      valoresOriginales.set(nombre, process.env[nombre]);
+      // Se dejan VACÍAS en vez de borrarlas: `ConfigModule.forRoot()` recarga `backend/.env` al
+      // construir la aplicación, y dotenv repone toda clave que no exista ya en `process.env` —
+      // borrarlas las traía de vuelta. Una cadena vacía sí existe, así que no se repone, y el
+      // adaptador la trata como ausencia de clave.
+      process.env[nombre] = '';
+    }
     contexto = await crearAppDePrueba();
   });
 
   afterAll(async () => {
     await cerrarAppDePrueba(contexto.app);
+    for (const [nombre, valor] of valoresOriginales) {
+      if (valor === undefined) delete process.env[nombre];
+      else process.env[nombre] = valor;
+    }
   });
 
   beforeEach(async () => {
@@ -37,7 +57,10 @@ describe('Asistente de consultas — /api/asistente (T256, US33)', () => {
   });
 
   it('sin la clave del servicio responde 200 con aviso, NUNCA 500 (FR-136)', async () => {
-    expect(process.env.ANTHROPIC_API_KEY ?? '').toBe('');
+    // El proveedor está apagado por el `beforeAll` de arriba, no por casualidad del entorno.
+    for (const nombre of VARIABLES_DEL_PROVEEDOR) {
+      expect(process.env[nombre] ?? '').toBe('');
+    }
 
     const usuario = await crearUsuarioDePrueba(contexto, { rol: 'OPERARIO' });
     const cookie = await iniciarSesion(servidor(), usuario.login, usuario.password);
