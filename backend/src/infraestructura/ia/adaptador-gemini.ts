@@ -12,18 +12,19 @@
  *
  * ## Decisiones de configuración, con su porqué
  *
- * - **Modelo**: `AI_MODEL`, por defecto `gemini-flash-latest`. El alias `-latest` apunta siempre al
- *   Flash más reciente de la cuenta: el catálogo de Google se mueve mucho más rápido que este
- *   repositorio, y fijar una versión obligaría a un despliegue cada vez que saliera una mejor. A
- *   cambio el comportamiento puede cambiar sin avisar, y para eso existe `AI_MODEL`: para CLAVAR
- *   una versión el día que haga falta reproducir algo.
+ * - **Modelos**: `AI_MODEL`, por defecto la cadena `gemini-3.6-flash`, `gemini-3.5-flash`,
+ *   `gemini-flash-latest`. Se prueban EN ORDEN: si el primero está saturado se pregunta al
+ *   siguiente, en vez de esperar a que se desahogue el mismo. Reintentar al saturado es esperar;
+ *   cambiar de modelo es preguntarle a otro que está libre.
  *
- *   **Por qué Flash y no Pro**, que sería lo esperable para un asistente que razona: en el nivel
- *   GRATUITO de AI Studio la cuota de los modelos Pro no es baja, es CERO — la API responde 429 con
- *   `limit: 0` (comprobado con la clave real el 2026-08-20). Un Pro por defecto significa un
- *   asistente que no funciona para nadie que no tenga facturación activada, que es justo el caso de
- *   quien acaba de sacar su clave. Con facturación, `AI_MODEL=gemini-pro-latest` encadena mejor las
- *   preguntas de varios pasos y es el cambio de una variable.
+ *   El primero está FIJADO y no es un alias `-latest`, corrigiendo la elección inicial: `-latest`
+ *   apunta al modelo más NUEVO, que es justamente el más congestionado y, en el plan gratuito, a
+ *   veces el que tiene cuota cero. Medido con la clave real el 2026-08-21: `gemini-3.6-flash`
+ *   respondió en 1,6 s y `gemini-flash-latest` en 6,4 s cuando no fallaba con 503.
+ *
+ *   `AI_MODEL` admite varios separados por coma y sustituye la cadena entera, para poder fijar
+ *   otra combinación sin desplegar. Con facturación activada, `gemini-pro-latest` de primero
+ *   encadena mejor las preguntas de varios pasos — en el plan gratuito su cuota es CERO.
  * - **Pensamiento dinámico** (`thinkingBudget: -1`): el modelo decide cuánto piensa según la
  *   pregunta. Una consulta de stock no gasta nada; comparar clientes sí. `0` lo apagaría y las
  *   preguntas de varios pasos empezarían a fallar en silencio.
@@ -59,8 +60,8 @@ import {
   type ResultadoHerramienta,
 } from '../../aplicacion/asistente/puertos/modelo-conversacional';
 
-/** Ver el TSDoc de cabecera para el porqué de cada uno. */
-const MODELO_POR_DEFECTO = 'gemini-flash-latest';
+/** Ver el TSDoc de cabecera para el porqué de cada uno y para las medidas que los eligieron. */
+const MODELOS_POR_DEFECTO = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-flash-latest'];
 const MAXIMO_TOKENS = 16000;
 /** `-1` = presupuesto de pensamiento AUTOMÁTICO: lo decide el modelo según la pregunta. */
 const PENSAMIENTO_AUTOMATICO = -1;
@@ -75,9 +76,9 @@ const PREFIJO_ID_SINTETICO = 'sin-id:';
  */
 const CODIGOS_TRANSITORIOS = [429, 503];
 
-/** Esperas entre reintentos. Dos bastan: medido contra la API real, los 503 de "high demand" duran
- *  segundos, no minutos. Más reintentos solo alargarían la espera de quien mira la pantalla. */
-const ESPERAS_MS = [700, 2500];
+/** Espera antes de pasar al modelo siguiente. Corta a propósito: el cambio de modelo es lo que
+ *  resuelve la saturación, no la espera. Al otro lado hay alguien mirando la pantalla. */
+const ESPERA_ENTRE_MODELOS_MS = 400;
 
 @Injectable()
 export class AdaptadorGemini implements ModeloConversacional {
@@ -114,9 +115,9 @@ export class AdaptadorGemini implements ModeloConversacional {
     }
 
     const cliente = this.cliente;
-    const respuesta = await this.conReintentos(() =>
+    const respuesta = await this.conCadenaDeModelos((modelo) =>
       cliente.models.generateContent({
-        model: primeraDefinida('AI_MODEL', 'GEMINI_MODELO') ?? MODELO_POR_DEFECTO,
+        model: modelo,
         contents: this.construirContenidos(entrada),
         config: {
           // Las instrucciones estables y el contexto volátil (fecha, quién pregunta) van juntos aquí:
@@ -159,31 +160,49 @@ export class AdaptadorGemini implements ModeloConversacional {
   }
 
   /**
-   * Ejecuta la llamada reintentando los fallos TRANSITORIOS del proveedor.
+   * Recorre la cadena de modelos hasta que uno responda.
    *
-   * Por qué hace falta: medido contra la API real, de tres consultas seguidas dos cayeron con
-   * `503 UNAVAILABLE — high demand` y una respondió perfectamente. Sin reintento, el asistente
-   * parecería roto dos de cada tres veces por algo que se arregla solo en segundos.
+   * Por qué cambiar de modelo y no reintentar el mismo: medido contra la API real, un
+   * `503 UNAVAILABLE — high demand` es del MODELO, no del servicio. Insistirle al que está
+   * saturado es esperar a que se desahogue; preguntarle al siguiente es hablar con uno que está
+   * libre — y en la medición el segundo de la cadena respondía mientras el primero fallaba.
    *
-   * Se reintenta poco y rápido a propósito: al otro lado hay una persona esperando una respuesta
-   * en pantalla, y una espera larga es tan mala respuesta como un fallo. Si tras los intentos sigue
-   * fallando, el error se propaga y el caso de uso lo convierte en un aviso en español (FR-136).
+   * Solo se pasa al siguiente ante fallos TRANSITORIOS. Un `400`, un `401` o un `403` son
+   * configuración equivocada: recorrer la cadena entera con una clave inválida gasta tres veces
+   * el tiempo para llegar al mismo sitio, y de paso esconde la causa detrás de una espera.
+   *
+   * Si TODOS fallan, se propaga el último con su causa ya clasificada y el caso de uso lo convierte
+   * en un aviso en español (FR-136).
    */
-  private async conReintentos<T>(operacion: () => Promise<T>): Promise<T> {
-    for (let intento = 0; ; intento += 1) {
+  private async conCadenaDeModelos<T>(operacion: (modelo: string) => Promise<T>): Promise<T> {
+    const modelos = this.modelos();
+    for (let indice = 0; indice < modelos.length; indice += 1) {
+      const modelo = modelos[indice] as string;
       try {
-        return await operacion();
+        return await operacion(modelo);
       } catch (error) {
         const transitorio = error instanceof ApiError && CODIGOS_TRANSITORIOS.includes(error.status);
-        if (!transitorio || intento >= ESPERAS_MS.length) {
+        const quedanModelos = indice < modelos.length - 1;
+        if (!transitorio || !quedanModelos) {
           throw new FalloDelProveedor(causaDe(error), String(error instanceof Error ? error.message : error));
         }
         this.logger.warn(
-          `El proveedor respondió ${error.status}; reintento ${intento + 1} de ${ESPERAS_MS.length}.`,
+          `"${modelo}" respondió ${error instanceof ApiError ? error.status : '?'}; pruebo con "${modelos[indice + 1]}".`,
         );
-        await new Promise((continuar) => setTimeout(continuar, ESPERAS_MS[intento]));
+        await new Promise((continuar) => setTimeout(continuar, ESPERA_ENTRE_MODELOS_MS));
       }
     }
+    // Inalcanzable: el bucle o devuelve o lanza. Está por exhaustividad del tipo.
+    throw new FalloDelProveedor('desconocido', 'La cadena de modelos quedó vacía.');
+  }
+
+  /** La cadena configurada, o la de por defecto. `AI_MODEL` admite varios separados por coma. */
+  private modelos(): string[] {
+    const configurados = (primeraDefinida('AI_MODEL', 'GEMINI_MODELO') ?? '')
+      .split(',')
+      .map((nombre) => nombre.trim())
+      .filter((nombre) => nombre !== '');
+    return configurados.length > 0 ? configurados : MODELOS_POR_DEFECTO;
   }
 
   /**
