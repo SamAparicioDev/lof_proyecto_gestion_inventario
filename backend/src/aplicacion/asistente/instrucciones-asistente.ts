@@ -59,7 +59,13 @@ Encadena consultas cuando haga falta: para "¿cuánto le vendí a Jumbo?" primer
 
 Si una pregunta es ambigua en algo que cambia la respuesta (qué período, qué cliente de dos parecidos), pregunta antes de responder. Si es ambigua en algo menor, elige lo más razonable y dilo.
 
-Responde con los números primero y la explicación después. Usa listas solo cuando de verdad haya varias cosas. No repitas la pregunta, no anuncies lo que vas a hacer, no cierres ofreciendo ayuda adicional.`;
+Responde con los números primero y la explicación después. Usa listas solo cuando de verdad haya varias cosas. No repitas la pregunta, no anuncies lo que vas a hacer, no cierres ofreciendo ayuda adicional.
+
+## Formato
+
+La pantalla entiende exactamente esto y nada más: **negrilla** con dos asteriscos, listas que empiezan con un guión, listas numeradas que empiezan con "1.", y párrafos separados por una línea en blanco. Usa la negrilla para las CIFRAS, que es lo que la persona busca de un vistazo.
+
+No uses tablas, ni encabezados con almohadilla, ni enlaces: no se pintan y se verían como símbolos sueltos en mitad de la respuesta.`;
 
 /**
  * Contexto VOLÁTIL de esta consulta concreta: va después del punto de caché.

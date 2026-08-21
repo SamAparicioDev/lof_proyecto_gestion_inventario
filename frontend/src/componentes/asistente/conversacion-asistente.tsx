@@ -24,6 +24,7 @@ import { PaperPlaneRight, Sparkle } from '@phosphor-icons/react';
 import type { FuenteConsultada, RespuestaAsistente, TurnoAsistente } from '@trazo/compartido';
 import { consultarAsistente } from '@/lib/api/asistente';
 import { ErrorApi } from '@/lib/api/cliente';
+import { TextoConFormato } from './texto-con-formato';
 
 const MENSAJE_ERROR_RED = 'No fue posible comunicarse con el servidor. Intenta de nuevo.';
 
@@ -192,12 +193,15 @@ function Turno({ turno }: { turno: TurnoEnPantalla }) {
 
   return (
     <div style={{ maxWidth: '95%' }}>
-      <p
-        style={{ whiteSpace: 'pre-wrap', margin: 0, color: turno.aviso ? 'var(--color-accent-300)' : undefined }}
-        role={turno.aviso ? 'alert' : undefined}
-      >
-        {turno.texto}
-      </p>
+      {/* Un AVISO se pinta plano y en color de alerta: no es una respuesta, y darle el mismo
+          tratamiento tipográfico que a un dato es la forma más rápida de que se lea como un dato. */}
+      {turno.aviso ? (
+        <p style={{ margin: 0, color: 'var(--color-accent-300)' }} role="alert">
+          {turno.texto}
+        </p>
+      ) : (
+        <TextoConFormato texto={turno.texto} />
+      )}
       {turno.fuentes && turno.fuentes.length > 0 && <Fuentes fuentes={turno.fuentes} />}
     </div>
   );
