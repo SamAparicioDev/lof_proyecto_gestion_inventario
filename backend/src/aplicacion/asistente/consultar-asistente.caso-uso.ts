@@ -7,7 +7,7 @@
  * El modelo pide herramientas, este caso de uso las ejecuta y le devuelve el resultado, hasta que
  * el modelo redacta su respuesta. Ese bucle es capa de APLICACIÓN porque cada vuelta toma dos
  * decisiones de negocio: qué herramientas existen (FR-133, solo lectura) y si quien pregunta
- * tiene permiso para esa consulta (FR-134). Si viviera en el adaptador de Claude, la
+ * tiene permiso para esa consulta (FR-134). Si viviera en el adaptador del proveedor, la
  * infraestructura estaría decidiendo quién puede ver qué.
  *
  * ## Los permisos se comprueban aquí, herramienta a herramienta
@@ -30,7 +30,9 @@ import type { Usuario } from '../../dominio/entidades/usuario';
 import { construirHerramientasConsulta, type DependenciasHerramientas } from './herramientas-consulta';
 import { INSTRUCCIONES_ASISTENTE, contextoDeLaConsulta } from './instrucciones-asistente';
 import {
+  FalloDelProveedor,
   MODELO_CONVERSACIONAL,
+  type CausaFalloProveedor,
   type ModeloConversacional,
   type ResultadoHerramienta,
 } from './puertos/modelo-conversacional';
@@ -71,9 +73,30 @@ const AVISO_NO_CONFIGURADO =
   'configurado en el servidor. El resto de la aplicación funciona con normalidad: puedes consultar ' +
   'lo mismo desde Inventario y Reportes.';
 
-const AVISO_FALLO =
-  'No pude completar la consulta porque el servicio de asistencia falló. Vuelve a intentarlo en un ' +
-  'momento; mientras tanto, el dato está disponible en Inventario y Reportes.';
+/**
+ * Un aviso por CAUSA, y no uno solo para todas.
+ *
+ * "Vuelve a intentarlo en un momento" solo es cierto cuando el servicio está saturado. Con una
+ * clave rechazada es una instrucción falsa: se puede reintentar un día entero sin que cambie nada,
+ * y nadie va a mirar los logs del servidor por un chat que no responde. Cada mensaje dice qué pasó
+ * y quién puede arreglarlo, y todos señalan dónde está el dato mientras tanto.
+ */
+const AVISOS: Record<CausaFalloProveedor, string> = {
+  credencial:
+    'El servicio de consultas rechazó la clave configurada en el servidor, así que el asistente no ' +
+    'puede responder. Esto NO se arregla reintentando: avísale a quien administra el despliegue para ' +
+    'que revise la clave del asistente. Mientras tanto, el dato está en Inventario y Reportes.',
+  cuota:
+    'Se agotó por ahora la cuota del servicio de consultas. Vuelve a intentarlo más tarde — si pasa ' +
+    'a menudo, quien administra el despliegue puede ampliar el plan. Mientras tanto, el dato está en ' +
+    'Inventario y Reportes.',
+  saturado:
+    'El servicio de consultas está saturado en este momento. Vuelve a intentarlo en un minuto; ' +
+    'mientras tanto, el dato está disponible en Inventario y Reportes.',
+  desconocido:
+    'No pude completar la consulta porque el servicio de asistencia falló. Vuelve a intentarlo en un ' +
+    'momento; mientras tanto, el dato está disponible en Inventario y Reportes.',
+};
 
 @Injectable()
 export class ConsultarAsistenteCasoUso implements CasoDeUso<ConsultarAsistenteEntrada, RespuestaAsistente> {
@@ -132,10 +155,12 @@ export class ConsultarAsistenteCasoUso implements CasoDeUso<ConsultarAsistenteEn
         disponible: true,
       };
     } catch (error) {
-      // El mensaje del proveedor NUNCA llega al usuario: puede traer detalle de configuración y no
-      // le dice nada a quien solo quería un dato. Al log sí, entero.
-      this.logger.error(`Fallo del servicio de asistencia: ${error instanceof Error ? error.message : error}`);
-      return { respuesta: AVISO_FALLO, fuentes, disponible: false };
+      const causa: CausaFalloProveedor = error instanceof FalloDelProveedor ? error.causa : 'desconocido';
+      // El detalle técnico NUNCA llega al usuario — puede traer configuración y no le dice nada a
+      // quien solo quería un dato. Al log sí, entero y con la causa delante para poder buscarla.
+      const detalle = error instanceof FalloDelProveedor ? error.detalleTecnico : String(error);
+      this.logger.error(`Fallo del servicio de asistencia [${causa}]: ${detalle}`);
+      return { respuesta: AVISOS[causa], fuentes, disponible: false };
     }
   }
 

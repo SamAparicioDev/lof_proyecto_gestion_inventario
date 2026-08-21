@@ -49,12 +49,14 @@
  */
 import { ApiError, GoogleGenAI, type Content, type FunctionCall, type Part } from '@google/genai';
 import { Injectable, Logger } from '@nestjs/common';
-import type {
-  EntradaPasoConversacion,
-  LlamadaHerramienta,
-  ModeloConversacional,
-  PasoConversacion,
-  ResultadoHerramienta,
+import {
+  FalloDelProveedor,
+  type CausaFalloProveedor,
+  type EntradaPasoConversacion,
+  type LlamadaHerramienta,
+  type ModeloConversacional,
+  type PasoConversacion,
+  type ResultadoHerramienta,
 } from '../../aplicacion/asistente/puertos/modelo-conversacional';
 
 /** Ver el TSDoc de cabecera para el porqué de cada uno. */
@@ -174,7 +176,7 @@ export class AdaptadorGemini implements ModeloConversacional {
       } catch (error) {
         const transitorio = error instanceof ApiError && CODIGOS_TRANSITORIOS.includes(error.status);
         if (!transitorio || intento >= ESPERAS_MS.length) {
-          throw error;
+          throw new FalloDelProveedor(causaDe(error), String(error instanceof Error ? error.message : error));
         }
         this.logger.warn(
           `El proveedor respondió ${error.status}; reintento ${intento + 1} de ${ESPERAS_MS.length}.`,
@@ -257,4 +259,20 @@ function primeraDefinida(...nombres: readonly string[]): string | undefined {
     if (valor) return valor;
   }
   return undefined;
+}
+
+/**
+ * Traduce el código HTTP del proveedor al vocabulario del puerto.
+ *
+ * `400` entra en `credencial` junto a `401` y `403` porque es lo que devuelve esta API cuando la
+ * clave es inválida (`API_KEY_INVALID`), no solo cuando el cuerpo está mal formado — y una clave
+ * rechazada es, con diferencia, el fallo más probable de los que llegan como 400 en una integración
+ * que ya funcionó alguna vez.
+ */
+function causaDe(error: unknown): CausaFalloProveedor {
+  if (!(error instanceof ApiError)) return 'desconocido';
+  if ([400, 401, 403].includes(error.status)) return 'credencial';
+  if (error.status === 429) return 'cuota';
+  if (error.status >= 500) return 'saturado';
+  return 'desconocido';
 }

@@ -89,5 +89,36 @@ export interface ModeloConversacional {
   responder(entrada: EntradaPasoConversacion): Promise<PasoConversacion>;
 }
 
+/**
+ * Por qué falló el proveedor, en un vocabulario que NO menciona a ninguno.
+ *
+ * Existe porque los tres primeros casos exigen respuestas distintas de quien los sufre, y el
+ * mensaje genérico "vuelve a intentarlo" solo es cierto en dos de ellos:
+ *
+ * - `credencial`: la clave configurada fue rechazada. NO se arregla esperando — hay que revisarla
+ *   en el despliegue. Decirle a alguien que reintente aquí es mandarlo a perder el rato.
+ * - `cuota`: se agotó lo que el plan permite. Se arregla con tiempo o con plan, no reintentando.
+ * - `saturado`: el servicio está ocupado. Este sí se arregla solo, en segundos.
+ * - `desconocido`: cualquier otra cosa. Se dice como tal, sin adivinar.
+ */
+export type CausaFalloProveedor = 'credencial' | 'cuota' | 'saturado' | 'desconocido';
+
+/**
+ * Fallo del servicio del modelo, ya clasificado por el adaptador (que conoce los códigos de SU
+ * proveedor) en el vocabulario de arriba, que el caso de uso entiende sin conocer a ninguno.
+ *
+ * `detalleTecnico` es para el log y NUNCA para el usuario: puede traer detalle de configuración y
+ * no le dice nada a quien solo quería un dato.
+ */
+export class FalloDelProveedor extends Error {
+  constructor(
+    readonly causa: CausaFalloProveedor,
+    readonly detalleTecnico: string,
+  ) {
+    super(`El proveedor del asistente falló (${causa})`);
+    this.name = 'FalloDelProveedor';
+  }
+}
+
 /** Token de inyección de NestJS para el puerto. */
 export const MODELO_CONVERSACIONAL = 'ModeloConversacional';

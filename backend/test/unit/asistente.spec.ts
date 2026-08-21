@@ -14,10 +14,12 @@
  */
 import { ConsultarAsistenteCasoUso } from '../../src/aplicacion/asistente/consultar-asistente.caso-uso';
 import { construirHerramientasConsulta, type DependenciasHerramientas } from '../../src/aplicacion/asistente/herramientas-consulta';
-import type {
-  EntradaPasoConversacion,
-  ModeloConversacional,
-  PasoConversacion,
+import {
+  FalloDelProveedor,
+  type CausaFalloProveedor,
+  type EntradaPasoConversacion,
+  type ModeloConversacional,
+  type PasoConversacion,
 } from '../../src/aplicacion/asistente/puertos/modelo-conversacional';
 import type { Usuario } from '../../src/dominio/entidades/usuario';
 
@@ -199,6 +201,38 @@ describe('Asistente de consultas (US33)', () => {
       expect(resultado.respuesta).toContain('no está disponible');
       // Señala dónde SÍ está el dato: un aviso que solo dice "no puedo" deja a la persona parada.
       expect(resultado.respuesta).toContain('Inventario');
+    });
+
+    it.each<[CausaFalloProveedor, string]>([
+      ['credencial', 'rechazó la clave'],
+      ['cuota', 'Se agotó'],
+      ['saturado', 'saturado'],
+      ['desconocido', 'falló'],
+    ])('el aviso de la causa "%s" dice qué pasó, no solo que falló', async (causa, esperado) => {
+      const { dependencias } = dependenciasEspia();
+      const queFalla: ModeloConversacional = {
+        disponible: () => true,
+        responder: async () => {
+          throw new FalloDelProveedor(causa, 'detalle técnico que no debe salir');
+        },
+      };
+
+      const resultado = await new ConsultarAsistenteCasoUso(queFalla, dependencias).ejecutar({
+        pregunta: '¿Cuánto hay de cemento?',
+        historial: [],
+        usuario: usuarioCon(['inventario.ver']),
+      });
+
+      expect(resultado.disponible).toBe(false);
+      expect(resultado.respuesta).toContain(esperado);
+      // El detalle técnico se queda en el log en todos los casos.
+      expect(resultado.respuesta).not.toContain('detalle técnico');
+
+      // El de credencial es el que más importa: reintentar NO lo arregla, y el mensaje tiene que
+      // decirlo o la persona se pasa el día insistiendo mientras nadie revisa la clave.
+      if (causa === 'credencial') {
+        expect(resultado.respuesta).toContain('NO se arregla reintentando');
+      }
     });
 
     it('si el proveedor falla a mitad, tampoco propaga la excepción', async () => {
