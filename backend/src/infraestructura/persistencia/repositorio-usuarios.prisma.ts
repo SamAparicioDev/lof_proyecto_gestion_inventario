@@ -406,6 +406,7 @@ function aUsuarioDominio(registro: UsuarioConRol): Usuario {
     rolAsignado: aRolDominio(registro.rol),
     estado: mapearEstado(registro.estado),
     debeCambiarPassword: registro.debeCambiarPassword,
+    fechaCreacion: registro.fechaCreacion,
   };
 }
 

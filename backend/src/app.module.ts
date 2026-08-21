@@ -43,6 +43,7 @@ import { AuthModule } from './interfaces/http/auth/auth.module';
 import { ClientesModule } from './interfaces/http/clientes/clientes.module';
 import { IngresosModule } from './interfaces/http/ingresos/ingresos.module';
 import { InventarioModule } from './interfaces/http/inventario/inventario.module';
+import { NotificacionesModule } from './interfaces/http/notificaciones/notificaciones.module';
 import { PanelModule } from './interfaces/http/panel/panel.module';
 import { ProductosModule } from './interfaces/http/productos/productos.module';
 import { ReportesModule } from './interfaces/http/reportes/reportes.module';
@@ -96,6 +97,9 @@ import { UsuariosModule } from './interfaces/http/usuarios/usuarios.module';
     MarcaModule,
     // US10: panel de control de la ruta de inicio — compone las cifras que ya existen (T115).
     PanelModule,
+    // US35: la bandeja de avisos. Solo lectura — la emisión vive en los módulos que cambian
+    // el estado (ingresos, salidas, inventario).
+    NotificacionesModule,
   ],
   controllers: [ControladorSalud],
   providers: [

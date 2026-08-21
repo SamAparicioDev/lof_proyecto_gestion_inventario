@@ -14,6 +14,7 @@ import { AnularIngresoCasoUso } from '../../../aplicacion/ingresos/anular-ingres
 import { CrearIngresoCasoUso } from '../../../aplicacion/ingresos/crear-ingreso.caso-uso';
 import { RecibirIngresoCasoUso } from '../../../aplicacion/ingresos/recibir-ingreso.caso-uso';
 import { VerificarIngresoCasoUso } from '../../../aplicacion/ingresos/verificar-ingreso.caso-uso';
+import { AvisadorDeNotificaciones } from '../../../aplicacion/notificaciones/avisador-notificaciones';
 import { ControladorIngresos } from './controlador-ingresos';
 
 @Module({
@@ -25,6 +26,10 @@ import { ControladorIngresos } from './controlador-ingresos';
     RecibirIngresoCasoUso,
     VerificarIngresoCasoUso,
     AnularIngresoCasoUso,
+  // US35: el AVISADOR se declara en cada módulo que EMITE, no en el de la campana. Al revés
+  // —colgarlo del módulo de notificaciones y hacer que este lo importe— obligaría a que
+  // registrar un ingreso dependiera de la bandeja, que es la dependencia justo al revés.
+    AvisadorDeNotificaciones,
   ],
 })
 export class IngresosModule {}

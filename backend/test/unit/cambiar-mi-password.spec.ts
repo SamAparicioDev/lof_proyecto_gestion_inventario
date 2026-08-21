@@ -131,6 +131,7 @@ function crearUsuarioDePrueba(): UsuarioAutenticable {
     },
     estado: 'ACTIVO',
     debeCambiarPassword: true,
+    fechaCreacion: new Date('2026-01-01T00:00:00.000Z'),
     passwordHash: `${PREFIJO_HASH_FALSO}ClaveVieja#1`,
   };
 }

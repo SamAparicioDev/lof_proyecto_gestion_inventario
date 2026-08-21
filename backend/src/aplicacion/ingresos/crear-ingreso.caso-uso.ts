@@ -34,6 +34,7 @@ import {
   type RepositorioOrdenesCompra,
 } from '../../dominio/puertos/repositorio-ordenes-compra';
 import { ErrorValidacionDominio } from '../../dominio/comunes/errores';
+import { AvisadorDeNotificaciones } from '../notificaciones/avisador-notificaciones';
 import { verificarProveedorAsignable } from './verificar-proveedor-asignable';
 
 /** Línea de factura ya validada en forma (producto, cantidad, precio de compra unitario). */
@@ -74,6 +75,7 @@ export class CrearIngresoCasoUso implements CasoDeUso<CrearIngresoEntrada, Crear
     @Inject(REPOSITORIO_INGRESOS) private readonly repositorioIngresos: RepositorioIngresos,
     @Inject(REPOSITORIO_PROVEEDORES) private readonly repositorioProveedores: RepositorioProveedores,
     @Inject(REPOSITORIO_ORDENES_COMPRA) private readonly repositorioOrdenes: RepositorioOrdenesCompra,
+    private readonly avisador: AvisadorDeNotificaciones,
   ) {}
 
   async ejecutar(entrada: CrearIngresoEntrada): Promise<CrearIngresoSalida> {
@@ -100,6 +102,10 @@ export class CrearIngresoCasoUso implements CasoDeUso<CrearIngresoEntrada, Crear
       lineas: entrada.lineas.map((linea) => ({ ...linea })),
       usuarioId: entrada.usuarioId,
     });
+    // US35 (FR-139): el ingreso nace PENDIENTE, o sea que hay mercancía esperando a que
+    // alguien la reciba. Todavía no toca stock, así que no hay umbral que revisar.
+    await this.avisador.ingresoRegistrado(ingreso.id, entrada.usuarioId);
+
     return { id: ingreso.id };
   }
 

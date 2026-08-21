@@ -41,6 +41,7 @@ import { Global, Module } from '@nestjs/common';
 import { CONTADORES } from '../../dominio/puertos/contadores';
 import { REPOSITORIO_CLIENTES } from '../../dominio/puertos/repositorio-clientes';
 import { REPOSITORIO_HISTORIAL_COSTOS } from '../../dominio/puertos/repositorio-historial-costos';
+import { REPOSITORIO_NOTIFICACIONES } from '../../dominio/puertos/repositorio-notificaciones';
 import { REPOSITORIO_INGRESOS } from '../../dominio/puertos/repositorio-ingresos';
 import { REPOSITORIO_MOVIMIENTOS } from '../../dominio/puertos/repositorio-movimientos';
 import { REPOSITORIO_PERMISOS } from '../../dominio/puertos/repositorio-permisos';
@@ -58,6 +59,7 @@ import { ContadoresPrisma } from './contadores.prisma';
 import { PrismaService } from './prisma.service';
 import { RepositorioClientesPrisma } from './repositorio-clientes.prisma';
 import { RepositorioHistorialCostosPrisma } from './repositorio-historial-costos.prisma';
+import { RepositorioNotificacionesPrisma } from './repositorio-notificaciones.prisma';
 import { RepositorioIngresosPrisma } from './repositorio-ingresos.prisma';
 import { RepositorioMovimientosPrisma } from './repositorio-movimientos.prisma';
 import { RepositorioPermisosPrisma } from './repositorio-permisos.prisma';
@@ -95,6 +97,7 @@ import { UnidadDeTrabajo } from './unidad-de-trabajo';
     { provide: SUGERENCIAS_COMPRA, useClass: SugerenciasCompraPrisma },
     { provide: REPOSITORIO_PERMISOS, useClass: RepositorioPermisosPrisma },
     { provide: REPOSITORIO_HISTORIAL_COSTOS, useClass: RepositorioHistorialCostosPrisma },
+    { provide: REPOSITORIO_NOTIFICACIONES, useClass: RepositorioNotificacionesPrisma },
   ],
   exports: [
     PrismaService,
@@ -115,6 +118,7 @@ import { UnidadDeTrabajo } from './unidad-de-trabajo';
     SUGERENCIAS_COMPRA,
     REPOSITORIO_PERMISOS,
     REPOSITORIO_HISTORIAL_COSTOS,
+    REPOSITORIO_NOTIFICACIONES,
   ],
 })
 export class PersistenciaModule {}

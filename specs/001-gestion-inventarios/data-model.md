@@ -434,6 +434,16 @@ mercancía"; desde US12 admite además edición manual y masiva, así que su lec
 pasa a ser "costo de referencia vigente" — su procedencia exacta siempre se puede reconstruir
 en esta tabla.
 
+**El costo es el ÚLTIMO, nunca un promedio (FR-138)**: recibir mercancía a un precio distinto
+REEMPLAZA `ultimo_costo`; no lo promedia con las existencias previas. La razón es estructural y
+no de fórmula: aquí el stock es UN número por producto (`productos.stock_actual`), no una pila de
+lotes con su precio, así que no existe el dato "cuántas unidades quedan de la compra vieja" que un
+promedio ponderado necesita. Una cifra promediada sobre un solo número no sería ni el costo de lo
+que hay ni el precio de ninguna compra, y ningún documento podría respaldarla. Consecuencia
+aceptada: tras una compra más cara, las unidades viejas quedan valorizadas por encima de lo que
+costaron — una distorsión visible y reconstruible en esta tabla, que es preferible a una cifra
+derivada que nadie puede explicar.
+
 ### movimientos_inventario (INMUTABLE)
 
 | Columna | Tipo | Constraints |
@@ -470,6 +480,49 @@ reescribe la historia (y en esta tabla reescribirla está prohibido por el trigg
 Uso exclusivo vía `UPDATE ... RETURNING` dentro de transacciones (research R5). Sin campos de
 auditoría (tabla técnica).
 
+
+### notificaciones (US35, FR-139…FR-147)
+
+| Columna | Tipo | Constraints |
+|---|---|---|
+| `id` | BIGINT PK | |
+| `tipo` | ENUM `INGRESO_REGISTRADO/INGRESO_RECIBIDO/INGRESO_ANULADO/SALIDA_POR_APROBAR/SALIDA_CONFIRMADA/SALIDA_ANULADA/STOCK_BAJO/CANTIDAD_CORREGIDA` | NOT NULL — decide el permiso de suscripción y el de lectura que exige (catálogo en `dominio/entidades/notificacion.ts`) |
+| `titulo` | VARCHAR(150) | NOT NULL — redactado en el momento del hecho |
+| `detalle` | VARCHAR(300) | NULL — la segunda línea del aviso |
+| `entidad_tipo` | ENUM `INGRESO/SALIDA/PRODUCTO` | NOT NULL — a dónde lleva el aviso (FR-140) |
+| `entidad_id` | BIGINT | NOT NULL |
+| `usuario_origen_id` | FK → usuarios | NULL — quien provocó el hecho; se EXCLUYE de los destinatarios (FR-143). Nulo cuando lo provoca el sistema |
+| `creada_en` | timestamptz | NOT NULL DEFAULT now() |
+
+**Una fila por HECHO, no por destinatario.** Es la decisión de diseño de la tabla y tiene tres
+consecuencias que se buscaron: (1) cambiar los permisos de un rol surte efecto de inmediato,
+también sobre los avisos ya creados, porque los destinatarios se resuelven al CONSULTAR y no al
+escribir; (2) un usuario dado de alta después no arrastra el fan-out de nadie; (3) el número de
+filas no se multiplica por la plantilla. El costo es que "quién puede ver esto" se calcula en cada
+lectura — barato, porque son dos conjuntos de claves de permiso comparados en memoria.
+
+**Solo INSERT.** Un aviso no se edita ni se anula: es lo que se supo en ese momento. Si el hecho
+se revierte (una anulación), lo que corresponde es OTRO aviso, no reescribir el anterior — mismo
+criterio que `movimientos_inventario` (Principio II).
+
+**No es el archivo permanente** (FR-147): la bandeja muestra una ventana reciente. Lo que pasó de
+verdad vive en `movimientos_inventario` y en la auditoría de cada documento.
+
+### notificaciones_lecturas (US35, FR-144)
+
+| Columna | Tipo | Constraints |
+|---|---|---|
+| `notificacion_id` | FK → notificaciones | NOT NULL, ON DELETE CASCADE |
+| `usuario_id` | FK → usuarios | NOT NULL |
+| `leida_en` | timestamptz | NOT NULL DEFAULT now() |
+
+PK compuesta `(notificacion_id, usuario_id)`: la existencia de la fila ES el estado "leída" para
+ESE usuario. No hay columna booleana ni fila previa "no leída" — el no-leído es la ausencia, que
+es lo que hace que un aviso nuevo no necesite escribir nada por cada destinatario posible.
+
+Marcar todo como leído es un único `INSERT ... SELECT ... ON CONFLICT DO NOTHING` sobre lo que ese
+usuario puede ver y aún no ha leído.
+
 ## Relaciones (resumen)
 
 ```text
@@ -489,6 +542,8 @@ ingresos 1───n detalles_ingresos n───1 productos
 salidas  1───n detalles_salidas  n───1 productos
 productos 1───n movimientos_inventario n───1 (ingresos|salidas) [documento_tipo+documento_id]
 proyectos 1───n movimientos_inventario (solo tipo SALIDA/AJUSTE de salida)
+usuarios 1───n notificaciones       (usuario_origen — quien provocó el hecho, US35)
+notificaciones 1───n notificaciones_lecturas n───1 usuarios  (leída por, US35)
 ```
 
 ## Máquinas de estado
@@ -598,6 +653,8 @@ cruzado sería sobre-ingeniería para este caso de uso (Principio V, YAGNI).
 | proyectos | btree(cliente_id, estado); UNIQUE(cliente_id, nombre) | combobox FR-038, listados FR-037 |
 | usuarios | UNIQUE(login); UNIQUE(email) | FR-009 |
 | clientes | UNIQUE(nit); btree(nombre) | FR-035, búsqueda |
+| notificaciones | btree(creada_en); btree(tipo, creada_en) | la bandeja se lee siempre "lo más reciente primero" y filtrada a los TIPOS que la sesión puede ver (FR-141/FR-142), que es justo el compuesto |
+| notificaciones_lecturas | PK(notificacion_id, usuario_id); btree(usuario_id) | "¿esta la leí?" por la PK y "¿cuántas me faltan?" por el segundo |
 
 **Filtros de US13 que NO reciben índice, y por qué** (anotado en T132; ninguno se agregó ni se
 omitió en silencio — ver [rendimiento.md](./rendimiento.md) § (g) para los planes medidos):

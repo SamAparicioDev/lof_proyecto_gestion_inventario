@@ -151,6 +151,12 @@ const TABLAS_DE_NEGOCIO = [
   // siembra la migración NO sobreviven al truncado, que es justo lo que hay que saber al
   // escribir una suite (por eso existe `crearUnidadMedidaDePrueba`).
   'unidades_medida',
+  // US35: las lecturas ANTES que los avisos (FK) y ambos antes que `usuarios`, del que
+  // cuelgan por `usuario_origen_id`/`usuario_id`. Se listan explícitamente aunque el
+  // `CASCADE` los arrastraría: una bandeja heredada de otra suite haría pasar —o fallar—
+  // una prueba de entrega por avisos que esa prueba nunca creó.
+  'notificaciones_lecturas',
+  'notificaciones',
   'usuarios',
 ] as const;
 

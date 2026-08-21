@@ -57,3 +57,4 @@ export * from './esquemas/usuarios';
 export * from './esquemas/roles';
 export * from './esquemas/ordenes-compra';
 export * from './esquemas/cotizaciones';
+export * from './esquemas/notificaciones';

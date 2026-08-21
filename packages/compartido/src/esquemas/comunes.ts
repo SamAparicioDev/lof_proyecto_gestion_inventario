@@ -50,6 +50,23 @@ export const esquemaPaginacion = z.object({
 export type DatosPaginacion = z.infer<typeof esquemaPaginacion>;
 
 /**
+ * Coerciona un query param BOOLEANO opcional: llega como texto (`?soloNoLeidas=true`) o ausente.
+ * Cualquier valor distinto de `true`/`"true"` —incluidos `undefined`, `"false"` y texto
+ * arbitrario— se interpreta como `false`: mismo criterio permisivo que `esquemaPaginacion` aplica
+ * a los números. Zod no ofrece un `z.coerce.boolean()` seguro para esto (coerciona CUALQUIER
+ * string no vacío, incluido `"false"`, a `true`).
+ *
+ * La `union([boolean, string])` de la ENTRADA no es decorativa: `PipeValidacionZod<T>` recibe un
+ * `ZodSchema<T>`, donde entrada y salida son el MISMO tipo, así que un esquema cuya salida
+ * (`boolean`) no sea asignable a su entrada no se puede pasar al pipe. Con `z.enum(['true','false'])`
+ * el paquete compila igual y el error aparece en el controlador, lejos de aquí.
+ */
+export const esquemaBooleanoDeQuery = z
+  .union([z.boolean(), z.string()])
+  .optional()
+  .transform((valor) => valor === true || valor === 'true');
+
+/**
  * Trata como AUSENTE un valor de query string vacío antes de aplicar `esquema` (US13/T130).
  *
  * Por qué existe: los filtros de los listados son `<form method="GET">` nativos, y un HTML form

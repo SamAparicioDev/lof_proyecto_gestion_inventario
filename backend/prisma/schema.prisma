@@ -362,6 +362,9 @@ model Usuario {
   cambiosDeCosto            HistorialCostoProducto[] @relation("CambioCostoUsuario")
   cotizacionesCreadas       Cotizacion[]             @relation("CotizacionCreadaPor")
   cotizacionesModificadas   Cotizacion[]             @relation("CotizacionModificadaPor")
+  // US35: avisos que esta persona provocó, y los que ha marcado como leídos.
+  notificacionesOriginadas  Notificacion[]           @relation("NotificacionOrigen")
+  notificacionesLeidas      NotificacionLectura[]    @relation("NotificacionLeidaPor")
 
   @@map("usuarios")
 }
@@ -1043,4 +1046,89 @@ model DetalleCotizacion {
   @@unique([cotizacionId, productoId])
   @@index([productoId])
   @@map("detalles_cotizaciones")
+}
+
+// ============================================================================
+// Notificaciones (US35, FR-139…FR-147)
+// ============================================================================
+
+/**
+ * Los hechos que el sistema avisa (FR-139). El tipo decide, vía
+ * `dominio/entidades/notificacion.ts`, qué permiso de suscripción y qué permiso de lectura
+ * exige y a qué clase de entidad lleva — aquí solo se guarda cuál fue.
+ */
+enum TipoNotificacion {
+  INGRESO_REGISTRADO
+  INGRESO_RECIBIDO
+  INGRESO_ANULADO
+  SALIDA_POR_APROBAR
+  SALIDA_CONFIRMADA
+  SALIDA_ANULADA
+  STOCK_BAJO
+  CANTIDAD_CORREGIDA
+
+  @@map("tipo_notificacion")
+}
+
+/**
+ * A qué clase de cosa lleva un aviso (FR-140). NO se guarda la ruta: `/salidas/231` es el mapa
+ * de rutas de HOY (contracts/rutas-frontend.md) y meterlo en la base lo congelaría dentro de
+ * datos que duran años.
+ */
+enum EntidadNotificada {
+  INGRESO
+  SALIDA
+  PRODUCTO
+
+  @@map("entidad_notificada")
+}
+
+/**
+ * Un aviso: UNA fila por HECHO, no una por destinatario (data-model.md § notificaciones).
+ * Quién lo ve se resuelve al CONSULTAR, cruzando los tipos que la sesión puede recibir contra
+ * esta tabla. Por eso cambiar los permisos de un rol surte efecto de inmediato también sobre lo
+ * ya ocurrido, y por eso un usuario nuevo no hereda el fan-out de nadie.
+ * Solo INSERT: un aviso es lo que se supo en ese momento. Si el hecho se revierte, corresponde
+ * OTRO aviso (la anulación también se avisa), no reescribir este.
+ */
+model Notificacion {
+  id              BigInt            @id @default(autoincrement())
+  tipo            TipoNotificacion
+  /// Redactado en el momento del hecho — el texto no se recalcula al leerlo.
+  titulo          String            @db.VarChar(150)
+  detalle         String?           @db.VarChar(300)
+  entidadTipo     EntidadNotificada @map("entidad_tipo")
+  entidadId       BigInt            @map("entidad_id")
+  /**
+   * Quien provocó el hecho: se EXCLUYE de los destinatarios (FR-143). Nulo cuando lo provoca
+   * el sistema y no una persona.
+   */
+  usuarioOrigenId BigInt?           @map("usuario_origen_id")
+  usuarioOrigen   Usuario?          @relation("NotificacionOrigen", fields: [usuarioOrigenId], references: [id])
+  creadaEn        DateTime          @default(now()) @map("creada_en") @db.Timestamptz(6)
+
+  lecturas NotificacionLectura[]
+
+  // La bandeja se lee siempre "lo más reciente primero" y acotada a los TIPOS visibles.
+  @@index([creadaEn])
+  @@index([tipo, creadaEn])
+  @@map("notificaciones")
+}
+
+/**
+ * Marca de que UN usuario ya leyó UNA notificación (FR-144).
+ * La EXISTENCIA de la fila es el estado "leída". No hay columna booleana ni fila previa "no
+ * leída": el no-leído es la ausencia, que es justo lo que permite que emitir un aviso no
+ * escriba nada por cada destinatario posible.
+ */
+model NotificacionLectura {
+  notificacionId BigInt       @map("notificacion_id")
+  notificacion   Notificacion @relation(fields: [notificacionId], references: [id], onDelete: Cascade)
+  usuarioId      BigInt       @map("usuario_id")
+  usuario        Usuario      @relation("NotificacionLeidaPor", fields: [usuarioId], references: [id])
+  leidaEn        DateTime     @default(now()) @map("leida_en") @db.Timestamptz(6)
+
+  @@id([notificacionId, usuarioId])
+  @@index([usuarioId])
+  @@map("notificaciones_lecturas")
 }

@@ -80,6 +80,10 @@ const PERMISOS_DEL_SISTEMA = [
   { clave: 'inventario.ajustar', modulo: 'inventario', descripcion: 'Corregir a mano la cantidad de un producto para cuadrar con el conteo físico, sin documento de entrada ni de salida. Permiso reservado: solo el super administrador lo concede o lo retira.' },
   { clave: 'asistente.consultar', modulo: 'asistente', descripcion: 'Preguntarle al asistente sobre los datos del sistema. Es de solo lectura: cada consulta que hace por dentro respeta los permisos de quien pregunta.' },
 
+  { clave: 'notificaciones.ingresos', modulo: 'notificaciones', descripcion: 'Recibir avisos de entradas de mercancía: registradas, recibidas y anuladas. Requiere además poder ver ingresos.' },
+  { clave: 'notificaciones.salidas', modulo: 'notificaciones', descripcion: 'Recibir avisos de salidas: pendientes por aprobar, confirmadas y anuladas. Requiere además poder ver salidas.' },
+  { clave: 'notificaciones.inventario', modulo: 'notificaciones', descripcion: 'Recibir avisos de inventario: productos que cruzan su umbral de stock bajo y cantidades corregidas a mano. Requiere además poder ver el inventario.' },
+
   { clave: 'productos.ver', modulo: 'productos', descripcion: 'Consultar el catálogo de productos para seleccionarlos en documentos.' },
   { clave: 'productos.crear', modulo: 'productos', descripcion: 'Dar de alta productos en el catálogo.' },
   { clave: 'productos.editar', modulo: 'productos', descripcion: 'Editar los datos de un producto del catálogo.' },
@@ -157,6 +161,10 @@ const PERMISOS_DEL_SISTEMA = [
  */
 const PERMISOS_OPERARIO = [
   'inventario.ver',
+  'asistente.consultar',
+  'notificaciones.ingresos',
+  'notificaciones.salidas',
+  'notificaciones.inventario',
   'productos.ver',
   'productos.crear',
   'categorias.ver',
@@ -206,6 +214,10 @@ const PERMISOS_EXCLUSIVOS_ADMINISTRADOR = ['usuarios.gestionar', 'roles.gestiona
  * | inventario.ver             | ✔ | ✔ | ✔ | GET /api/inventario · /:productoId · /:productoId/movimientos       |
  * | inventario.ver_costos      | ✔ | ✔ | — | GET /api/inventario/:productoId/historial-costos (US12)             |
  * | inventario.ajustar         | ✔ | — | — | PUT /api/inventario/:productoId/cantidad (US31 — RESERVADO)          |
+ * | asistente.consultar        | ✔ | ✔ | ✔ | POST /api/asistente/consulta (US33)                                 |
+ * | notificaciones.ingresos    | ✔ | ✔ | ✔ | GET /api/notificaciones — suscripción a avisos de ingresos (US35)   |
+ * | notificaciones.salidas     | ✔ | ✔ | ✔ | GET /api/notificaciones — suscripción a avisos de salidas (US35)    |
+ * | notificaciones.inventario  | ✔ | ✔ | ✔ | GET /api/notificaciones — umbral cruzado y cantidad corregida (US35)|
  * | productos.ver              | ✔ | ✔ | ✔ | GET /api/productos                                                 |
  * | productos.crear            | ✔ | ✔ | ✔ | POST /api/productos                                                |
  * | productos.editar           | ✔ | ✔ | — | PUT /api/productos/:id                                             |
@@ -253,7 +265,7 @@ const PERMISOS_EXCLUSIVOS_ADMINISTRADOR = ['usuarios.gestionar', 'roles.gestiona
  * | cotizaciones.cerrar        | ✔ | ✔ | — | POST /api/cotizaciones/:id/{aceptar,rechazar} (US21)                |
  * | cotizaciones.anular        | ✔ | ✔ | — | POST /api/cotizaciones/:id/anular (US21)                            |
  *
- * TOTALES: Administrador 48 · Gerente 46 · Operario 23 (de 48 permisos del catálogo).
+ * TOTALES: Administrador 53 · Gerente 50 · Operario 27 (de 53 permisos del catálogo).
  * (Eran 31/29/14 sobre 31 hasta US12; US15 agrega los cuatro de los catálogos, US16 los cinco
  * de órdenes de compra y US17 los dos de unidades de medida. Ninguno recorta nada de lo que ya tenía un rol — SC-013 se conserva
  * intacto, misma lectura que la nota de `inventario.ver_costos` de más abajo.)
@@ -270,6 +282,13 @@ const PERMISOS_EXCLUSIVOS_ADMINISTRADOR = ['usuarios.gestionar', 'roles.gestiona
  * información de valorización, mismo alcance que `reportes.ver`. La migración
  * `20260812150000_historial_costos_producto` inserta el permiso y esta misma matriz en las
  * bases ya existentes.
+ *
+ * Nota sobre los cuatro permisos que el Operario gana en US35: tres son de avisos
+ * (`notificaciones.*`, nuevos) y el cuarto es `asistente.consultar`, que NO es nuevo — la
+ * migración `20260820090000_permiso_asistente` ya se lo concedía a los tres roles, pero esta
+ * lista nunca lo recogió, así que una base recreada desde cero le dejaba el asistente apagado
+ * al Operario, justo al revés de lo que esa migración dice. Ninguno recorta nada: SC-013 sigue
+ * intacto.
  * ════════════════════════════════════════════════════════════════════════════════════════
  */
 const ROLES_DEL_SISTEMA: { nombre: string; descripcion: string; permisos: readonly string[] }[] = [

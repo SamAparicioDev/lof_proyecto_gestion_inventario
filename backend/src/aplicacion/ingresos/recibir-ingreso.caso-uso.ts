@@ -13,6 +13,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { CasoDeUso } from '../comunes/caso-de-uso';
 import { REPOSITORIO_INGRESOS, type RepositorioIngresos } from '../../dominio/puertos/repositorio-ingresos';
+import { AvisadorDeNotificaciones } from '../notificaciones/avisador-notificaciones';
 
 /** Entrada: `usuarioId` viene del token de sesión, nunca del body (FR-045). */
 export interface RecibirIngresoEntrada {
@@ -22,9 +23,16 @@ export interface RecibirIngresoEntrada {
 
 @Injectable()
 export class RecibirIngresoCasoUso implements CasoDeUso<RecibirIngresoEntrada, void> {
-  constructor(@Inject(REPOSITORIO_INGRESOS) private readonly repositorioIngresos: RepositorioIngresos) {}
+  constructor(
+    @Inject(REPOSITORIO_INGRESOS) private readonly repositorioIngresos: RepositorioIngresos,
+    private readonly avisador: AvisadorDeNotificaciones,
+  ) {}
 
   async ejecutar(entrada: RecibirIngresoEntrada): Promise<void> {
     await this.repositorioIngresos.recibir(entrada.ingresoId, entrada.usuarioId);
+
+    // US35 (FR-139): entró mercancía y el stock ya subió. Sin umbrales que revisar — recibir
+    // solo puede sacar a un producto de "bajo", nunca meterlo.
+    await this.avisador.ingresoRecibido(entrada.ingresoId, entrada.usuarioId);
   }
 }

@@ -27,6 +27,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { CasoDeUso } from '../comunes/caso-de-uso';
 import { REPOSITORIO_PRODUCTOS, type RepositorioProductos } from '../../dominio/puertos/repositorio-productos';
+import { AvisadorDeNotificaciones } from '../notificaciones/avisador-notificaciones';
 
 /** Entrada: lo validado por `esquemaCorregirCantidad` más quién ejecuta (FR-045). */
 export interface CorregirCantidadEntrada {
@@ -40,14 +41,38 @@ export interface CorregirCantidadEntrada {
 
 @Injectable()
 export class CorregirCantidadCasoUso implements CasoDeUso<CorregirCantidadEntrada, void> {
-  constructor(@Inject(REPOSITORIO_PRODUCTOS) private readonly repositorioProductos: RepositorioProductos) {}
+  constructor(
+    @Inject(REPOSITORIO_PRODUCTOS) private readonly repositorioProductos: RepositorioProductos,
+    private readonly avisador: AvisadorDeNotificaciones,
+  ) {}
 
   async ejecutar(entrada: CorregirCantidadEntrada): Promise<void> {
+    // US35: la cantidad ANTERIOR se lee antes de corregir porque después ya no existe en ninguna
+    // parte salvo en el movimiento de ajuste. Es una lectura FUERA de la transacción y solo
+    // alimenta el texto del aviso: si otro usuario mueve el producto en ese instante, el aviso
+    // podría citar una cifra de hace un segundo, pero el stock que queda lo decide la
+    // transacción de `corregirCantidad` (Principio I), no esto.
+    const [antes] = await this.repositorioProductos.buscarPorIds([entrada.productoId]);
+
     await this.repositorioProductos.corregirCantidad({
       productoId: entrada.productoId,
       cantidad: entrada.cantidad,
       motivo: entrada.motivo,
       usuarioId: entrada.usuarioId,
     });
+
+    if (!antes) return;
+
+    // Escribir el stock a mano es la única operación capaz de desmentir a todos los documentos
+    // (FR-130), así que se avisa SIEMPRE, suba o baje. Y si bajó, además puede cruzar el umbral.
+    await this.avisador.cantidadCorregida(entrada.productoId, entrada.usuarioId, {
+      anterior: antes.stockActual,
+      nueva: entrada.cantidad,
+      motivo: entrada.motivo,
+    });
+    const baja = antes.stockActual - entrada.cantidad;
+    if (baja > 0) {
+      await this.avisador.revisarUmbrales([{ productoId: entrada.productoId, cantidad: baja }], entrada.usuarioId);
+    }
   }
 }

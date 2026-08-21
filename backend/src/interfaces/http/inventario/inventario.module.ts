@@ -22,6 +22,7 @@ import { HistorialProductoCasoUso } from '../../../aplicacion/inventario/histori
 import { ListarInventarioCasoUso } from '../../../aplicacion/inventario/listar-inventario.caso-uso';
 import { OpcionesFiltroInventarioCasoUso } from '../../../aplicacion/inventario/opciones-filtro-inventario.caso-uso';
 import { AuthModule } from '../auth/auth.module';
+import { AvisadorDeNotificaciones } from '../../../aplicacion/notificaciones/avisador-notificaciones';
 import { ControladorInventario } from './controlador-inventario';
 
 @Module({
@@ -34,6 +35,10 @@ import { ControladorInventario } from './controlador-inventario';
     FichaProductoCasoUso,
     HistorialProductoCasoUso,
     HistorialCostosProductoCasoUso,
+  // US35: el AVISADOR se declara en cada módulo que EMITE, no en el de la campana. Al revés
+  // —colgarlo del módulo de notificaciones y hacer que este lo importe— obligaría a que
+  // registrar un ingreso dependiera de la bandeja, que es la dependencia justo al revés.
+    AvisadorDeNotificaciones,
   ],
 })
 export class InventarioModule {}

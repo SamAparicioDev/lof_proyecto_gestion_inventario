@@ -56,3 +56,30 @@ export interface Producto {
 export function esStockBajo(disponible: number, umbralStockBajo: number): boolean {
   return disponible <= umbralStockBajo;
 }
+
+/**
+ * `true` si el producto ACABA de cruzar su umbral hacia abajo (US35, FR-145): estaba por encima
+ * y la operación recién aplicada lo dejó en o por debajo.
+ *
+ * Existe para que el aviso de stock bajo se emita UNA vez, en el cruce, y no en cada movimiento
+ * posterior mientras siga bajo — un aviso que se repite cada vez deja de leerse, y a partir de
+ * ahí también dejan de leerse los demás.
+ *
+ * `bajaDeDisponible` es cuánto bajó el disponible en esa operación, y quien llama SIEMPRE lo
+ * sabe: son las cantidades que acaba de comprometer, descontar o corregir. Se reconstruye el
+ * "antes" sumándolo al "después" en vez de leer el disponible dos veces, porque entre las dos
+ * lecturas otro usuario puede haber movido el mismo producto y el cruce se atribuiría al
+ * documento equivocado.
+ *
+ * Una operación que no baja el disponible (`bajaDeDisponible <= 0`) nunca cruza: subir o quedarse
+ * igual no es cruzar hacia abajo.
+ */
+export function cruzaElUmbral(
+  disponibleDespues: number,
+  bajaDeDisponible: number,
+  umbralStockBajo: number,
+): boolean {
+  if (bajaDeDisponible <= 0) return false;
+  const disponibleAntes = disponibleDespues + bajaDeDisponible;
+  return !esStockBajo(disponibleAntes, umbralStockBajo) && esStockBajo(disponibleDespues, umbralStockBajo);
+}

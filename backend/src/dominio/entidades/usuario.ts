@@ -45,4 +45,10 @@ export interface Usuario {
   readonly rolAsignado: Rol;
   readonly estado: EstadoUsuario;
   readonly debeCambiarPassword: boolean;
+  /**
+   * Cuándo se dio de alta (spec.md § Key Entities). Llega a la entidad en US35 porque la
+   * bandeja de avisos se acota al alta de cada quien: nadie hereda pendientes anteriores a
+   * su llegada (FR-147). No es un dato sensible ni de autorización — es parte de quién es.
+   */
+  readonly fechaCreacion: Date;
 }

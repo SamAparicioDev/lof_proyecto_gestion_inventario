@@ -690,6 +690,39 @@ escondida en un inventario es una cifra que alguien no ve antes de decidir.
 
 ---
 
+### User Story 35 - Que el sistema avise (Priority: P2)
+
+El sistema sabe, en el instante exacto en que ocurren, todas las cosas que alguien está esperando:
+que llegó mercancía por recibir, que hay una salida pendiente de que alguien la apruebe, que se
+anuló un documento, que un producto acaba de cruzar su umbral. Hoy no se lo dice a nadie. Quien
+tiene que actuar se entera porque se acordó de entrar a mirar, o porque alguien lo llamó.
+
+**Why this priority**: los datos ya están y las pantallas ya existen; lo único que falta es que
+lleguen a tiempo a la persona que puede actuar. Un aviso que llega dos días tarde vale lo mismo
+que ninguno, y una salida esperando aprobación que nadie ve es mercancía que no sale.
+
+**Independent Test**: con dos sesiones abiertas, una registra un ingreso y deja una salida
+pendiente; la otra ve aparecer los avisos, abre uno y aterriza exactamente en ese documento.
+
+**Acceptance Scenarios**:
+
+1. **Given** una salida que queda PENDIENTE, **When** otro usuario suscrito a los avisos de salidas
+   abre la aplicación, **Then** ve que hay una salida por aprobar y al pulsar el aviso aterriza en
+   esa salida, no en el listado.
+2. **Given** que soy yo quien registró el hecho, **Then** NO recibo aviso de mi propia acción.
+3. **Given** un rol al que se le desmarca el aviso de salidas, **Then** deja de recibirlos, y sigue
+   recibiendo los de los módulos que sí tenga marcados.
+4. **Given** un rol con el aviso marcado pero SIN permiso para ver ese módulo, **Then** tampoco los
+   recibe: la casilla suscribe, no abre puertas.
+5. **Given** un aviso que leo, **Then** deja de contar en el indicador y se sigue viendo en el
+   historial, distinguido de los no leídos.
+6. **Given** un producto que cruza su umbral por una salida, **Then** se avisa UNA vez por el cruce;
+   las salidas siguientes, estando ya bajo, no vuelven a avisar.
+7. **Given** un fallo al generar el aviso, **Then** la operación de negocio se completa igual y el
+   fallo queda anotado en el servidor.
+
+---
+
 ### Edge Cases
 
 - **Salida mayor al disponible**: debe rechazarse siempre, incluida la carrera entre dos usuarios simultáneos sobre el mismo producto (solo una confirmación puede ganar).
@@ -704,6 +737,9 @@ escondida en un inventario es una cifra que alguien no ve antes de decidir.
 - **Corrección de cantidad desde el inventario** (US31): no lleva documento, pero sí motivo, usuario y un movimiento por la DIFERENCIA. Si la corrección deja el stock por debajo de lo comprometido por salidas PENDIENTE, esas salidas fallan al confirmarse con el mensaje de disponibilidad de siempre — es la respuesta correcta: la mercancía no está.
 - **Sistema sin nadie que administre** (US30): el super administrador conserva sus capacidades aunque la matriz de permisos quede vacía, porque no se resuelve contra ella.
 - **Ajuste de inventario** (US29): no lleva factura ni proveedor, pero sí motivo y número propio; sus movimientos son de AJUSTE DE ENTRADA para que no se confundan con una compra en el reporte de movimientos.
+- **Aviso de un módulo que el rol no ve** (US35): no se entrega. La casilla de avisos suscribe, no concede acceso; un rol sin `salidas.ver` no recibe avisos de salidas aunque tenga `notificaciones.salidas` marcado (FR-142).
+- **Usuario dado de alta hoy** (US35): no hereda avisos anteriores a su alta. Entrar por primera vez a una bandeja con decenas de pendientes ajenos es la forma más rápida de que nadie vuelva a mirarla.
+- **Permiso de avisos concedido a un rol ya existente** (US35): empieza a recibir los avisos de la ventana reciente, no la historia completa del sistema (FR-147).
 - **Sesión expirada a mitad de un formulario**: al reintentar guardar, el sistema pide autenticarse de nuevo sin perder la información capturada o indicando claramente que debe recapturarse.
 - **Salida pendiente cuya disponibilidad desaparece** (otro usuario consumió el stock): al intentar confirmarla, se rechaza indicando el disponible actual.
 - **SKU repetido dentro del mismo archivo de carga masiva**: la primera ocurrencia se procesa; las repeticiones posteriores del mismo SKU en el archivo se reportan como fila inválida (evita aplicar dos altas/actualizaciones contradictorias del mismo producto en una sola corrida).
@@ -908,6 +944,36 @@ que recordar por separado.
 - **FR-135**: Toda CIFRA de una respuesta DEBE provenir de una consulta real hecha en ese momento, y la respuesta DEBE citar de dónde sale. El asistente NO DEBE estimar, redondear de memoria ni completar un dato que no obtuvo: ante la duda, dice que no lo sabe. Un inventario vale lo que vale la confianza en sus números.
 - **FR-136**: El asistente DEBE degradar con elegancia: si el servicio del modelo no está configurado, falla o se agota, la pantalla lo dice en español y el RESTO de la aplicación sigue funcionando sin cambios. Es la primera pieza del sistema que depende de un servicio externo y no puede arrastrar al resto. El PROVEEDOR concreto (hoy Google AI Studio) es un detalle de infraestructura detrás del puerto `ModeloConversacional`: cambiarlo NO DEBE tocar qué se puede consultar, con qué permiso ni qué sabe el asistente del negocio.
 - **FR-137**: La interfaz DEBE ser usable en pantallas desde 1024 px de ancho sin desplazamiento HORIZONTAL de página, y en alturas de 768 px sin que un diálogo deje sus botones fuera de alcance. Lo que exceda el ancho se desplaza DENTRO de su contenedor — una tabla ancha se desplaza sola, sin arrastrar la página. Las columnas que identifican una fila DEBEN seguir visibles al desplazarla.
+- **FR-138**: El costo de un producto es SIEMPRE el ÚLTIMO registrado. Cuando entra mercancía a un precio distinto del vigente, ese precio REEMPLAZA al anterior y desde ese instante TODAS las existencias del producto se valorizan a él —las que acaban de llegar y las que ya estaban—. El costo NO DEBE promediarse, prorratearse ni ponderarse con las existencias previas. Lo que conserva la historia no es el costo sino su registro (FR-072): desde qué valor, hasta cuál, quién lo cambió y por qué documento.
+
+> **Decisión descartada (2026-08-20): promedio ponderado.** Se llegó a proponer que al recibir
+> mercancía el costo se recalculara como promedio de lo viejo y lo nuevo (100 existentes + 200
+> recibidos → 150 hasta agotar las unidades viejas, y luego 200). Se descarta y se deja escrito
+> para que no vuelva a proponerse como si fuera una mejora pendiente.
+>
+> El motivo no es la dificultad de la fórmula, es que el promedio exige algo que este sistema no
+> tiene: saber a qué costo entró CADA unidad y cuáles quedan. El stock aquí es un número por
+> producto (`productos.stock_actual`), no una pila de lotes con su precio — así lo fijó
+> data-model.md desde el principio y de ahí depende el invariante `stock = Σ movimientos`
+> (Principio I). Un promedio sobre un solo número da una cifra que ya no es ni el costo de lo que
+> hay ni el precio al que se compró, y que además cambia sola con cada entrada; nadie podría
+> explicar de dónde salió un valorizado, que es exactamente lo que un inventario tiene que poder
+> hacer. El último costo, en cambio, es un hecho verificable contra un documento.
+>
+> Consecuencia aceptada: tras una compra más cara, las unidades viejas se valorizan a un precio
+> al que no se compraron. Es una distorsión conocida, acotada y visible —el `historial_costos_producto`
+> dice cuándo cambió y por cuál documento—, y es preferible a una cifra derivada que ningún
+> documento respalda.
+
+- **FR-139**: El sistema DEBE avisar dentro de la aplicación cuando ocurre un hecho que OTRA persona necesita saber para hacer su trabajo: se registra un ingreso (queda por recibir), se recibe mercancía, se anula un ingreso, queda una salida PENDIENTE por aprobar, se confirma una salida, se anula una salida, un producto cruza su umbral de stock bajo y se corrige a mano la cantidad de un producto. El aviso DEBE existir en el momento del hecho, no cuando alguien entre a mirar.
+- **FR-140**: Todo aviso DEBE llevar a su origen: al abrirlo, el sistema navega al documento o al producto exacto que lo generó. Un aviso que solo informa obliga a buscar a mano lo que el sistema ya sabía señalar.
+- **FR-141**: Quién recibe cada aviso DEBE decidirse por PERMISO y ser parametrizable como cualquier otro permiso (`notificaciones.ingresos`, `notificaciones.salidas`, `notificaciones.inventario`), editables desde la pantalla de roles. NO son permisos reservados (FR-131): suscribir a alguien a un aviso no le concede ninguna capacidad nueva.
+- **FR-142**: El permiso de avisos SUSCRIBE, nunca AMPLÍA: para recibir un aviso hace falta además el permiso de LECTURA del módulo del que habla (`ingresos.ver`, `salidas.ver`, `inventario.ver`). Marcar la casilla de avisos a un rol que no puede ver salidas NO DEBE mostrarle salidas por la puerta de atrás — el texto del aviso ya es información del módulo.
+- **FR-143**: Quien PROVOCA el hecho NO DEBE recibir su propio aviso. Avisarle a alguien de lo que acaba de hacer entrena a ignorar el indicador, que es la forma más rápida de que un aviso importante pase inadvertido.
+- **FR-144**: El estado leído/no leído DEBE ser POR USUARIO: el mismo hecho puede estar leído por unos y pendiente para otros. La aplicación DEBE mostrar de forma permanente cuántos avisos no leídos hay, permitir marcarlos leídos —uno o todos— y conservar los leídos como historial consultable, nunca borrarlos al leerlos.
+- **FR-145**: El aviso de STOCK BAJO DEBE emitirse en el CRUCE del umbral —el movimiento que deja el stock en o por debajo de él viniendo de arriba—, no en cada movimiento posterior mientras siga bajo. Un aviso que se repite cada vez deja de leerse.
+- **FR-146**: Generar un aviso NUNCA DEBE impedir, retrasar ni revertir la operación que lo origina. Si el aviso falla, la recepción, la confirmación o la anulación se completan igual y el fallo queda en el registro del servidor: el hecho de negocio ya ocurrió y negarlo por no poder anunciarlo sería un daño mayor que no anunciarlo.
+- **FR-147**: Un aviso NO es un documento: no se edita, no se exporta y su texto es el del momento en que ocurrió. La bandeja DEBE mostrar una ventana reciente y acotada, no la historia completa del sistema — el archivo permanente de lo que pasó son los movimientos (FR-046) y la auditoría de cada documento (FR-045), no la bandeja.
 
 **Auditoría y trazabilidad (transversal)**
 
@@ -931,6 +997,8 @@ que recordar por separado.
 - **Salida**: documento de egreso de mercancía; número auto-correlativo, fecha, cliente de destino (obligatorio) y proyecto (OPCIONAL desde US28, FR-124), observaciones, estado (Pendiente/Confirmada/Completada, más Anulada como resultado de anulación), usuario que autoriza, valor total. Compuesta por líneas de detalle.
 - **Detalle de salida**: línea de una salida; producto, cantidad, precio unitario de referencia, valor total de la línea.
 - **Movimiento de inventario**: registro inmutable de cada afectación de stock; fecha/hora, tipo (entrada/salida/ajuste), producto, cantidad con signo, documento asociado, usuario, cliente/proyecto cuando aplica.
+- **Notificación**: hecho ocurrido del que hay que avisar (US35, FR-139); tipo, título y detalle redactados en el momento, entidad a la que lleva (documento o producto), usuario que lo provocó y fecha/hora. Se guarda UNA vez por hecho, no una por destinatario: quién lo ve se resuelve al consultarlo, contra los permisos vigentes de cada usuario.
+- **Lectura de notificación**: marca de que UN usuario ya leyó UNA notificación (US35, FR-144), con su fecha/hora. Su ausencia es el estado "no leída" — no se borra la notificación al leerla, se anota quién la leyó.
 
 ## Success Criteria *(mandatory)*
 
@@ -965,6 +1033,6 @@ que recordar por separado.
 - **Cantidades**: se permiten decimales (hasta 2) para materiales medidos en unidades continuas; la unidad de medida va implícita en la descripción del producto.
 - **Proveedores**: campo de texto libre en el ingreso; no hay catálogo de proveedores en v1.
 - **Usuarios iniciales**: el sistema arranca con un usuario Administrador semilla; el restablecimiento de contraseñas lo hace el Administrador (sin flujo de recuperación por email en v1).
-- **Precios**: el precio unitario en salidas es de referencia (último costo registrado del producto, editable al capturar); la valoración de consumo usa ese precio de referencia.
+- **Precios**: el precio unitario en salidas es de referencia (último costo registrado del producto, editable al capturar); la valoración de consumo usa ese precio de referencia. El costo del producto es SIEMPRE el último registrado y nunca un promedio de las entradas anteriores — decisión tomada el 2026-08-20, con su alternativa descartada escrita bajo FR-138.
 - **Gráficos**: el reporte de consumo por proyecto incluye al menos un gráfico de consumo (por producto o en el tiempo); los demás reportes no requieren gráficos en v1.
 - **Carga masiva (US8)**: un archivo por corrida, máximo 2.000 filas de datos y 5 MB — coherente con la escala esperada (miles de productos, no cientos de miles) sin necesidad de una cola de procesamiento en background; sin catálogo propio de categorías en v1 (texto libre, igual que "ubicación").

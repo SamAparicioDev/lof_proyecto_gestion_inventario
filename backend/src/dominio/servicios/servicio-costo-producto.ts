@@ -20,12 +20,35 @@
  * `productos.ultimo_costo` ni en `historial_costos_producto` (FR-074: las filas cuyo valor
  * unitario llega igual, o vacío, NO generan un registro de cambio).
  *
+ * ## El costo es el ÚLTIMO, nunca un promedio (FR-138 — decisión del 2026-08-20)
+ *
+ * Recibir mercancía a otro precio REEMPLAZA el costo vigente: 100 existentes más 200 recibidos
+ * dejan el producto en 200, no en 150. Se llegó a proponer el promedio ponderado y se DESCARTÓ;
+ * queda escrito aquí porque este servicio es donde aterrizaría quien fuera a implementarlo.
+ *
+ * El motivo no es la fórmula, es que el promedio necesita un dato que este sistema no tiene: a
+ * qué costo entró CADA unidad y cuántas quedan de cada compra. Aquí el stock es UN número por
+ * producto (`productos.stock_actual`), no una pila de lotes con su precio — así lo fija
+ * data-model.md y de ahí depende el invariante `stock = Σ movimientos`. Un promedio sobre un
+ * solo número da una cifra que no es ni el costo de lo que hay ni el precio de ninguna compra, y
+ * que ningún documento respalda; el último costo, en cambio, se puede señalar con el dedo en una
+ * factura.
+ *
+ * Por eso `SolicitudCambioCosto` no tiene dónde poner las existencias, y no es un olvido: es la
+ * barrera. Un prorrateo no se puede colar sin cambiar el contrato del servicio, y cambiarlo
+ * obliga a pasar por este comentario (lo vigila `servicio-costo-producto.spec.ts`).
+ *
+ * Consecuencia aceptada: tras una compra más cara, las unidades viejas quedan valorizadas por
+ * encima de lo que costaron. Es una distorsión conocida, acotada y reconstruible en
+ * `historial_costos_producto` — preferible a una cifra derivada que nadie puede explicar.
+ *
  * Lo que este servicio deliberadamente NO hace: NO produce ningún movimiento de inventario
  * (FR-073). Un cambio de costo no altera cantidades; registrarlo como movimiento rompería el
  * invariante `stock = Σ movimientos` (invariante 2 de data-model.md).
  *
  * Implementa: FR-071 (el costo es corregible), FR-072 (todo cambio queda registrado con costo
- * anterior/nuevo, usuario y origen), FR-074 (solo se registra si REALMENTE cambió).
+ * anterior/nuevo, usuario y origen), FR-074 (solo se registra si REALMENTE cambió) y FR-138 (el
+ * costo es el último registrado, jamás un promedio ponderado).
  */
 import { ErrorValidacionDominio } from '../comunes/errores';
 import type { OrigenCambioCosto } from '../entidades/cambio-costo-producto';

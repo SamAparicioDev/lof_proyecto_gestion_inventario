@@ -11,19 +11,13 @@
  * FR-023 (búsqueda por SKU/descripción) y FR-024 (historial de movimientos por producto).
  */
 import { z } from 'zod';
-import { MENSAJE_CANTIDAD_ENTERA, esquemaCantidadFiltro, esquemaPaginacion, esquemaTextoFiltro } from './comunes';
-
-/**
- * Coerciona un query param booleano opcional: llega como string (`?soloStockBajo=true`) o
- * ausente. Cualquier valor distinto de `true`/`"true"` (incluido `undefined`, `"false"` o
- * texto arbitrario) se interpreta como `false` — mismo criterio permisivo que `esquemaPaginacion`
- * usa para números de query string, adaptado a booleanos (Zod no ofrece `z.coerce.boolean()`
- * seguro para esto: coerciona CUALQUIER string no vacío, incluido `"false"`, a `true`).
- */
-const esquemaBooleanoOpcionalDeQuery = z
-  .union([z.boolean(), z.string()])
-  .optional()
-  .transform((valor) => valor === true || valor === 'true');
+import {
+  MENSAJE_CANTIDAD_ENTERA,
+  esquemaBooleanoDeQuery,
+  esquemaCantidadFiltro,
+  esquemaPaginacion,
+  esquemaTextoFiltro,
+} from './comunes';
 
 /** Fecha (solo día) en texto ISO `YYYY-MM-DD`, opcional — mismo criterio que `esquemaFiltroSalidas`. */
 function esquemaFechaOpcional(mensajeInvalida: string) {
@@ -53,7 +47,7 @@ function esquemaFechaOpcional(mensajeInvalida: string) {
 export const esquemaFiltroInventario = z
   .object({
     buscar: z.string().trim().optional(),
-    soloStockBajo: esquemaBooleanoOpcionalDeQuery,
+    soloStockBajo: esquemaBooleanoDeQuery,
     /** US15: se filtra por el id del catálogo, no por texto — así el problema de "cómo se
      *  escribió" desaparece de raíz (FR-088). */
     categoriaId: z.coerce

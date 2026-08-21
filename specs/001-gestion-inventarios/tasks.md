@@ -705,6 +705,40 @@ Proveedores — MISMO patrón que categorías (FR-091), con dos diferencias que 
 
 ---
 
+## Phase 38: Decisión de costo — el último valor, sin prorrateo (documentación)
+
+**Goal**: Dejar por escrito que el costo de un producto es SIEMPRE el último registrado y que el promedio ponderado queda descartado, para que no vuelva a proponerse como mejora pendiente (FR-138)
+
+**Independent Test**: `grep -r "FR-138"` encuentra la regla en la especificación, en el modelo de datos, en el servicio de dominio que la aplica y en una prueba que falla si alguien promedia
+
+- [x] T261 [DOC] FR-138 en `spec.md` con la alternativa descartada y su porqué; nota en `data-model.md` y en Assumptions § Precios
+- [x] T262 [DOC] TSDoc de `servicio-costo-producto.ts`: por qué reemplaza y no promedia (es donde aterriza quien vaya a implementarlo)
+- [x] T263 [DOC] Prueba unitaria que fija la regla: recibir a otro precio REEMPLAZA el costo, no lo promedia con las existencias
+
+**Checkpoint**: La regla está escrita donde se busca y donde se implementa, y una prueba la sostiene
+
+---
+
+## Phase 39: User Story 35 - Que el sistema avise (Priority: P2)
+
+**Goal**: Que los hechos que alguien está esperando lleguen a esa persona en el momento en que ocurren, con un clic hasta el documento (FR-139…FR-147)
+
+**Independent Test**: Con dos sesiones, una deja una salida PENDIENTE y la otra ve el aviso, lo abre y aterriza en esa salida (US35-AS1)
+
+- [x] T264 [US35] Dominio: entidad `Notificacion`, catálogo de tipos con su permiso de suscripción y de lectura, `cruzaElUmbral` —junto a `esStockBajo` en `entidades/producto.ts`, que es de donde sale el criterio de "bajo"— y el puerto `RepositorioNotificaciones`
+- [x] T265 [US35] Esquemas Zod compartidos + tipos del contrato en `@trazo/compartido`
+- [x] T266 [US35] Prisma: modelos `Notificacion`/`NotificacionLectura` + migración con las dos tablas, los tres permisos y su matriz rol → permiso (el seed NO corre en producción)
+- [x] T267 [US35] Adaptador Prisma: consulta por tipos visibles con exclusión del autor, ventana de 30 días, conteo de no leídas y marcado (uno y todas)
+- [x] T268 [US35] Aplicación: `AvisadorDeNotificaciones` (redacta y publica, nunca lanza) + casos de uso de bandeja, resumen y marcado
+- [x] T269 [US35] Emisión desde las transiciones reales: crear/recibir/anular ingreso, crear/confirmar/anular salida, corregir cantidad y cruce de umbral
+- [x] T270 [US35] `GET /api/notificaciones`, `/resumen`, `POST /:id/leer`, `POST /leer-todas` — sin permiso propio, recortado por dentro (mismo criterio que `/api/panel`)
+- [x] T271 [US35] Frontend: campana con contador en la barra lateral, panel de últimos avisos que redirige, y `/notificaciones` con filtro de no leídas
+- [x] T272 [P] [US35] Pruebas: catálogo y cruce de umbral (unitarias); entrega por permiso, exclusión del autor y marcado (integración)
+
+**Checkpoint**: Una salida pendiente le llega a quien puede aprobarla, con un clic hasta ella, y quién recibe qué se edita en `/roles`
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -796,7 +830,7 @@ persona: orden estricto de fases 1→10.
 
 ## Notes
 
-- Total: **236 tareas** (las 172 del plan original más las historias pedidas sobre la marcha, US14…US29); recuento original abajo: **172 tareas** (Setup 7, Foundational 20, US1 11, US2 8, US3 12, US5 8, US4 8, US6 5, US7 5, US8 8, Polish 6, US9 11, Experiencia de uso 4, US10 4, US11 6, US12 6, US13 10); **MVP = 66 tareas** (T001–T066). Siete bloques se agregaron fuera del plan original, a pedido directo del dueño del proyecto: US8/carga masiva (T091-T098, ver research R15), US9/roles y permisos (T099-T109, ver research R16), la Phase 13 de experiencia de uso (T110-T113, cierra huecos detectados usando el sistema en vivo), US10/panel (T114-T117), US11/exportación universal (T118-T123), US12/costo con historial (T124-T129) y US13/filtrado de listados (T130-T139, 2026-08-12).
+- Total: **248 tareas** (las 172 del plan original más las historias pedidas sobre la marcha, US14…US35 y la decisión de costo de la Phase 38); recuento original abajo: **172 tareas** (Setup 7, Foundational 20, US1 11, US2 8, US3 12, US5 8, US4 8, US6 5, US7 5, US8 8, Polish 6, US9 11, Experiencia de uso 4, US10 4, US11 6, US12 6, US13 10); **MVP = 66 tareas** (T001–T066). Siete bloques se agregaron fuera del plan original, a pedido directo del dueño del proyecto: US8/carga masiva (T091-T098, ver research R15), US9/roles y permisos (T099-T109, ver research R16), la Phase 13 de experiencia de uso (T110-T113, cierra huecos detectados usando el sistema en vivo), US10/panel (T114-T117), US11/exportación universal (T118-T123), US12/costo con historial (T124-T129) y US13/filtrado de listados (T130-T139, 2026-08-12).
 - [P] = archivos distintos sin dependencias pendientes dentro de su fase
 - Cada checkpoint de historia es un incremento demostrable e independientemente testeable
 - Toda tarea de backend respeta la regla de dependencia y las convenciones de [docs/arquitectura.md](../../docs/arquitectura.md); TSDoc con `FR-###` obligatorio en casos de uso, puertos y controladores

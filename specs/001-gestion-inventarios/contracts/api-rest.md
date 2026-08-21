@@ -237,6 +237,105 @@ que se anotan aquí ANTES de que existan como código, no después:
   define y desglosa el consumo; el listado de salidas no serviría de detalle porque suma
   también pendientes y anuladas.
 
+
+## Asistente de consultas (`/api/asistente`) (US33, FR-133…FR-136)
+
+| Método y ruta | Permiso | Body | Respuesta OK |
+|---|---|---|---|
+| `POST /api/asistente/consulta` | `asistente.consultar` | `esquemaConsultaAsistente` | `200` `RespuestaAsistente` |
+
+```json
+{
+  "respuesta": "Tienes **1.240** unidades disponibles de Cemento gris 50 kg…",
+  "fuentes": [ { "herramienta": "consultar_inventario", "argumentos": { "buscar": "cemento" }, "permitida": true } ],
+  "disponible": true
+}
+```
+
+Reglas de la respuesta:
+- **Solo lectura, por construcción** (FR-133): el asistente no dispone de ninguna herramienta de
+  escritura — no es que se le prohíba usarla, es que no existe en su registro
+  (`aplicacion/asistente/herramientas-consulta.ts`). Una petición de registrar, confirmar o anular
+  se responde indicando dónde se hace a mano.
+- **Los permisos son los de quien pregunta** (FR-134): cada herramienta declara el permiso que
+  exige y el bucle lo comprueba ANTES de ejecutarla, contra los permisos efectivos de la sesión.
+  Una herramienta sin permiso no se ejecuta y sale en `fuentes` con `permitida: false` — el
+  asistente lo dice en español en vez de inventar la cifra.
+- **`fuentes` no es adorno** (FR-135): es de dónde salió cada número, y la pantalla lo muestra
+  plegado bajo la respuesta. Una cifra sin fuente no es verificable, y un inventario vale lo que
+  vale la confianza en sus números.
+- **`disponible: false`** es la degradación elegante de FR-136: falta la clave del proveedor, o
+  este falló o está saturado. `respuesta` trae el aviso YA REDACTADO en español y la pantalla lo
+  pinta como aviso, no como respuesta. Nunca es un `500`: que el modelo externo no esté no es un
+  error de esta API.
+- El PROVEEDOR concreto (hoy Google AI Studio) no aparece en el contrato a propósito: vive detrás
+  del puerto `ModeloConversacional` y cambiarlo no toca este endpoint.
+- El historial viaja en el BODY, no en el servidor: la conversación es efímera y se acaba al cerrar
+  la pantalla (ver el TSDoc de `esquemas/asistente.ts`). Tope de 10 turnos, porque el historial
+  entra en cada petición al modelo y su tamaño es costo por consulta.
+
+**Anotado el 2026-08-20**: esta sección faltaba. El endpoint se implementó en US33 (T253) y su
+contrato se quedó sin escribir — el hueco se cierra aquí, con lo que el código ya hace.
+
+## Notificaciones (`/api/notificaciones`) (US35, FR-139…FR-147)
+
+| Método y ruta | Permiso | Query / Body | Respuesta OK |
+|---|---|---|---|
+| `GET /api/notificaciones` | — (ver abajo) | `pagina`, `porPagina`, `soloNoLeidas` (`true`/`false`) | `200` `{ datos, total, pagina, porPagina, noLeidas }` |
+| `GET /api/notificaciones/resumen` | — | — | `200` `{ noLeidas: number }` |
+| `POST /api/notificaciones/:id/leer` | — | — | `204` |
+| `POST /api/notificaciones/leer-todas` | — | — | `200` `{ marcadas: number }` |
+
+```json
+{
+  "datos": [
+    {
+      "id": 512,
+      "tipo": "SALIDA_POR_APROBAR",
+      "titulo": "Salida SAL-000231 por aprobar",
+      "detalle": "Constructora Jumbo · 4 líneas · registrada por Operario Demo",
+      "entidad": { "tipo": "SALIDA", "id": 231 },
+      "creadaEn": "2026-08-20T14:31:02.881Z",
+      "leida": false
+    }
+  ],
+  "total": 37, "pagina": 1, "porPagina": 20, "noLeidas": 6
+}
+```
+
+Reglas de la respuesta:
+
+- **Autorización: ningún permiso propio, recorte por dentro.** Mismo criterio y mismo motivo que
+  `GET /api/panel`: exigir un `notificaciones.ver` crearía una casilla capaz de dejar a alguien sin
+  bandeja sin proteger un solo dato, porque el contenido YA está gateado tipo por tipo. Una sesión
+  sin ninguna suscripción recibe `200` con `datos: []` y `noLeidas: 0` — no hay nada que filtrar
+  porque no se consultó nada.
+- **Qué ve cada quien** (FR-141/FR-142): un tipo de aviso se entrega si la sesión tiene su permiso
+  de SUSCRIPCIÓN (`notificaciones.ingresos`, `notificaciones.salidas`, `notificaciones.inventario`)
+  **y** el permiso de LECTURA del módulo del que habla (`ingresos.ver`, `salidas.ver`,
+  `inventario.ver`). Las dos condiciones, siempre: la suscripción no amplía el acceso.
+- **Nunca los propios** (FR-143): se excluyen los avisos cuyo `usuario_origen_id` es el de la
+  sesión.
+- **Ventana** (FR-147): solo se devuelven los avisos posteriores al alta del usuario y dentro de
+  los últimos 30 días. No es un archivo histórico; el archivo son los movimientos y la auditoría
+  de cada documento.
+- **`noLeidas` es del conjunto completo, no de la página**: es el número del indicador, y un
+  contador que cambiara al pasar de página no sería un contador.
+- **`entidad`** es a dónde lleva el aviso (FR-140). El contrato transporta `{ tipo, id }`, no una
+  URL: las rutas de la interfaz las fija [rutas-frontend.md](./rutas-frontend.md) y guardar rutas
+  literales en la base sería congelar el mapa de hoy dentro de los datos de siempre.
+- **`POST /:id/leer`** es idempotente: marcar dos veces devuelve `204` las dos. Un id que la sesión
+  no puede ver responde `404`, no `403` — decir "existe pero no es tuyo" ya es información.
+- **`POST /leer-todas`** marca lo visible y no leído de la ventana, y devuelve cuántas marcó.
+- **No hay POST de creación.** Los avisos los emite el propio sistema al ocurrir el hecho; una API
+  para fabricarlos a mano permitiría anunciar cosas que nunca pasaron.
+
+### Los permisos de aviso, en la matriz de roles
+
+Son tres permisos normales del catálogo (`modulo = notificaciones`), visibles y editables en
+`/roles` como cualquier otro, y NO reservados (FR-131): suscribir a alguien no le concede ninguna
+capacidad. La descripción que se lee al marcarlos dice explícitamente que hace falta además poder
+ver el módulo — porque una casilla que a veces no hace nada tiene que explicar cuándo.
 ## Roles y permisos (`/api/roles`, `/api/permisos`) — solo Administrador (US9, FR-054…FR-059)
 
 | Método y ruta | Permiso | Body (Zod) | Respuesta OK | Errores |

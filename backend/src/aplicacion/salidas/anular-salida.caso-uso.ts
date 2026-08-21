@@ -19,6 +19,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { CasoDeUso } from '../comunes/caso-de-uso';
 import { ErrorValidacionDominio, EstadoInvalido, NoEncontrado } from '../../dominio/comunes/errores';
 import { REPOSITORIO_SALIDAS, type RepositorioSalidas } from '../../dominio/puertos/repositorio-salidas';
+import { AvisadorDeNotificaciones } from '../notificaciones/avisador-notificaciones';
 
 /** Entrada: `usuarioId` viene del token de sesión, nunca del body (FR-045). */
 export interface AnularSalidaEntrada {
@@ -29,7 +30,10 @@ export interface AnularSalidaEntrada {
 
 @Injectable()
 export class AnularSalidaCasoUso implements CasoDeUso<AnularSalidaEntrada, void> {
-  constructor(@Inject(REPOSITORIO_SALIDAS) private readonly repositorioSalidas: RepositorioSalidas) {}
+  constructor(
+    @Inject(REPOSITORIO_SALIDAS) private readonly repositorioSalidas: RepositorioSalidas,
+    private readonly avisador: AvisadorDeNotificaciones,
+  ) {}
 
   async ejecutar(entrada: AnularSalidaEntrada): Promise<void> {
     const motivo = entrada.motivo.trim();
@@ -48,5 +52,10 @@ export class AnularSalidaCasoUso implements CasoDeUso<AnularSalidaEntrada, void>
     }
 
     await this.repositorioSalidas.anular(entrada.salidaId, entrada.usuarioId, motivo);
+
+    // US35 (FR-139): anular una salida CONFIRMADA devuelve mercancía al inventario — una
+    // reversa es justo lo que nadie descubre a tiempo si no se avisa. No se revisan umbrales:
+    // el disponible SUBE.
+    await this.avisador.salidaAnulada(entrada.salidaId, entrada.usuarioId, motivo);
   }
 }

@@ -74,6 +74,13 @@ export const PERMISOS = {
 
   ROLES_GESTIONAR: 'roles.gestionar',
 
+  // US35 (FR-141/FR-142): SUSCRIPCIÓN a los avisos de cada módulo. No conceden acceso a nada:
+  // para recibir un aviso hace falta ADEMÁS el permiso de lectura del módulo del que habla, y el
+  // servidor lo comprueba en cada consulta de la bandeja.
+  NOTIFICACIONES_INGRESOS: 'notificaciones.ingresos',
+  NOTIFICACIONES_SALIDAS: 'notificaciones.salidas',
+  NOTIFICACIONES_INVENTARIO: 'notificaciones.inventario',
+
   // US33 (FR-133): abre el asistente de consultas. NO concede acceso a datos — cada consulta que
   // el asistente hace por dentro vuelve a comprobar su propio permiso en el servidor (FR-134).
   ASISTENTE_CONSULTAR: 'asistente.consultar',
@@ -130,6 +137,23 @@ export type ClavePermisoUI = (typeof PERMISOS)[keyof typeof PERMISOS];
  */
 export function tienePermiso(permisos: readonly string[] | undefined | null, clave: ClavePermisoUI): boolean {
   return permisos?.includes(clave) ?? false;
+}
+
+/**
+ * ¿Esta sesión está suscrita a ALGÚN aviso? (US35, FR-141)
+ *
+ * Decide si la campana se muestra. Sin ninguna suscripción la bandeja sale siempre vacía — el
+ * servidor no devuelve nada porque no hay tipos visibles—, y una campana que nunca puede tener
+ * contenido es un botón que enseña a ignorar los botones.
+ *
+ * Es solo UX, como todo este archivo: la autoridad de qué se ve es el servidor (FR-003).
+ */
+export function recibeAvisos(permisos: readonly string[] | undefined | null): boolean {
+  return (
+    tienePermiso(permisos, PERMISOS.NOTIFICACIONES_INGRESOS) ||
+    tienePermiso(permisos, PERMISOS.NOTIFICACIONES_SALIDAS) ||
+    tienePermiso(permisos, PERMISOS.NOTIFICACIONES_INVENTARIO)
+  );
 }
 
 /**

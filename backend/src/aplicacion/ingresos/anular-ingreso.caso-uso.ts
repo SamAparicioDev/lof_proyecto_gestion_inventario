@@ -22,6 +22,7 @@ import type { CasoDeUso } from '../comunes/caso-de-uso';
 import { ErrorValidacionDominio, EstadoInvalido, NoEncontrado } from '../../dominio/comunes/errores';
 import { transicionValidaIngreso } from '../../dominio/entidades/ingreso';
 import { REPOSITORIO_INGRESOS, type RepositorioIngresos } from '../../dominio/puertos/repositorio-ingresos';
+import { AvisadorDeNotificaciones } from '../notificaciones/avisador-notificaciones';
 
 /** Entrada: `usuarioId` viene del token de sesión, nunca del body (FR-045). */
 export interface AnularIngresoEntrada {
@@ -32,7 +33,10 @@ export interface AnularIngresoEntrada {
 
 @Injectable()
 export class AnularIngresoCasoUso implements CasoDeUso<AnularIngresoEntrada, void> {
-  constructor(@Inject(REPOSITORIO_INGRESOS) private readonly repositorioIngresos: RepositorioIngresos) {}
+  constructor(
+    @Inject(REPOSITORIO_INGRESOS) private readonly repositorioIngresos: RepositorioIngresos,
+    private readonly avisador: AvisadorDeNotificaciones,
+  ) {}
 
   async ejecutar(entrada: AnularIngresoEntrada): Promise<void> {
     const motivo = entrada.motivo.trim();
@@ -51,5 +55,16 @@ export class AnularIngresoCasoUso implements CasoDeUso<AnularIngresoEntrada, voi
     }
 
     await this.repositorioIngresos.anular(entrada.ingresoId, entrada.usuarioId, motivo);
+
+    // US35 (FR-139/FR-145): anular avisa siempre; además, si el ingreso ya estaba RECIBIDO,
+    // la reversa BAJA el stock — y esa bajada puede cruzar el umbral, igual que una salida.
+    // Un ingreso PENDIENTE no había tocado nada, así que ahí no hay umbral que revisar.
+    await this.avisador.ingresoAnulado(entrada.ingresoId, entrada.usuarioId, motivo);
+    if (ingreso.estado !== 'PENDIENTE') {
+      await this.avisador.revisarUmbrales(
+        ingreso.detalles.map((linea) => ({ productoId: linea.productoId, cantidad: linea.cantidad })),
+        entrada.usuarioId,
+      );
+    }
   }
 }

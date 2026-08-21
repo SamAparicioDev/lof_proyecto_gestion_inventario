@@ -15,6 +15,7 @@ import { CancelarSalidaCasoUso } from '../../../aplicacion/salidas/cancelar-sali
 import { CompletarSalidaCasoUso } from '../../../aplicacion/salidas/completar-salida.caso-uso';
 import { ConfirmarSalidaCasoUso } from '../../../aplicacion/salidas/confirmar-salida.caso-uso';
 import { CrearSalidaCasoUso } from '../../../aplicacion/salidas/crear-salida.caso-uso';
+import { AvisadorDeNotificaciones } from '../../../aplicacion/notificaciones/avisador-notificaciones';
 import { ControladorSalidas } from './controlador-salidas';
 
 @Module({
@@ -27,6 +28,10 @@ import { ControladorSalidas } from './controlador-salidas';
     CompletarSalidaCasoUso,
     CancelarSalidaCasoUso,
     AnularSalidaCasoUso,
+  // US35: el AVISADOR se declara en cada módulo que EMITE, no en el de la campana. Al revés
+  // —colgarlo del módulo de notificaciones y hacer que este lo importe— obligaría a que
+  // registrar un ingreso dependiera de la bandeja, que es la dependencia justo al revés.
+    AvisadorDeNotificaciones,
   ],
 })
 export class SalidasModule {}

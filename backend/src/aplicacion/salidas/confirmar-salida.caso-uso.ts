@@ -16,6 +16,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { CasoDeUso } from '../comunes/caso-de-uso';
 import { REPOSITORIO_SALIDAS, type RepositorioSalidas } from '../../dominio/puertos/repositorio-salidas';
+import { AvisadorDeNotificaciones } from '../notificaciones/avisador-notificaciones';
 
 /** Entrada: `usuarioId` viene del token de sesión, nunca del body (FR-045). */
 export interface ConfirmarSalidaEntrada {
@@ -25,9 +26,17 @@ export interface ConfirmarSalidaEntrada {
 
 @Injectable()
 export class ConfirmarSalidaCasoUso implements CasoDeUso<ConfirmarSalidaEntrada, void> {
-  constructor(@Inject(REPOSITORIO_SALIDAS) private readonly repositorioSalidas: RepositorioSalidas) {}
+  constructor(
+    @Inject(REPOSITORIO_SALIDAS) private readonly repositorioSalidas: RepositorioSalidas,
+    private readonly avisador: AvisadorDeNotificaciones,
+  ) {}
 
   async ejecutar(entrada: ConfirmarSalidaEntrada): Promise<void> {
     await this.repositorioSalidas.confirmar(entrada.salidaId, entrada.usuarioId);
+
+    // US35 (FR-139): el stock ya se descontó. No se revisan umbrales aquí — confirmar mueve
+    // la cantidad de "comprometida" a "descontada" y el DISPONIBLE no cambia: el cruce, si lo
+    // hubo, se avisó al registrar la salida (ver `revisarUmbrales`).
+    await this.avisador.salidaConfirmada(entrada.salidaId, entrada.usuarioId);
   }
 }

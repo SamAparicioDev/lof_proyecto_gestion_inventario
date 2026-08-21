@@ -62,6 +62,7 @@ function usuarioConPermisos(permisos: ClavePermiso[], estado: EstadoUsuario = 'A
     },
     estado,
     debeCambiarPassword: false,
+    fechaCreacion: new Date('2026-01-01T00:00:00.000Z'),
   };
 }
 
@@ -87,6 +88,7 @@ function superAdministrador(estado: EstadoUsuario = 'ACTIVO'): Usuario {
     },
     estado,
     debeCambiarPassword: false,
+    fechaCreacion: new Date('2026-01-01T00:00:00.000Z'),
   };
 }
 

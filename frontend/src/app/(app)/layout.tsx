@@ -33,6 +33,8 @@ import { ENCABEZADO_RUTA_ACTUAL } from '@/lib/sesion-constantes';
 import { ProveedorSesion } from '@/lib/sesion';
 import { LogoLof } from '@/componentes/comunes/logo-lof';
 import { iniciales } from '@/lib/formato';
+import { recibeAvisos } from '@/lib/permisos';
+import { CampanaNotificaciones } from '@/componentes/layout/campana-notificaciones';
 import { NavegacionLateral } from '@/componentes/layout/navegacion-lateral';
 import { BotonCerrarSesion } from '@/componentes/layout/boton-cerrar-sesion';
 import { BotonTema } from '@/componentes/layout/boton-tema';
@@ -61,6 +63,13 @@ export default async function LayoutApp({ children }: { children: React.ReactNod
           <div className="flex items-center gap-2.5 px-1.5 py-0.5">
             <LogoLof alto={28} tamanoTextoRespaldo={16} />
           </div>
+
+          {/* US35 (FR-141): la campana va con la navegación — es el sitio donde ya se mira
+              para decidir a dónde ir. Se OCULTA si el rol no está suscrito a ningún aviso:
+              su bandeja saldría siempre vacía, y un botón que nunca puede tener contenido
+              enseña a ignorar los botones. Ocultarlo es UX, no control de acceso (FR-003):
+              quien fuerce la URL recibe la misma bandeja vacía del servidor. */}
+          {recibeAvisos(perfil.permisos) && <CampanaNotificaciones />}
 
           <NavegacionLateral permisos={perfil.permisos} />
 

@@ -11,7 +11,10 @@
  * INSERT, tumbando una recepción de mercancía legítima.
  */
 import { ErrorValidacionDominio } from '../../src/dominio/comunes/errores';
-import { aplicarCambioDeCosto } from '../../src/dominio/servicios/servicio-costo-producto';
+import {
+  aplicarCambioDeCosto,
+  type SolicitudCambioCosto,
+} from '../../src/dominio/servicios/servicio-costo-producto';
 
 const BASE = { productoId: 42, costoAnterior: 1000, origen: 'EDICION_MANUAL' as const, usuarioId: 7 };
 
@@ -80,3 +83,41 @@ describe('aplicarCambioDeCosto — invariante de costo no negativo (T125)', () =
     expect(() => aplicarCambioDeCosto({ ...BASE, costoNuevo: Number.NaN })).toThrow(ErrorValidacionDominio);
   });
 });
+
+describe('aplicarCambioDeCosto — el costo es el ÚLTIMO, nunca un promedio (US35/T263, FR-138)', () => {
+  /**
+   * Esta prueba no cubre una rama nueva: fija una DECISIÓN, que es lo que la vuelve útil.
+   *
+   * El 2026-08-20 se descartó el promedio ponderado (100 existentes + 200 recibidos → 150 hasta
+   * agotar lo viejo). Si alguien vuelve a proponerlo e implementarlo, el sitio donde lo haría es
+   * exactamente este servicio, y esta prueba es lo que le dirá que no es un olvido sino una
+   * decisión — con el porqué en el TSDoc de arriba y en spec.md § FR-138.
+   */
+  it('recibir a otro precio REEMPLAZA el costo vigente; no lo promedia con las existencias previas', () => {
+    const registro = aplicarCambioDeCosto({
+      ...BASE,
+      costoAnterior: 100,
+      costoNuevo: 200,
+      origen: 'RECEPCION_INGRESO',
+      documentoId: 91,
+    });
+
+    // 150 sería el promedio; 200 es el hecho que respalda el documento 91.
+    expect(registro?.costoNuevo).toBe(200);
+  });
+
+  it('no tiene dónde poner las existencias: el promedio no cabe en el contrato del servicio', () => {
+    // Esta es la barrera de verdad, y la comprueba `npm run typecheck`, no el runtime:
+    // `@ts-expect-error` FALLA la compilación si algún día el campo llegara a existir, que es
+    // justo el momento en el que alguien estaría implementando el prorrateo.
+    const conExistencias: SolicitudCambioCosto = {
+      ...BASE,
+      costoNuevo: 200,
+      // @ts-expect-error — FR-138: el costo no se pondera con el stock, así que el stock no entra aquí.
+      stockActual: 10,
+    };
+
+    expect(aplicarCambioDeCosto(conExistencias)?.costoNuevo).toBe(200);
+  });
+});
+

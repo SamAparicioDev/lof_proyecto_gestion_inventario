@@ -26,6 +26,7 @@ import { REPOSITORIO_CLIENTES, type RepositorioClientes } from '../../dominio/pu
 import { REPOSITORIO_PRODUCTOS, type RepositorioProductos } from '../../dominio/puertos/repositorio-productos';
 import { REPOSITORIO_PROYECTOS, type RepositorioProyectos } from '../../dominio/puertos/repositorio-proyectos';
 import { REPOSITORIO_SALIDAS, type RepositorioSalidas } from '../../dominio/puertos/repositorio-salidas';
+import { AvisadorDeNotificaciones } from '../notificaciones/avisador-notificaciones';
 import { validarDestinoSalida } from './validar-destino-salida';
 import { validarDisponibilidadLineas } from './validar-disponibilidad-lineas';
 
@@ -62,6 +63,7 @@ export class CrearSalidaCasoUso implements CasoDeUso<CrearSalidaEntrada, CrearSa
     @Inject(REPOSITORIO_CLIENTES) private readonly repositorioClientes: RepositorioClientes,
     @Inject(REPOSITORIO_PRODUCTOS) private readonly repositorioProductos: RepositorioProductos,
     @Inject(REPOSITORIO_SALIDAS) private readonly repositorioSalidas: RepositorioSalidas,
+    private readonly avisador: AvisadorDeNotificaciones,
   ) {}
 
   async ejecutar(entrada: CrearSalidaEntrada): Promise<CrearSalidaSalida> {
@@ -83,6 +85,16 @@ export class CrearSalidaCasoUso implements CasoDeUso<CrearSalidaEntrada, CrearSa
       },
       entrada.usuarioId,
     );
+
+    // US35 (FR-139/FR-145): la salida queda PENDIENTE, o sea esperando que alguien la apruebe, y
+    // su compromiso ya bajó el disponible. Los dos avisos van DESPUÉS de que la salida existe y
+    // ninguno puede tumbarla (ver `AvisadorDeNotificaciones`).
+    await this.avisador.salidaPorAprobar(salida.id, entrada.usuarioId);
+    await this.avisador.revisarUmbrales(
+      entrada.lineas.map((linea) => ({ productoId: linea.productoId, cantidad: linea.cantidad })),
+      entrada.usuarioId,
+    );
+
     return { id: salida.id, numero: salida.numero };
   }
 }
