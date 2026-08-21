@@ -57,6 +57,13 @@ function dependenciasEspia() {
     consumoCliente: { ejecutar: registrar('consumoCliente') },
     resumenPanel: { ejecutar: registrar('resumenPanel') },
     repositorioClientes: { listar: registrar('repositorioClientes') },
+    inventarioValorizado: {
+      ejecutar: async () => {
+        llamadas.push('inventarioValorizado');
+        return { productos: [], valorTotalInventario: 0 };
+      },
+    },
+    repositorioUsuarios: { listar: registrar('repositorioUsuarios') },
   };
   return { dependencias, llamadas };
 }
@@ -108,6 +115,67 @@ describe('Asistente de consultas (US33)', () => {
         expect(['string', 'object']).toContain(typeof herramienta.permiso);
         expect(herramienta.permiso === null || typeof herramienta.permiso === 'string').toBe(true);
       }
+    });
+  });
+
+  describe('lo que el modelo necesita para no tantear (FR-135)', () => {
+    /** Ejecuta una herramienta por su nombre con permisos suficientes. */
+    async function ejecutar(
+      nombre: string,
+      dependencias: DependenciasHerramientas,
+      argumentos: Record<string, unknown> = {},
+    ): Promise<Record<string, unknown>> {
+      const herramienta = construirHerramientasConsulta(dependencias).find((h) => h.nombre === nombre);
+      if (!herramienta) throw new Error(`No existe la herramienta ${nombre}`);
+      return (await herramienta.ejecutar(argumentos, usuarioCon([]))) as Record<string, unknown>;
+    }
+
+    it('un listado recortado lo DICE, con el total y la instrucción de no presentarlo como todo', async () => {
+      const { dependencias } = dependenciasEspia();
+      // 300 productos cumplen el filtro; la herramienta devuelve una página.
+      dependencias.listarInventario.ejecutar = async () => ({ datos: [{ sku: 'A' }, { sku: 'B' }], total: 300 });
+
+      const resultado = await ejecutar('consultar_inventario', dependencias);
+
+      expect(resultado.totalQueCumplenElFiltro).toBe(300);
+      expect(resultado.devueltas).toBe(2);
+      // Este aviso es la diferencia entre una respuesta honesta y seis búsquedas al azar: sin él,
+      // el modelo no tiene forma de saber que le falta información (caso real de Samuel,
+      // "¿cuál es el producto que vale más?", 2026-08-21).
+      expect(String(resultado.aviso)).toContain('RECORTE');
+      expect(String(resultado.aviso)).toContain('300');
+    });
+
+    it('un listado COMPLETO no lleva aviso: avisar siempre lo volvería ruido que se ignora', async () => {
+      const { dependencias } = dependenciasEspia();
+      dependencias.listarInventario.ejecutar = async () => ({ datos: [{ sku: 'A' }], total: 1 });
+
+      const resultado = await ejecutar('consultar_inventario', dependencias);
+
+      expect(resultado.aviso).toBeUndefined();
+      expect(resultado.totalQueCumplenElFiltro).toBe(1);
+    });
+
+    it('"¿qué producto vale más?" se responde con UNA consulta, ordenada sobre todo el catálogo', async () => {
+      const { dependencias } = dependenciasEspia();
+      dependencias.inventarioValorizado.ejecutar = async () => ({
+        productos: [
+          { producto: { sku: 'BARATO', descripcion: 'Tornillo' }, valorLinea: 1_000, stock: 100 },
+          { producto: { sku: 'CARO', descripcion: 'Compresor' }, valorLinea: 9_000_000, stock: 3 },
+          { producto: { sku: 'MEDIO', descripcion: 'Válvula' }, valorLinea: 250_000, stock: 10 },
+        ],
+        valorTotalInventario: 9_251_000,
+      });
+
+      const resultado = await ejecutar('productos_por_valor', dependencias, { cuantos: 2 });
+
+      const masValiosos = resultado.masValiosos as { producto: { sku: string } }[];
+      expect(masValiosos.map((fila) => fila.producto.sku)).toEqual(['CARO', 'MEDIO']);
+      expect(resultado.valorTotalInventario).toBe(9_251_000);
+      // Que el orden abarca TODO el catálogo se dice explícitamente: es lo que convierte "el
+      // primero de la lista" en "el que más vale" sin que el modelo tenga que suponerlo.
+      expect(resultado.productosEvaluados).toBe(3);
+      expect(String(resultado.criterio)).toContain('TODO');
     });
   });
 

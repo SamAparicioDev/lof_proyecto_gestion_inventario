@@ -19,6 +19,7 @@ import { ResumenPanelCasoUso } from '../../../aplicacion/panel/resumen-panel.cas
 import { ReporteConsumoClienteCasoUso } from '../../../aplicacion/reportes/reporte-consumo-cliente.caso-uso';
 import { ReporteInventarioActualCasoUso } from '../../../aplicacion/reportes/reporte-inventario-actual.caso-uso';
 import { REPOSITORIO_CLIENTES, type RepositorioClientes } from '../../../dominio/puertos/repositorio-clientes';
+import { REPOSITORIO_USUARIOS, type RepositorioUsuarios } from '../../../dominio/puertos/repositorio-usuarios';
 import { AdaptadorGemini } from '../../../infraestructura/ia/adaptador-gemini';
 import { AuthModule } from '../auth/auth.module';
 import { ControladorAsistente } from './controlador-asistente';
@@ -43,12 +44,16 @@ import { ControladorAsistente } from './controlador-asistente';
         consumoCliente: ReporteConsumoClienteCasoUso,
         resumenPanel: ResumenPanelCasoUso,
         repositorioClientes: RepositorioClientes,
+        inventarioValorizado: ReporteInventarioActualCasoUso,
+        repositorioUsuarios: RepositorioUsuarios,
       ): DependenciasHerramientas => ({
         listarInventario,
         historialProducto,
         consumoCliente,
         resumenPanel,
         repositorioClientes,
+        inventarioValorizado,
+        repositorioUsuarios,
       }),
       inject: [
         ListarInventarioCasoUso,
@@ -56,6 +61,8 @@ import { ControladorAsistente } from './controlador-asistente';
         ReporteConsumoClienteCasoUso,
         ResumenPanelCasoUso,
         REPOSITORIO_CLIENTES,
+        ReporteInventarioActualCasoUso,
+        REPOSITORIO_USUARIOS,
       ],
     },
   ],

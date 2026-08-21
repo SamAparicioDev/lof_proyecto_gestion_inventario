@@ -49,6 +49,17 @@ export interface DependenciasHerramientas {
     ejecutar(entrada: { clienteId: number; desde?: Date; hasta?: Date }): Promise<unknown>;
   };
   readonly resumenPanel: { ejecutar(entrada: { usuario: Usuario }): Promise<unknown> };
+  /** Reporte de inventario valorizado: trae TODAS las filas con su valor, sin paginar. Es lo que
+   *  permite responder "¿cuál vale más?" con una consulta en vez de con seis tanteos. */
+  readonly inventarioValorizado: {
+    ejecutar(entrada: { buscar?: string }): Promise<{
+      productos: { producto: { sku: string; descripcion: string }; valorLinea: number; stock: number }[];
+      valorTotalInventario: number;
+    }>;
+  };
+  readonly repositorioUsuarios: {
+    listar(filtros: { pagina: number; porPagina: number }): Promise<unknown>;
+  };
   readonly repositorioClientes: {
     listar(filtros: { buscar?: string; pagina: number; porPagina: number }): Promise<unknown>;
   };
@@ -86,10 +97,36 @@ function fecha(argumentos: Record<string, unknown>, clave: string): Date | undef
 }
 
 /** Tope de filas que una herramienta devuelve al modelo. No es una decisión de rendimiento sino
- *  de contexto: mil productos en una respuesta empujan fuera lo que el usuario preguntó. Cuando
- *  se alcanza, la propia herramienta lo dice, para que el modelo no presente un recorte como si
- *  fuera el total (FR-135). */
-const MAXIMO_FILAS = 25;
+ *  de contexto: mil productos en una respuesta empujan fuera lo que el usuario preguntó. */
+const MAXIMO_FILAS = 50;
+
+/**
+ * Envuelve una página diciendo CUÁNTAS filas hay en total y si lo devuelto es un recorte.
+ *
+ * Sin esto, el modelo recibe 50 filas de 300 y no tiene forma de saberlo: o presenta el recorte
+ * como si fuera todo —que es exactamente lo que FR-135 prohíbe— o se pone a tantear búsquedas al
+ * azar para adivinar qué falta. Lo segundo fue lo que ocurrió con "¿cuál es el producto que vale
+ * más?": seis consultas y ninguna respuesta.
+ *
+ * La nota va en español y como INSTRUCCIÓN, no como metadato: el modelo la lee y actúa sobre ella.
+ */
+function conNotaDeRecorte(pagina: { datos: unknown[]; total: number }): Record<string, unknown> {
+  const recortado = pagina.total > pagina.datos.length;
+  return {
+    filas: pagina.datos,
+    totalQueCumplenElFiltro: pagina.total,
+    devueltas: pagina.datos.length,
+    ...(recortado
+      ? {
+          aviso:
+            `Esto es un RECORTE: hay ${pagina.total} filas que cumplen el filtro y solo se devuelven ` +
+            `${pagina.datos.length}. NO presentes esta lista como si fuera el total. Si la pregunta ` +
+            'exige el conjunto completo (un máximo, un total, un conteo), acota más la búsqueda o usa ' +
+            'una herramienta que agregue, y si aun así no puedes, dilo.',
+        }
+      : {}),
+  };
+}
 
 /**
  * Construye el catálogo de herramientas. Es una función y no una constante porque cada
@@ -117,13 +154,15 @@ export function construirHerramientasConsulta(dependencias: DependenciasHerramie
         },
       },
       permiso: 'inventario.ver',
-      ejecutar: (argumentos) =>
-        dependencias.listarInventario.ejecutar({
-          buscar: texto(argumentos, 'buscar'),
-          soloStockBajo: argumentos.soloStockBajo === true,
-          pagina: 1,
-          porPagina: MAXIMO_FILAS,
-        }),
+      ejecutar: async (argumentos) =>
+        conNotaDeRecorte(
+          (await dependencias.listarInventario.ejecutar({
+            buscar: texto(argumentos, 'buscar'),
+            soloStockBajo: argumentos.soloStockBajo === true,
+            pagina: 1,
+            porPagina: MAXIMO_FILAS,
+          })) as { datos: unknown[]; total: number },
+        ),
     },
 
     {
@@ -192,6 +231,55 @@ export function construirHerramientasConsulta(dependencias: DependenciasHerramie
           hasta: fecha(argumentos, 'hasta'),
         });
       },
+    },
+
+    {
+      nombre: 'productos_por_valor',
+      descripcion:
+        'Ordena los productos por lo que VALE su existencia (cantidad × costo unitario) y devuelve ' +
+        'los de arriba, más el valor total del inventario. Es la herramienta para "¿qué producto vale ' +
+        'más?", "¿dónde tengo el dinero metido?" o "¿cuánto vale el inventario?". Recorre TODO el ' +
+        'catálogo, no una página: su respuesta SÍ es concluyente para preguntas de máximo o de total.',
+      esquemaArgumentos: {
+        type: 'object',
+        properties: {
+          buscar: { type: 'string', description: 'Acota a los productos que coincidan. Opcional.' },
+          cuantos: { type: 'number', description: 'Cuántos devolver, de mayor a menor valor. Por defecto 10.' },
+        },
+      },
+      // El mismo permiso que el reporte equivalente en pantalla: expone dinero.
+      permiso: 'reportes.ver',
+      ejecutar: async (argumentos) => {
+        const reporte = await dependencias.inventarioValorizado.ejecutar({ buscar: texto(argumentos, 'buscar') });
+        const cuantos = Math.min(Math.max(numero(argumentos, 'cuantos') ?? 10, 1), MAXIMO_FILAS);
+        const ordenados = [...reporte.productos].sort((a, b) => b.valorLinea - a.valorLinea);
+        return {
+          // Se dice explícitamente que el orden abarca todo: es lo que convierte "el primero de la
+          // lista" en "el que más vale" sin que el modelo tenga que suponerlo.
+          criterio: 'Ordenado por valor de existencia (cantidad × costo unitario) sobre TODO el catálogo filtrado.',
+          productosEvaluados: reporte.productos.length,
+          valorTotalInventario: reporte.valorTotalInventario,
+          masValiosos: ordenados.slice(0, cuantos),
+        };
+      },
+    },
+
+    {
+      nombre: 'listar_usuarios',
+      descripcion:
+        'Usuarios del sistema con su rol y su estado. Responde "¿cuántos usuarios hay?", "¿quién es ' +
+        'gerente?" o "¿quién está inactivo?". No devuelve contraseñas ni nada parecido: solo lo que ya ' +
+        'se ve en la pantalla de usuarios.',
+      esquemaArgumentos: { type: 'object', properties: {} },
+      // El mismo permiso que la pantalla: quien no administra usuarios tampoco los cuenta por chat.
+      permiso: 'usuarios.gestionar',
+      ejecutar: async () =>
+        conNotaDeRecorte(
+          (await dependencias.repositorioUsuarios.listar({ pagina: 1, porPagina: MAXIMO_FILAS })) as {
+            datos: unknown[];
+            total: number;
+          },
+        ),
     },
 
     {
