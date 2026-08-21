@@ -66,15 +66,36 @@ export async function api<T>(ruta: string, init?: RequestInit): Promise<T> {
   return (await respuesta.json()) as T;
 }
 
+/**
+ * Mensajes de los errores que NO vienen de la aplicación sino de la pasarela.
+ *
+ * La API siempre responde `{ error: { mensaje } }` (backend/CLAUDE.md), así que una respuesta de
+ * error SIN ese cuerpo significa que quien contestó fue el proxy: el backend reiniciando tras un
+ * despliegue, o una petición que tardó más de lo que aguanta. Cada uno tiene una salida distinta y
+ * el mensaje genérico no dejaba distinguirlos.
+ */
+const MENSAJES_DE_PASARELA: Record<number, string> = {
+  502: 'El servidor no está respondiendo ahora mismo (error 502). Suele durar menos de un minuto ' +
+    'justo después de una actualización: espera un momento y vuelve a intentarlo.',
+  503: 'El servidor no está disponible en este momento (error 503). Espera un momento y vuelve a ' +
+    'intentarlo.',
+  504: 'La operación tardó más de lo que el servidor permite esperar (error 504). Si era una ' +
+    'consulta larga, prueba a acotarla; si se repite, avísale a quien administra el despliegue.',
+};
+
 /** Traduce la respuesta de error del contrato a `ErrorApi`; tolera cuerpos no-JSON. */
 async function construirError(respuesta: Response): Promise<ErrorApi> {
   try {
     const cuerpo = (await respuesta.json()) as ApiError;
     return new ErrorApi(respuesta.status, cuerpo.error.mensaje, cuerpo.error.campos);
   } catch {
+    // El código va SIEMPRE en el texto: es el único dato que distingue "se está reiniciando" de
+    // "tardó demasiado" de "algo se rompió", y sin él hay que abrir la consola del navegador —
+    // donde nadie va a mirar.
     return new ErrorApi(
       respuesta.status,
-      'No fue posible comunicarse con el servidor. Intenta de nuevo.',
+      MENSAJES_DE_PASARELA[respuesta.status] ??
+        `No fue posible comunicarse con el servidor (error ${respuesta.status}). Intenta de nuevo.`,
       null,
     );
   }

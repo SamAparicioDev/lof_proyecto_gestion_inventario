@@ -24,6 +24,7 @@ import { PaperPlaneRight, Sparkle } from '@phosphor-icons/react';
 import type { FuenteConsultada, RespuestaAsistente, TurnoAsistente } from '@trazo/compartido';
 import { consultarAsistente } from '@/lib/api/asistente';
 import { ErrorApi } from '@/lib/api/cliente';
+import { EstadoPensando } from './estado-pensando';
 import { TextoConFormato } from './texto-con-formato';
 
 const MENSAJE_ERROR_RED = 'No fue posible comunicarse con el servidor. Intenta de nuevo.';
@@ -98,11 +99,7 @@ export function ConversacionAsistente() {
         ) : (
           turnos.map((turno, indice) => <Turno key={indice} turno={turno} />)
         )}
-        {enviando && (
-          <p className="text-muted" style={{ fontSize: 14 }} role="status">
-            Consultando…
-          </p>
-        )}
+        {enviando && <EstadoPensando />}
         <div ref={finDeLaLista} />
       </div>
 
