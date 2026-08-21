@@ -1,0 +1,22 @@
+-- US35 — Se retira un índice que nunca se va a usar.
+--
+-- `20260820140000_notificaciones` creó `notificaciones_usuario_origen_id_idx` por reflejo —"es
+-- una clave foránea, indéxala"—, sin comprobar que alguna consulta pudiera aprovecharlo. No
+-- puede, por dos razones:
+--
+--  1. La ÚNICA consulta que toca esa columna la usa para EXCLUIR al autor:
+--     `usuario_origen_id IS NULL OR usuario_origen_id <> $1`. Ese predicado casa con casi todas
+--     las filas de la tabla, así que el planificador prefiere siempre un recorrido secuencial o
+--     el índice `(tipo, creada_en)`, que es el que sí acota. Un índice de baja selectividad no
+--     se usa: solo se paga en cada INSERT.
+--  2. El otro motivo clásico para indexar una FK —acelerar la comprobación al BORRAR la fila
+--     referenciada— aquí no existe: los usuarios nunca se borran, se desactivan (Principio II).
+--
+-- Se retira ahora que la tabla está recién creada y vacía, que es cuando cuesta cero. Los dos
+-- índices que data-model.md sí pide (`creada_en` y `(tipo, creada_en)`) se quedan: son los que
+-- responden la única pregunta que la bandeja hace.
+--
+-- `IF EXISTS` para que la migración también sea aplicable donde el índice nunca llegó a
+-- crearse (bases que reciben las dos migraciones juntas).
+
+DROP INDEX IF EXISTS "notificaciones_usuario_origen_id_idx";
