@@ -34,6 +34,10 @@ import type {
   DocumentoReporte,
   ColumnaDocumentoReporte,
 } from '../../../aplicacion/reportes/puertos/exportador-reporte';
+import type {
+  ReporteInventarioInmovil as ReporteInventarioInmovilApi,
+  ReporteValorizacion as ReporteValorizacionApi,
+} from '@trazo/compartido';
 import type { ReporteConsumoCliente } from '../../../aplicacion/reportes/reporte-consumo-cliente.caso-uso';
 import type { ReporteConsumoProyecto } from '../../../aplicacion/reportes/reporte-consumo-proyecto.caso-uso';
 import type { ReporteInventarioActual } from '../../../aplicacion/reportes/reporte-inventario-actual.caso-uso';
@@ -159,6 +163,108 @@ const COLUMNAS_REPORTE_INVENTARIO: ColumnaDocumentoReporte[] = [
 ];
 
 /** Aplana `ReporteInventarioActual` (FR-041) a `DocumentoReporte` para exportar (FR-043). */
+
+/** Columnas del reporte de inventario inmóvil (US37, FR-158). */
+const COLUMNAS_INVENTARIO_INMOVIL: ColumnaDocumentoReporte[] = [
+  { clave: 'sku', etiqueta: 'SKU' },
+  { clave: 'descripcion', etiqueta: 'Producto' },
+  { clave: 'categoria', etiqueta: 'Categoría' },
+  { clave: 'existencias', etiqueta: 'Existencias', alineacion: 'derecha' },
+  { clave: 'ultimoCosto', etiqueta: 'Costo unitario', alineacion: 'derecha' },
+  { clave: 'valorInmovilizado', etiqueta: 'Valor inmovilizado', alineacion: 'derecha' },
+  { clave: 'ultimaSalida', etiqueta: 'Última salida' },
+  { clave: 'diasSinSalida', etiqueta: 'Días sin salir', alineacion: 'derecha' },
+];
+
+/**
+ * Reporte de inventario inmóvil → documento exportable (US37, FR-158).
+ *
+ * "Nunca ha salido" se escribe con letras en la columna de última salida en vez de dejarla vacía.
+ * Una celda en blanco en un archivo se lee como un dato que faltó capturar; aquí es justo lo
+ * contrario — es el hallazgo más grave del reporte y tiene que leerse como tal (FR-159).
+ */
+export function mapearInventarioInmovilADocumento(reporte: ReporteInventarioInmovilApi): DocumentoReporte {
+  const filas = reporte.productos.map((fila) => ({
+    sku: fila.sku,
+    descripcion: fila.descripcion,
+    categoria: fila.categoria ?? 'Sin categoría',
+    existencias: fila.existencias,
+    ultimoCosto: fila.ultimoCosto,
+    valorInmovilizado: fila.valorInmovilizado,
+    ultimaSalida: fila.nuncaHaSalido ? 'Nunca ha salido' : formatoFechaCorta(fila.ultimaSalida),
+    diasSinSalida: fila.diasSinSalida,
+  }));
+
+  return {
+    titulo: 'Inventario inmóvil',
+    generadoEn: new Date(),
+    filtrosAplicados: soloFiltrosAplicados({
+      'Días sin salida': String(reporte.filtros.diasSinSalida),
+      Categoría: reporte.filtros.categoria?.nombre ?? 'Sin filtro',
+      Buscar: reporte.filtros.buscar ?? 'Sin filtro',
+    }),
+    columnas: COLUMNAS_INVENTARIO_INMOVIL,
+    filas,
+    totales: [
+      { etiqueta: 'Valor total inmovilizado', valor: formatoMonedaCop(reporte.valorTotalInmovilizado) },
+      { etiqueta: 'Productos inmóviles', valor: String(reporte.productos.length) },
+    ],
+  };
+}
+
+/** Columnas de la valorización a una fecha (US38, FR-163). */
+const COLUMNAS_VALORIZACION: ColumnaDocumentoReporte[] = [
+  { clave: 'sku', etiqueta: 'SKU' },
+  { clave: 'descripcion', etiqueta: 'Producto' },
+  { clave: 'categoria', etiqueta: 'Categoría' },
+  { clave: 'existencias', etiqueta: 'Existencias', alineacion: 'derecha' },
+  { clave: 'costoVigente', etiqueta: 'Costo vigente', alineacion: 'derecha' },
+  { clave: 'valorLinea', etiqueta: 'Valor', alineacion: 'derecha' },
+];
+
+/**
+ * Valorización a una fecha → documento exportable (US38, FR-163).
+ *
+ * La FECHA DEL CORTE va en `filtrosAplicados`, que las dos estrategias imprimen en la cabecera.
+ * No es un filtro más: es lo que le da significado a todas las cifras de abajo, y una valorización
+ * sin su fecha es un papel con números que nadie puede volver a comprobar.
+ */
+export function mapearValorizacionADocumento(reporte: ReporteValorizacionApi): DocumentoReporte {
+  const filas = reporte.productos.map((fila) => ({
+    sku: fila.sku,
+    descripcion: fila.descripcion,
+    categoria: fila.categoria ?? 'Sin categoría',
+    existencias: fila.existencias,
+    costoVigente: fila.costoVigente,
+    valorLinea: fila.valorLinea,
+  }));
+
+  return {
+    titulo: `Valorización de inventario al ${formatoFechaCorta(reporte.fecha)}`,
+    generadoEn: new Date(),
+    filtrosAplicados: soloFiltrosAplicados({
+      'Fecha del corte': formatoFechaCorta(reporte.fecha),
+      Categoría: reporte.filtros.categoria?.nombre ?? 'Sin filtro',
+      Buscar: reporte.filtros.buscar ?? 'Sin filtro',
+    }),
+    columnas: COLUMNAS_VALORIZACION,
+    filas,
+    totales: [
+      { etiqueta: 'Valor total del inventario a la fecha', valor: formatoMonedaCop(reporte.valorTotalInventario) },
+      { etiqueta: 'Productos con existencias', valor: String(reporte.productos.length) },
+    ],
+  };
+}
+
+/** Fecha legible para un documento, sin hora. Acepta el ISO completo de una marca de tiempo o el
+ *  `AAAA-MM-DD` del corte, y devuelve el texto vacío ante un valor ausente. */
+function formatoFechaCorta(valor: string | null): string {
+  if (!valor) return '';
+  const soloFecha = valor.slice(0, 10);
+  const [anio, mes, dia] = soloFecha.split('-');
+  return dia && mes && anio ? `${dia}/${mes}/${anio}` : soloFecha;
+}
+
 export function mapearInventarioADocumento(reporte: ReporteInventarioActual): DocumentoReporte {
   const filas = reporte.productos.map((fila) => ({
     sku: fila.producto.sku,

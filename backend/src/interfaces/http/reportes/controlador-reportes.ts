@@ -65,6 +65,16 @@ import {
   type ReporteMovimientosEntrada,
 } from '../../../aplicacion/reportes/reporte-movimientos.caso-uso';
 import { EXPORTADOR_EXCEL, EXPORTADOR_PDF } from '../../../infraestructura/exportacion/exportacion.module';
+import {
+  esquemaFiltrosInventarioInmovil,
+  esquemaFiltrosValorizacion,
+  type FiltrosInventarioInmovil,
+  type FiltrosValorizacion,
+  type ReporteInventarioInmovil as ReporteInventarioInmovilApi,
+  type ReporteValorizacion as ReporteValorizacionApi,
+} from '@trazo/compartido';
+import { ReporteInventarioInmovilCasoUso } from '../../../aplicacion/reportes/reporte-inventario-inmovil.caso-uso';
+import { ReporteValorizacionCasoUso } from '../../../aplicacion/reportes/reporte-valorizacion.caso-uso';
 import { PipeValidacionZod } from '../comunes/pipe-validacion-zod';
 import { RequierePermiso } from '../comunes/requiere-permiso.decorator';
 import { fechaHoyIso, responderConArchivoExportado } from '../comunes/respuesta-export';
@@ -72,6 +82,8 @@ import {
   mapearConsumoClienteADocumento,
   mapearConsumoProyectoADocumento,
   mapearInventarioADocumento,
+  mapearInventarioInmovilADocumento,
+  mapearValorizacionADocumento,
   mapearMovimientosADocumento,
 } from './mapeadores-documento-reporte';
 
@@ -82,6 +94,9 @@ export class ControladorReportes {
     private readonly reporteConsumoProyecto: ReporteConsumoProyectoCasoUso,
     private readonly reporteInventarioActual: ReporteInventarioActualCasoUso,
     private readonly reporteMovimientos: ReporteMovimientosCasoUso,
+    // US37 y US38: dos reportes de SOLO LECTURA sobre datos que ya existían desde el primer día.
+    private readonly reporteInventarioInmovil: ReporteInventarioInmovilCasoUso,
+    private readonly reporteValorizacion: ReporteValorizacionCasoUso,
     /** Solo para la lista de personas del filtro (US25, FR-121): es una consulta de apoyo a la
      *  pantalla, no un reporte con su propio caso de uso — mismo criterio con el que los
      *  controladores de ingresos y órdenes inyectan su repositorio para el listado exportado. */
@@ -164,6 +179,118 @@ export class ControladorReportes {
   }
 
   /**
+   * `GET /api/reportes/inventario-inmovil?diasSinSalida=&categoriaId=&buscar=` — el capital
+   * dormido en la bodega (US37, FR-158). SOLO LECTURA: no ofrece ninguna acción sobre el producto
+   * (FR-162), y por eso esta sección del controlador no tiene un solo `@Post`.
+   */
+  @Get('inventario-inmovil')
+  @RequierePermiso('reportes.ver')
+  async inventarioInmovil(
+    @Query(new PipeValidacionZod(esquemaFiltrosInventarioInmovil)) filtros: FiltrosInventarioInmovil,
+  ): Promise<ReporteInventarioInmovilApi> {
+    return this.componerInventarioInmovil(filtros);
+  }
+
+  /** `GET /api/reportes/inventario-inmovil/export?...&formato=pdf|xlsx` — MISMO caso de uso y
+   *  MISMOS filtros que la vista (SC-007). */
+  @Get('inventario-inmovil/export')
+  @RequierePermiso('reportes.exportar')
+  async exportarInventarioInmovil(
+    @Query(new PipeValidacionZod(esquemaFiltrosInventarioInmovil.merge(esquemaFormatoExport)))
+    filtros: FiltrosInventarioInmovil & FormatoExport,
+    @Res({ passthrough: true }) respuesta: Response,
+  ): Promise<StreamableFile> {
+    const reporte = await this.componerInventarioInmovil(filtros);
+    return this.exportar(mapearInventarioInmovilADocumento(reporte), filtros.formato, 'inventario-inmovil', respuesta);
+  }
+
+  /**
+   * `GET /api/reportes/valorizacion?fecha=&categoriaId=&buscar=` — cuánto valía el inventario ese
+   * día (US38, FR-163). `fecha` es obligatoria y una futura responde `400` desde el propio
+   * esquema compartido (FR-167).
+   */
+  @Get('valorizacion')
+  @RequierePermiso('reportes.ver')
+  async valorizacion(
+    @Query(new PipeValidacionZod(esquemaFiltrosValorizacion)) filtros: FiltrosValorizacion,
+  ): Promise<ReporteValorizacionApi> {
+    return this.componerValorizacion(filtros);
+  }
+
+  /** `GET /api/reportes/valorizacion/export?...&formato=pdf|xlsx` — con la FECHA impresa en la
+   *  cabecera del archivo: una valorización sin su fecha no significa nada. */
+  @Get('valorizacion/export')
+  @RequierePermiso('reportes.exportar')
+  async exportarValorizacion(
+    @Query(new PipeValidacionZod(esquemaFiltrosValorizacion.merge(esquemaFormatoExport)))
+    filtros: FiltrosValorizacion & FormatoExport,
+    @Res({ passthrough: true }) respuesta: Response,
+  ): Promise<StreamableFile> {
+    const reporte = await this.componerValorizacion(filtros);
+    return this.exportar(mapearValorizacionADocumento(reporte), filtros.formato, 'valorizacion', respuesta);
+  }
+
+  /** Vista y exportación comparten esta composición para que no puedan divergir (SC-007). */
+  private async componerInventarioInmovil(
+    filtros: FiltrosInventarioInmovil,
+  ): Promise<ReporteInventarioInmovilApi> {
+    const reporte = await this.reporteInventarioInmovil.ejecutar({
+      diasSinSalida: filtros.diasSinSalida,
+      categoriaId: filtros.categoriaId,
+      buscar: filtros.buscar,
+    });
+    return {
+      productos: reporte.productos.map((fila) => ({
+        productoId: String(fila.productoId),
+        sku: fila.sku,
+        descripcion: fila.descripcion,
+        categoria: fila.categoria,
+        unidadMedida: fila.unidadMedida,
+        existencias: fila.existencias,
+        ultimoCosto: fila.ultimoCosto,
+        valorInmovilizado: fila.valorInmovilizado,
+        ultimaSalida: fila.ultimaSalida ? fila.ultimaSalida.toISOString() : null,
+        diasSinSalida: fila.diasSinSalida,
+        nuncaHaSalido: fila.nuncaHaSalido,
+      })),
+      valorTotalInmovilizado: reporte.valorTotalInmovilizado,
+      filtros: {
+        diasSinSalida: filtros.diasSinSalida,
+        categoria: categoriaDelFiltro(filtros.categoriaId, reporte.productos[0]?.categoria ?? null),
+        buscar: filtros.buscar ?? null,
+      },
+    };
+  }
+
+  private async componerValorizacion(filtros: FiltrosValorizacion): Promise<ReporteValorizacionApi> {
+    // Fin del día de corte: pedir "al 31 de diciembre" incluye todo lo que pasó ESE día. Cortar a
+    // medianoche dejaría fuera la jornada entera y el cierre no cuadraría con sus documentos.
+    const reporte = await this.reporteValorizacion.ejecutar({
+      fecha: new Date(`${filtros.fecha}T23:59:59.999Z`),
+      categoriaId: filtros.categoriaId,
+      buscar: filtros.buscar,
+    });
+    return {
+      fecha: filtros.fecha,
+      productos: reporte.productos.map((fila) => ({
+        productoId: String(fila.productoId),
+        sku: fila.sku,
+        descripcion: fila.descripcion,
+        categoria: fila.categoria,
+        unidadMedida: fila.unidadMedida,
+        existencias: fila.existencias,
+        costoVigente: fila.costoVigente,
+        valorLinea: fila.valorLinea,
+      })),
+      valorTotalInventario: reporte.valorTotalInventario,
+      filtros: {
+        categoria: categoriaDelFiltro(filtros.categoriaId, reporte.productos[0]?.categoria ?? null),
+        buscar: filtros.buscar ?? null,
+      },
+    };
+  }
+
+  /**
    * `GET /api/reportes/movimientos/usuarios` — quiénes han movido inventario (US25, FR-121).
    *
    * Alimenta el filtro por persona del propio reporte, y por eso exige `reportes.ver` y no
@@ -223,6 +350,22 @@ export class ControladorReportes {
       respuesta,
     );
   }
+}
+
+
+/**
+ * La categoría por la que se filtró, resuelta desde las filas ya obtenidas (mismo criterio que
+ * `ReporteInventarioActualCasoUso`, US24/FR-120): si el filtro devolvió productos, todos comparten
+ * esa categoría por construcción. Ahorra una consulta al catálogo y no puede desincronizarse de lo
+ * que el reporte está mostrando. Con cero resultados queda `null`, que es lo que el documento debe
+ * decir — el nombre de una categoría cuyo filtro no trajo nada no aporta.
+ */
+function categoriaDelFiltro(
+  categoriaId: number | undefined,
+  nombreDeLaPrimeraFila: string | null,
+): { id: number; nombre: string } | null {
+  if (categoriaId === undefined || !nombreDeLaPrimeraFila) return null;
+  return { id: categoriaId, nombre: nombreDeLaPrimeraFila };
 }
 
 /** Convierte el filtro ya validado (fechas en texto ISO) a la entrada `Date` que espera el

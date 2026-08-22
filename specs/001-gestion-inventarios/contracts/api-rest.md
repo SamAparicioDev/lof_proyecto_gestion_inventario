@@ -406,6 +406,70 @@ Reglas de la sección:
 - El PROVEEDOR del refinado no aparece en el contrato, igual que en `/api/asistente`: vive detrás
   del puerto `ModeloConversacional` y cambiarlo no toca estos endpoints.
 
+## Inventario inmóvil (US37, FR-158…FR-162) y valorización a una fecha (US38, FR-163…FR-168)
+
+| Método y ruta | Permiso | Query | Respuesta OK |
+|---|---|---|---|
+| `GET /api/reportes/inventario-inmovil` | `reportes.ver` | `diasSinSalida` (def. 90), `categoriaId`, `buscar` | `200` `ReporteInventarioInmovil` |
+| `GET /api/reportes/inventario-inmovil/exportar` | `reportes.exportar` | los mismos + `formato=excel\|pdf` | `200` archivo |
+| `GET /api/reportes/valorizacion` | `reportes.ver` | `fecha` (**obligatoria**, ISO `AAAA-MM-DD`), `categoriaId`, `buscar` | `200` `ReporteValorizacion` |
+| `GET /api/reportes/valorizacion/exportar` | `reportes.exportar` | los mismos + `formato=excel\|pdf` | `200` archivo |
+
+```json
+{
+  "productos": [
+    { "productoId": "12", "sku": "CEM-50", "descripcion": "Cemento gris 50 kg",
+      "categoria": "Cementos", "unidadMedida": "Saco",
+      "existencias": 240, "ultimoCosto": 28500, "valorInmovilizado": 6840000,
+      "ultimaSalida": "2026-01-14T10:22:00.000Z", "diasSinSalida": 219, "nuncaHaSalido": false }
+  ],
+  "valorTotalInmovilizado": 6840000,
+  "filtros": { "diasSinSalida": 90, "categoria": null, "buscar": null }
+}
+```
+
+```json
+{
+  "fecha": "2025-12-31",
+  "productos": [
+    { "productoId": "12", "sku": "CEM-50", "descripcion": "Cemento gris 50 kg",
+      "categoria": "Cementos", "unidadMedida": "Saco",
+      "existencias": 180, "costoVigente": 26000, "valorLinea": 4680000 }
+  ],
+  "valorTotalInventario": 4680000,
+  "filtros": { "categoria": null, "buscar": null }
+}
+```
+
+Reglas de la sección:
+
+- **Los dos son de SOLO LECTURA** (FR-162). No hay `POST`, `PATCH` ni `DELETE` en esta sección y no
+  los habrá: qué hacer con un producto inmóvil —liquidarlo, devolverlo, darlo de baja— se ejecuta
+  por las pantallas que ya existen, donde queda auditado. Un reporte que además actuara escondería
+  decisiones de negocio dentro de una consulta.
+- **Ningún permiso nuevo**: reutilizan `reportes.ver` y `reportes.exportar`, como los otros cuatro
+  reportes. Es lo correcto —son reportes, y quien puede ver el consumo de un cliente puede ver qué
+  no rota— y de paso no hay que sembrar nada en la migración, que es donde se olvidan los permisos
+  en producción.
+- **`diasSinSalida` cuenta desde la última SALIDA, no desde el último movimiento** (FR-159). Es la
+  decisión de diseño de todo el reporte: si contara movimientos, recibir mercancía de un producto
+  que no rota lo sacaría del listado justo cuando el problema empeoró. `nuncaHaSalido: true` marca
+  las filas cuyo contador arranca en la PRIMERA ENTRADA porque nunca hubo salida — el caso más
+  grave, y por eso viene señalado y no disimulado como un número más.
+- **`existencias > 0` es condición de entrada al reporte de inmóvil** (FR-160): sin existencias no
+  hay capital detenido. No es un filtro que el cliente pueda desactivar.
+- **`fecha` en la valorización es OBLIGATORIA y sin valor por defecto** (FR-163). Un
+  `400` con el campo señalado es preferible a devolver silenciosamente el día de hoy: quien pide un
+  cierre y recibe el presente no tiene forma de notarlo mirando el archivo.
+- **Una `fecha` futura responde `400`**, no una lista vacía (FR-167). Vacío se lee como "no había
+  nada"; el caso real es que alguien escribió mal el año.
+- **Las existencias a la fecha salen de los MOVIMIENTOS, no de `productos.stock_actual`** (FR-164),
+  y el costo, del historial vigente ESE día (FR-165). Consultada con la fecha de hoy, la
+  valorización tiene que dar exactamente el `valorTotalInventario` de
+  `GET /api/reportes/inventario` (FR-168): si difieren, una de las dos está mal.
+- Ambos exportables llevan el logotipo de LOF como cualquier otro (FR-067), y el de valorización
+  imprime SU FECHA en la cabecera: una valorización sin fecha no significa nada.
+
 ## Roles y permisos (`/api/roles`, `/api/permisos`) — solo Administrador (US9, FR-054…FR-059)
 
 | Método y ruta | Permiso | Body (Zod) | Respuesta OK | Errores |

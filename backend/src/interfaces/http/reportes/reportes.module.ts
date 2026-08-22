@@ -18,7 +18,9 @@ import { Module } from '@nestjs/common';
 import { ReporteConsumoClienteCasoUso } from '../../../aplicacion/reportes/reporte-consumo-cliente.caso-uso';
 import { ReporteConsumoProyectoCasoUso } from '../../../aplicacion/reportes/reporte-consumo-proyecto.caso-uso';
 import { ReporteInventarioActualCasoUso } from '../../../aplicacion/reportes/reporte-inventario-actual.caso-uso';
+import { ReporteInventarioInmovilCasoUso } from '../../../aplicacion/reportes/reporte-inventario-inmovil.caso-uso';
 import { ReporteMovimientosCasoUso } from '../../../aplicacion/reportes/reporte-movimientos.caso-uso';
+import { ReporteValorizacionCasoUso } from '../../../aplicacion/reportes/reporte-valorizacion.caso-uso';
 import { ExportacionModule } from '../../../infraestructura/exportacion/exportacion.module';
 import { AuthModule } from '../auth/auth.module';
 import { ControladorReportes } from './controlador-reportes';
@@ -31,6 +33,9 @@ import { ControladorReportes } from './controlador-reportes';
     ReporteConsumoProyectoCasoUso,
     ReporteInventarioActualCasoUso,
     ReporteMovimientosCasoUso,
+    // US37/US38: dos reportes de solo lectura sobre datos que ya existían.
+    ReporteInventarioInmovilCasoUso,
+    ReporteValorizacionCasoUso,
   ],
 })
 export class ReportesModule {}

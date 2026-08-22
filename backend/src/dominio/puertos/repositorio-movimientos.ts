@@ -54,6 +54,31 @@ export interface FiltrosListarMovimientosGeneral {
   readonly proyectoId?: number;
 }
 
+/**
+ * Cuándo se movió por última vez cada producto, visto desde la ROTACIÓN (US37, FR-159).
+ *
+ * Los dos campos son distintos a propósito y ninguno sobra:
+ *
+ * - `ultimaSalida` es lo que mide la rotación. Un producto rota cuando SALE; que entre más
+ *   mercancía no es rotación, es lo contrario.
+ * - `primeraEntrada` es el reloj de repuesto para el que NUNCA ha salido — el caso más grave,
+ *   que sin este campo no tendría antigüedad que mostrar y se caería del reporte justo por ser
+ *   el peor.
+ *
+ * Ambos son `null` cuando el producto no tiene ningún movimiento de ese tipo.
+ */
+export interface RotacionDeProducto {
+  readonly productoId: number;
+  readonly ultimaSalida: Date | null;
+  readonly primeraEntrada: Date | null;
+}
+
+/** Existencias de UN producto a una fecha de corte (US38, FR-164). */
+export interface ExistenciasAFecha {
+  readonly productoId: number;
+  readonly existencias: number;
+}
+
 export interface RepositorioMovimientos {
   /**
    * Historial de movimientos de UN producto, ordenado por `fecha_hora` DESCENDENTE (más
@@ -66,6 +91,32 @@ export interface RepositorioMovimientos {
    * SIN paginar (reporte, no listado de UI — FR-042). Alimenta `GET /api/reportes/movimientos`.
    */
   listar(filtros: FiltrosListarMovimientosGeneral): Promise<MovimientoInventario[]>;
+
+  /**
+   * Última salida y primera entrada de CADA producto que tenga movimientos (US37, FR-159).
+   *
+   * Una sola consulta agrupada para todo el catálogo, nunca una por producto: el reporte de
+   * inmovilizado recorre el catálogo entero y N+1 aquí serían miles de viajes a la base.
+   *
+   * Devuelve solo los productos CON movimientos. Los que no tienen ninguno no aparecen, y eso es
+   * correcto: un producto sin un solo movimiento tampoco tiene existencias (el stock solo se
+   * mueve con movimientos), así que el reporte lo descarta igual por FR-160.
+   */
+  rotacionPorProducto(): Promise<RotacionDeProducto[]>;
+
+  /**
+   * Existencias de cada producto A UNA FECHA (US38, FR-164), reconstruidas del registro
+   * inmutable de movimientos y NUNCA de `productos.stock_actual`.
+   *
+   * Se resuelve con el `stock_resultante` del ÚLTIMO movimiento anterior o igual a la fecha, no
+   * sumando cantidades con signo. Esa columna es la foto del stock inmediatamente después de cada
+   * movimiento, escrita en la MISMA transacción que lo produjo: leerla es más barato que sumar la
+   * historia entera y —lo que importa más— no puede desviarse de ella.
+   *
+   * Un producto sin movimientos hasta esa fecha no aparece: no existía o no tenía nada, y en
+   * ambos casos su lugar en un documento de cierre es la ausencia, no una fila en cero (FR-166).
+   */
+  existenciasAFecha(fecha: Date): Promise<ExistenciasAFecha[]>;
 
   /**
    * Quiénes han movido inventario alguna vez, por nombre (US25, FR-121).

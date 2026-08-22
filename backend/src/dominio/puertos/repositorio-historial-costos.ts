@@ -35,7 +35,36 @@ export interface PaginaHistorialCostos {
   readonly total: number;
 }
 
+/**
+ * Costo que estaba VIGENTE para un producto en una fecha de corte (US38, FR-165).
+ *
+ * No es "el costo del producto": es el que regía ESE día. Valorar diciembre con el costo que se
+ * registró en agosto siguiente produce una cifra que no existió en ningún momento, y es la razón
+ * más común de que un cierre no cuadre con sus propios documentos.
+ */
+export interface CostoVigenteAFecha {
+  readonly productoId: number;
+  readonly costo: number;
+}
+
 export interface RepositorioHistorialCostos {
+  /**
+   * El costo vigente de cada producto A UNA FECHA (US38, FR-165), reconstruido del historial.
+   *
+   * La regla tiene dos ramas y las dos importan:
+   *
+   * - Si hay cambios ANTERIORES o iguales a la fecha, vale el `costoNuevo` del más reciente de
+   *   ellos: es el último precio que se fijó antes de ese día.
+   * - Si TODOS los cambios del producto son posteriores a la fecha, vale el `costoAnterior` del
+   *   más antiguo — que es, por definición, el que regía antes de que empezara a cambiar.
+   *
+   * Un producto SIN historial no aparece en el resultado: nunca cambió de costo, así que el
+   * vigente a cualquier fecha es el que lleva el producto encima. Quien llama completa ese caso
+   * con `ultimoCosto`, y esta separación es deliberada — este puerto habla del historial, no del
+   * producto, y devolver aquí un costo que no salió del historial sería mentir sobre su origen.
+   */
+  costosVigentesAFecha(fecha: Date): Promise<CostoVigenteAFecha[]>;
+
   /** Cambios de costo de un producto, MÁS RECIENTE PRIMERO y paginados (contracts/api-rest.md
    *  § Historial de costos del producto). */
   listarPorProducto(productoId: number, filtros: FiltrosHistorialCostos): Promise<PaginaHistorialCostos>;

@@ -26,6 +26,10 @@ const REPORTES = [
   { href: '/reportes/consumo-proyecto', etiqueta: 'Consumo por proyecto' },
   { href: '/reportes/inventario', etiqueta: 'Inventario actual' },
   { href: '/reportes/movimientos', etiqueta: 'Movimientos' },
+  // US37/US38: dos preguntas que ninguna otra pantalla responde — dónde está la plata quieta y
+  // cuánto valía el inventario un día concreto.
+  { href: '/reportes/inventario-inmovil', etiqueta: 'Inventario inmóvil' },
+  { href: '/reportes/valorizacion', etiqueta: 'Valorización' },
 ] as const;
 
 export function PestanasReportes() {

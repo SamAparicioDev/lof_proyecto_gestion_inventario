@@ -22,6 +22,7 @@ import { Injectable } from '@nestjs/common';
 import type { HistorialCostoProducto as HistorialCostoProductoPrisma } from '@prisma/client';
 import type { CambioCostoProducto } from '../../dominio/entidades/cambio-costo-producto';
 import type {
+  CostoVigenteAFecha,
   FiltrosHistorialCostos,
   PaginaHistorialCostos,
   RepositorioHistorialCostos,
@@ -32,6 +33,44 @@ import { mapearOrigenADominio } from './registrar-cambio-costo';
 @Injectable()
 export class RepositorioHistorialCostosPrisma implements RepositorioHistorialCostos {
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * Costo vigente de cada producto a una fecha (US38, FR-165), en dos consultas `DISTINCT ON`.
+   *
+   * La primera resuelve el caso normal: el último cambio ANTERIOR o igual a la fecha, del que se
+   * toma `costo_nuevo` — el último precio fijado antes de ese día.
+   *
+   * La segunda cubre el producto cuyos cambios son TODOS posteriores: se toma el `costo_anterior`
+   * del más antiguo, que es por definición el que regía antes de que empezara a cambiar. Sin esta
+   * rama, un producto que subió de precio en marzo quedaría valorizado en enero al precio de
+   * marzo — exactamente el error que FR-165 existe para impedir.
+   *
+   * El desempate por `id` importa por lo mismo que en `existenciasAFecha`: una recepción puede
+   * registrar dos cambios en el mismo instante.
+   */
+  async costosVigentesAFecha(fecha: Date): Promise<CostoVigenteAFecha[]> {
+    const [anteriores, posteriores] = await Promise.all([
+      this.prisma.$queryRaw<{ producto_id: bigint; costo: unknown }[]>`
+        SELECT DISTINCT ON (producto_id) producto_id, costo_nuevo AS costo
+        FROM historial_costos_producto
+        WHERE fecha_hora <= ${fecha}
+        ORDER BY producto_id, fecha_hora DESC, id DESC
+      `,
+      this.prisma.$queryRaw<{ producto_id: bigint; costo: unknown }[]>`
+        SELECT DISTINCT ON (producto_id) producto_id, costo_anterior AS costo
+        FROM historial_costos_producto
+        ORDER BY producto_id, fecha_hora ASC, id ASC
+      `,
+    ]);
+
+    // El más antiguo va primero y el vigente a la fecha lo pisa cuando existe: así la segunda
+    // rama solo sobrevive en los productos que no tienen ningún cambio anterior a la fecha.
+    const porProducto = new Map<number, number>();
+    for (const fila of posteriores) porProducto.set(Number(fila.producto_id), Number(fila.costo));
+    for (const fila of anteriores) porProducto.set(Number(fila.producto_id), Number(fila.costo));
+
+    return [...porProducto.entries()].map(([productoId, costo]) => ({ productoId, costo }));
+  }
 
   async listarPorProducto(productoId: number, filtros: FiltrosHistorialCostos): Promise<PaginaHistorialCostos> {
     const where = { productoId: BigInt(productoId) };

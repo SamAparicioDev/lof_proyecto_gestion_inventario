@@ -26,7 +26,9 @@ import type {
   ReporteConsumoCliente,
   ReporteConsumoProyecto,
   ReporteInventarioActual,
+  ReporteInventarioInmovil,
   ReporteMovimientos,
+  ReporteValorizacion,
 } from '@trazo/compartido';
 import { api, ErrorApi } from './cliente';
 
@@ -99,6 +101,43 @@ export function exportarReporteMovimientos(
 ): Promise<void> {
   const query = construirQueryReporte({ ...filtros, formato });
   return descargarArchivo(`/api/reportes/movimientos/export?${query}`, `movimientos.${formato}`);
+}
+
+/** `GET /api/reportes/inventario-inmovil` — el capital dormido en la bodega (US37, FR-158). */
+export function obtenerInventarioInmovil(filtros: {
+  diasSinSalida?: number;
+  categoriaId?: number;
+  buscar?: string;
+}): Promise<ReporteInventarioInmovil> {
+  return api<ReporteInventarioInmovil>(`/api/reportes/inventario-inmovil?${construirQueryReporte(filtros)}`);
+}
+
+/** `GET /api/reportes/valorizacion` — cuánto valía el inventario ese día (US38, FR-163).
+ *  `fecha` no es opcional: un cierre sin fecha no significa nada. */
+export function obtenerValorizacion(filtros: {
+  fecha: string;
+  categoriaId?: number;
+  buscar?: string;
+}): Promise<ReporteValorizacion> {
+  return api<ReporteValorizacion>(`/api/reportes/valorizacion?${construirQueryReporte(filtros)}`);
+}
+
+/** `GET /api/reportes/inventario-inmovil/export` — MISMOS filtros que la pantalla (SC-007). */
+export function exportarInventarioInmovil(
+  filtros: { diasSinSalida?: number; categoriaId?: number; buscar?: string },
+  formato: FormatoExport['formato'],
+): Promise<void> {
+  const query = construirQueryReporte({ ...filtros, formato });
+  return descargarArchivo(`/api/reportes/inventario-inmovil/export?${query}`, `inventario-inmovil.${formato}`);
+}
+
+/** `GET /api/reportes/valorizacion/export` — MISMOS filtros que la pantalla (SC-007). */
+export function exportarValorizacion(
+  filtros: { fecha: string; categoriaId?: number; buscar?: string },
+  formato: FormatoExport['formato'],
+): Promise<void> {
+  const query = construirQueryReporte({ ...filtros, formato });
+  return descargarArchivo(`/api/reportes/valorizacion/export?${query}`, `valorizacion-${filtros.fecha}.${formato}`);
 }
 
 /** Nombre de archivo tomado del header `Content-Disposition: attachment; filename="..."` del

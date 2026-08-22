@@ -36,10 +36,12 @@ import type {
   TipoMovimientoInventario,
 } from '../../dominio/entidades/movimiento-inventario';
 import type {
+  ExistenciasAFecha,
   FiltrosListarMovimientos,
   FiltrosListarMovimientosGeneral,
   PaginaMovimientos,
   RepositorioMovimientos,
+  RotacionDeProducto,
 } from '../../dominio/puertos/repositorio-movimientos';
 import { PrismaService } from './prisma.service';
 
@@ -79,6 +81,77 @@ export class RepositorioMovimientosPrisma implements RepositorioMovimientos {
       orderBy: { nombreCompleto: 'asc' },
     });
     return usuarios.map((usuario) => ({ id: Number(usuario.id), nombre: usuario.nombreCompleto }));
+  }
+
+  /**
+   * Última salida y primera entrada de cada producto (US37, FR-159), en DOS consultas agrupadas
+   * para todo el catálogo — nunca una por producto.
+   *
+   * Solo cuenta `SALIDA` como salida, no `AJUSTE_SALIDA`. Un ajuste de salida es una corrección
+   * —una rotura, un conteo que aparece de menos—, no mercancía que se fue a un cliente. Si
+   * contara, dar de baja producto averiado parecería rotación y sacaría del reporte justo lo que
+   * lleva años sin venderse.
+   *
+   * En la entrada, en cambio, sí cuentan las dos: para el producto que nunca ha salido lo que se
+   * busca es desde CUÁNDO está en la bodega, y ahí da igual si llegó por factura o apareció en
+   * un ajuste.
+   */
+  async rotacionPorProducto(): Promise<RotacionDeProducto[]> {
+    const [salidas, entradas] = await Promise.all([
+      this.prisma.movimientoInventario.groupBy({
+        by: ['productoId'],
+        where: { tipo: 'SALIDA' },
+        _max: { fechaHora: true },
+      }),
+      this.prisma.movimientoInventario.groupBy({
+        by: ['productoId'],
+        where: { tipo: { in: ['ENTRADA', 'AJUSTE_ENTRADA'] } },
+        _min: { fechaHora: true },
+      }),
+    ]);
+
+    const porProducto = new Map<number, { ultimaSalida: Date | null; primeraEntrada: Date | null }>();
+    for (const grupo of salidas) {
+      const id = Number(grupo.productoId);
+      porProducto.set(id, { ultimaSalida: grupo._max.fechaHora, primeraEntrada: null });
+    }
+    for (const grupo of entradas) {
+      const id = Number(grupo.productoId);
+      const previo = porProducto.get(id);
+      if (previo) porProducto.set(id, { ...previo, primeraEntrada: grupo._min.fechaHora });
+      else porProducto.set(id, { ultimaSalida: null, primeraEntrada: grupo._min.fechaHora });
+    }
+
+    return [...porProducto.entries()].map(([productoId, fechas]) => ({ productoId, ...fechas }));
+  }
+
+  /**
+   * Existencias de cada producto a una fecha (US38, FR-164).
+   *
+   * `DISTINCT ON` de PostgreSQL: por cada `producto_id`, la primera fila del orden — que aquí es
+   * el movimiento MÁS RECIENTE anterior o igual a la fecha. Se lee su `stock_resultante`, la foto
+   * del stock justo después de ese movimiento, en vez de sumar cantidades con signo sobre toda la
+   * historia: es una sola pasada y no puede desviarse de lo que quedó escrito.
+   *
+   * El desempate por `id DESC` no es decorativo: dos movimientos pueden compartir `fecha_hora` al
+   * milisegundo (una salida de varias líneas se escribe en la misma transacción), y sin él cuál
+   * gana quedaría a criterio del planificador — la misma consulta podría dar dos cifras distintas.
+   *
+   * SQL crudo y no Prisma porque `groupBy` sabe devolver el `MAX(fecha_hora)` pero no la COLUMNA
+   * de esa fila; resolverlo con el ORM costaría una segunda consulta con un `OR` de miles de
+   * pares. Va parametrizado, como exige backend/CLAUDE.md.
+   */
+  async existenciasAFecha(fecha: Date): Promise<ExistenciasAFecha[]> {
+    const filas = await this.prisma.$queryRaw<{ producto_id: bigint; stock_resultante: unknown }[]>`
+      SELECT DISTINCT ON (producto_id) producto_id, stock_resultante
+      FROM movimientos_inventario
+      WHERE fecha_hora <= ${fecha}
+      ORDER BY producto_id, fecha_hora DESC, id DESC
+    `;
+    return filas.map((fila) => ({
+      productoId: Number(fila.producto_id),
+      existencias: Number(fila.stock_resultante),
+    }));
   }
 
   async listar(filtros: FiltrosListarMovimientosGeneral): Promise<MovimientoInventario[]> {

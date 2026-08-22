@@ -767,6 +767,78 @@ Administrador— encuentra el módulo en el menú ni logra alcanzar sus endpoint
 
 ---
 
+### User Story 37 - Ver qué lleva meses sin moverse (Priority: P2)
+
+La bodega tiene dinero quieto y nadie lo ve. Un producto que entró hace ocho meses y del que no ha
+salido una sola unidad ocupa espacio, se deteriora y representa plata que ya se gastó y todavía no
+ha vuelto. El sistema sabe exactamente cuándo se movió cada producto por última vez —está en
+`movimientos_inventario` desde el primer día— pero ninguna pantalla lo pregunta, así que la
+respuesta solo aparece cuando alguien recorre la bodega y se acuerda.
+
+**Why this priority**: es el reporte más barato del sistema —no necesita ni una tabla ni un dato
+nuevo— y responde una pregunta que nadie más responde: dónde está el capital dormido. Un producto
+inmóvil no dispara ninguna alerta: no está bajo umbral (le sobra stock, ese es justamente el
+problema) y no sale en el panel, que muestra lo que se movió, no lo que no.
+
+**Independent Test**: Con productos de distintas antigüedades, el reporte los lista ordenados por
+valor inmovilizado y el umbral de días filtra exactamente lo esperado; recibir más mercancía de un
+producto inmóvil NO lo saca del reporte.
+
+**Acceptance Scenarios**:
+
+1. **Given** un producto con existencias cuya última SALIDA fue hace 200 días, **When** consulto el
+   reporte con umbral de 90 días, **Then** aparece con sus 200 días y su valor inmovilizado.
+2. **Given** un producto que salió ayer, **Then** NO aparece con ningún umbral mayor que 1.
+3. **Given** un producto inmóvil del que HOY se recibió más mercancía, **Then** SIGUE apareciendo y
+   sus días no se reinician: comprar más de lo que no sale agrava el problema, no lo resuelve.
+4. **Given** un producto que nunca ha tenido una salida, **Then** aparece contando desde su primera
+   entrada — es el caso más grave, no una fila sin dato.
+5. **Given** un producto con existencias en CERO, **Then** no aparece por antiguo que sea: sin
+   existencias no hay capital inmovilizado que mirar.
+6. **Given** el reporte, **Then** viene ordenado por VALOR inmovilizado descendente, no por
+   antigüedad: lo que importa primero es dónde está la plata, no qué es lo más viejo.
+7. **Given** el reporte con o sin filtros, **Then** se exporta a PDF y Excel cuadrando con la
+   pantalla, igual que los otros reportes.
+8. **Given** un sistema sin nada inmóvil, **Then** muestra un estado vacío en español, no una tabla
+   en blanco.
+
+---
+
+### User Story 38 - Cuánto valía el inventario en una fecha (Priority: P2)
+
+Al cerrar un mes o un año hay que decir cuánto valía el inventario ESE día. El sistema solo sabe
+decir cuánto vale HOY: el reporte de inventario actual es, como su nombre indica, del presente.
+Para responder por el 31 de diciembre toca reconstruirlo a mano desde los movimientos, que es justo
+el trabajo que el sistema debería ahorrar — y que hecho a mano nunca cuadra dos veces igual.
+
+**Why this priority**: es una cifra que se pide desde fuera (contabilidad, impuestos, el dueño) en
+fechas fijas y conocidas, y hoy la única forma de producirla es un ejercicio manual sobre miles de
+movimientos. Todos los datos necesarios ya están guardados: cada movimiento lleva el stock
+resultante y cada cambio de costo quedó registrado con su fecha (FR-072).
+
+**Independent Test**: Con un producto de historia conocida —entradas, salidas y un cambio de costo
+en fechas distintas— la valorización a una fecha intermedia coincide exactamente con el cálculo
+hecho a mano, y la valorización a hoy coincide con el reporte de inventario actual.
+
+**Acceptance Scenarios**:
+
+1. **Given** una fecha, **When** genero la valorización, **Then** cada producto muestra las
+   existencias que tenía ESE día y el costo que estaba vigente ESE día, no los de hoy.
+2. **Given** un producto cuyo costo cambió DESPUÉS de la fecha consultada, **Then** se valoriza al
+   costo anterior al cambio: valorar diciembre con el costo de agosto siguiente daría una cifra que
+   no existió nunca.
+3. **Given** un producto que en esa fecha no tenía existencias, **Then** no aparece: una fila en
+   cero no es información.
+4. **Given** un producto creado DESPUÉS de la fecha consultada, **Then** no aparece.
+5. **Given** la fecha de hoy, **Then** el total coincide EXACTAMENTE con el del reporte de
+   inventario actual — son la misma pregunta hecha dos veces.
+6. **Given** una fecha futura, **Then** se rechaza con un mensaje en español: el inventario de
+   mañana no existe todavía.
+7. **Given** el reporte, **Then** se exporta a PDF y Excel con la fecha impresa en el documento —
+   una valorización sin su fecha no significa nada.
+
+---
+
 ### Edge Cases
 
 - **Salida mayor al disponible**: debe rechazarse siempre, incluida la carrera entre dos usuarios simultáneos sobre el mismo producto (solo una confirmación puede ganar).
@@ -793,6 +865,12 @@ Administrador— encuentra el módulo en el menú ni logra alcanzar sus endpoint
 - **Pedido sin refinar** (US36): se puede completar o descartar igual. Refinar es una ayuda para redactar, no un trámite obligatorio; un pedido de una línea que ya se entiende no necesita pasar por el modelo.
 - **Pedido completado que vuelve a hacer falta** (US36): se reabre a PENDIENTE en vez de crearse otro, para que el historial de estados cuente lo que realmente pasó (FR-153).
 - **Refinado que sale vago** (US36): es el modo de fallo esperado de un modelo rápido, y por eso la plantilla obliga a una sección de lo que quedó sin definir (FR-151). Un prompt que declara sus huecos es utilizable; uno que suena completo y no lo está cuesta un ciclo de implementación.
+- **Producto inmóvil que recibe mercancía** (US37): sigue en el reporte y su contador NO se reinicia. El reloj cuenta desde la última SALIDA, no desde el último movimiento — si contara movimientos, comprar más de lo que no rota sacaría el producto del reporte justo cuando el problema empeoró.
+- **Producto que nunca ha salido** (US37): cuenta desde su primera entrada. Es el caso más grave y tiene que verse como una fila, no como un dato ausente.
+- **Producto sin existencias** (US37): fuera del reporte por antiguo que sea. Sin stock no hay capital inmovilizado; lo que pasó con él es historia de movimientos, no dinero quieto.
+- **Costo del que no hay historial** (US38): un producto cuyo costo nunca cambió no tiene filas en `historial_costos_producto`, así que su costo a cualquier fecha es el vigente. Si tiene historial pero TODOS los cambios son posteriores a la fecha consultada, se usa el `costo_anterior` del cambio más antiguo — que es, por definición, el que regía antes de todos ellos.
+- **Fecha futura en la valorización** (US38): se rechaza con mensaje en español. No es un caso raro: es lo que pasa cuando alguien escribe mal el año.
+- **Movimientos con decimales anteriores a US26** (US38): se suman tal cual, igual que en el resto del sistema (FR-122 mira hacia adelante). Una valorización histórica que "corrigiera" el pasado dejaría de cuadrar con los documentos de ese pasado.
 
 ## Requirements *(mandatory)*
 
@@ -1037,6 +1115,23 @@ que recordar por separado.
 - **FR-156**: Una solicitud es una NOTA, nunca una orden: nada de lo que se escriba o se refine en este módulo DEBE modificar inventario, documentos, usuarios, roles ni permisos. El módulo escribe únicamente sobre sus propias solicitudes.
 - **FR-157**: La aplicación DEBE permitir filtrar el listado por estado y copiar el prompt refinado en un solo gesto. El prompt existe para salir de la aplicación y llegar a quien implementa; si copiarlo cuesta trabajo, el módulo no cumple su función.
 
+**Rotación e inmovilizado (US37)**
+
+- **FR-158**: El sistema DEBE ofrecer un reporte de INVENTARIO INMÓVIL: los productos con existencias que llevan más de N días sin una salida, con su última salida, los días transcurridos, sus existencias y el VALOR inmovilizado (existencias × último costo). N DEBE ser un filtro y no una constante: cuánto tiempo es "mucho" depende del negocio y de la familia de producto.
+- **FR-159**: El reloj DEBE contarse desde la última SALIDA, nunca desde el último movimiento cualquiera. Recibir más mercancía de un producto que no rota AGRAVA el inmovilizado; si el contador se reiniciara con cada entrada, el reporte escondería justo los casos que empeoran. Un producto que nunca ha tenido salida cuenta desde su primera entrada.
+- **FR-160**: Un producto con existencias en CERO NO DEBE aparecer, por antiguo que sea su último movimiento: el reporte habla de capital quieto, y sin existencias no hay capital que mirar.
+- **FR-161**: El reporte DEBE venir ordenado por VALOR inmovilizado descendente. La pregunta que responde es dónde está la plata detenida, no qué es lo más viejo — y lo más viejo suele ser lo más barato.
+- **FR-162**: El reporte es de SOLO LECTURA: no crea, no corrige y no propone ninguna acción sobre el inventario. Qué hacer con un producto inmóvil —liquidarlo, devolverlo, darlo de baja— es una decisión de negocio que se ejecuta por las pantallas que ya existen y queda auditada por ellas.
+
+**Valorización a una fecha (US38)**
+
+- **FR-163**: El sistema DEBE ofrecer una VALORIZACIÓN DE INVENTARIO A UNA FECHA: las existencias que cada producto tenía ese día y su valor, con el total del inventario a esa fecha. La fecha es obligatoria y no tiene valor por defecto: un documento de cierre sin fecha no significa nada.
+- **FR-164**: Las existencias a la fecha DEBEN reconstruirse de los movimientos —el registro inmutable de todo lo que pasó (FR-046)— y NUNCA del stock actual del producto. El stock de hoy no dice nada de lo que había en diciembre.
+- **FR-165**: Cada producto DEBE valorizarse al costo que estaba VIGENTE en esa fecha, reconstruido desde el historial de cambios de costo (FR-072), no al costo de hoy. Valorar diciembre con el costo de agosto siguiente produce una cifra que no existió en ningún momento, y es el error que hace que un cierre no cuadre con sus propios documentos.
+- **FR-166**: Un producto SIN existencias en esa fecha —o creado después de ella— NO DEBE aparecer. Una fila en cero no es información y ensucia un documento que alguien va a firmar.
+- **FR-167**: Una fecha POSTERIOR a hoy DEBE rechazarse con un mensaje en español indicando el campo. El inventario futuro no existe, y lo que en realidad ocurrió fue que alguien escribió mal el año.
+- **FR-168**: La valorización a la fecha de HOY DEBE coincidir exactamente con el total del reporte de inventario actual (FR-041). Son la misma pregunta hecha dos veces, y si difieren, una de las dos está mal.
+
 **Auditoría y trazabilidad (transversal)**
 
 - **FR-045**: Toda operación de creación, edición, cambio de estado o anulación DEBE registrar usuario y fecha/hora; los registros con relevancia de inventario DEBEN conservar además el documento asociado.
@@ -1063,6 +1158,8 @@ que recordar por separado.
 - **Lectura de notificación**: marca de que UN usuario ya leyó UNA notificación (US35, FR-144), con su fecha/hora. Su ausencia es el estado "no leída" — no se borra la notificación al leerla, se anota quién la leyó.
 - **Solicitud de funcionalidad**: pedido de algo que al sistema le falta, anotado por el super administrador (US36, FR-149); título, descripción original en texto libre, prompt refinado opcional con su fecha de generación, estado (Pendiente/Completada/Descartada), autor, fecha de creación y la auditoría de cada cambio de estado. No tiene efecto sobre ningún dato operativo: es la lista de trabajo del sistema sobre sí mismo, no un documento del negocio.
 
+> **US37 y US38 no agregan ninguna entidad.** Las dos son de SOLO LECTURA sobre lo que ya está guardado: el inventario inmóvil se compone de `productos` y `movimientos_inventario`; la valorización a una fecha, de esos mismos más `historial_costos_producto`. Que dos reportes nuevos no necesiten una tabla nueva es la señal de que el modelo estaba bien puesto — el registro inmutable de movimientos (FR-046) y el de costos (FR-072) se escribieron para poder responder preguntas que todavía no se habían hecho.
+
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
@@ -1086,6 +1183,8 @@ que recordar por separado.
 - **SC-017**: Cada uno de los 5 listados (inventario, ingresos, salidas, clientes, usuarios) se acota por cualquiera de sus campos filtrables sin recorrer páginas a mano: un filtro devuelve EXACTAMENTE el conjunto esperado (verificado con datos conocidos contra la base real), los filtros activos son visibles y se limpian en un solo paso, y ningún filtro nuevo degrada el tiempo de respuesta por debajo del umbral de SC-008.
 - **SC-018**: Un usuario corrige su propio nombre y correo desde su perfil sin intervención de un Administrador, el cambio se refleja de inmediato en la aplicación sin volver a iniciar sesión, y por esa misma vía le resulta imposible alterar su rol, su estado o su nombre de usuario.
 - **SC-019**: El super administrador anota un pedido en menos de 30 segundos sin pensar en formato, y obtiene de él un prompt de implementación copiable en un gesto; el 100% de los prompts generados incluye criterios de aceptación observables y la sección de lo que quedó sin definir. Ningún otro rol del sistema —incluido un Administrador con la matriz de permisos completa— accede al módulo ni a sus endpoints.
+- **SC-019b**: Con productos de antigüedades conocidas, el reporte de inventario inmóvil devuelve EXACTAMENTE los que superan el umbral de días consultado, ordenados por valor inmovilizado descendente; recibir mercancía de un producto inmóvil no lo saca del reporte ni reinicia su contador, y ninguno con existencias en cero aparece.
+- **SC-020**: La valorización del inventario a una fecha pasada cuadra al 100% con el cálculo manual sobre los movimientos y los costos vigentes de ese día; la valorización a la fecha de HOY coincide EXACTAMENTE con el valor total del reporte de inventario actual, y ambas se exportan a PDF y Excel con la fecha impresa.
 
 ## Assumptions
 
