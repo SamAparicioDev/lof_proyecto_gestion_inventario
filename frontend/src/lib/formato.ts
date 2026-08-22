@@ -66,8 +66,14 @@ export function formatoFechaFiltro(valorIso: string | null | undefined): string 
  * porque estas columnas NO son medianoche UTC sino el momento real en que ocurrió la
  * mutación. Usar `formatoFecha` (UTC) sobre uno de estos campos corre el "día calendario"
  * un día hacia adelante para cualquier movimiento entre las 19:00 y 23:59 hora Bogotá
- * (hallazgo T089, quickstart.md escenario 2) — mismo formato visual DD/MM/AAAA que
- * `formatoFecha`, solo cambia el huso usado para decidir a qué día calendario pertenece.
+ * (hallazgo T089, quickstart.md escenario 2).
+ *
+ * **Imprime la HORA además del día** (`12/08/2026, 14:32`) desde 2026-08-22, a pedido del dueño
+ * del sistema. Hasta entonces convertía al huso correcto y luego tiraba la hora, que es lo que
+ * más falta hace justo en estas columnas: en un historial, dos movimientos del mismo día sin
+ * hora no se pueden ordenar ni explicar, y "¿esto se hizo antes o después de aquello?" es la
+ * pregunta que un historial existe para responder.
+ *
  * NO usar para los campos de los reportes (`reportes/movimientos`,
  * `reportes/consumo-proyecto`): esos truncan a "solo día" en UTC a propósito, replicando
  * `mapeadores-documento-reporte.ts#formatoFechaSoloDia` del backend para que pantalla y
@@ -78,6 +84,12 @@ const FORMATEADOR_FECHA_HORA = new Intl.DateTimeFormat('es-CO', {
   day: '2-digit',
   month: '2-digit',
   year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  // 24 horas: en un historial "14:32" no se puede confundir, y "2:32 p. m." ocupa casi el
+  // doble en una celda de tabla. Sin segundos — quien audita quiere saber el orden y el momento
+  // aproximado, y el segundo exacto solo añade ruido a cada fila.
+  hour12: false,
 });
 export function formatoFechaHora(fecha: string | Date): string {
   return FORMATEADOR_FECHA_HORA.format(new Date(fecha));

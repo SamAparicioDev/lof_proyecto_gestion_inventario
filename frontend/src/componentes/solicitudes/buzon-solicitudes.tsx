@@ -25,6 +25,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { EstadoSolicitud, PaginaSolicitudes, Solicitud } from '@trazo/compartido';
 import { ErrorApi } from '@/lib/api/cliente';
+import { formatoFechaHora } from '@/lib/formato';
 import {
   cambiarEstadoSolicitud,
   crearSolicitud,
@@ -268,12 +269,12 @@ function TarjetaSolicitud({
 
       <p className="text-muted" style={{ margin: 0 }}>
         Anotada por {solicitud.creadaPor.nombreCompleto} el{' '}
-        {new Date(solicitud.creadaEn).toLocaleDateString('es-CO')}
+        {formatoFechaHora(solicitud.creadaEn)}
         {solicitud.estadoCambiadoPor && solicitud.estadoCambiadoEn && (
           <>
             {' · '}
             {ETIQUETA_ESTADO[solicitud.estado].toLowerCase()} por {solicitud.estadoCambiadoPor.nombreCompleto} el{' '}
-            {new Date(solicitud.estadoCambiadoEn).toLocaleDateString('es-CO')}
+            {formatoFechaHora(solicitud.estadoCambiadoEn)}
           </>
         )}
       </p>
@@ -290,7 +291,7 @@ function TarjetaSolicitud({
             <strong style={{ flex: 1 }}>Prompt de implementación</strong>
             {solicitud.refinadoEn && (
               <span className="text-muted">
-                generado el {new Date(solicitud.refinadoEn).toLocaleDateString('es-CO')}
+                generado el {formatoFechaHora(solicitud.refinadoEn)}
               </span>
             )}
             <button type="button" className="btn btn-secondary" onClick={() => void copiar()}>

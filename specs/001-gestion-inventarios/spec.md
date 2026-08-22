@@ -1134,7 +1134,7 @@ que recordar por separado.
 
 **Auditoría y trazabilidad (transversal)**
 
-- **FR-045**: Toda operación de creación, edición, cambio de estado o anulación DEBE registrar usuario y fecha/hora; los registros con relevancia de inventario DEBEN conservar además el documento asociado.
+- **FR-045**: Toda operación de creación, edición, cambio de estado o anulación DEBE registrar usuario y fecha/hora; los registros con relevancia de inventario DEBEN conservar además el documento asociado. Donde el sistema MUESTRE esa auditoría —historiales, actividad reciente, fechas de confirmación— DEBE mostrar también la HORA, no solo el día: dos hechos del mismo día sin hora no se pueden ordenar, y el orden es justo lo que un historial existe para responder.
 - **FR-046**: Todo movimiento de inventario DEBE quedar en un historial permanente e inmutable; las correcciones generan movimientos de ajuste, nunca borrado de historia.
 - **FR-047**: Toda la interfaz, mensajes, validaciones y reportes DEBEN presentarse en español.
 

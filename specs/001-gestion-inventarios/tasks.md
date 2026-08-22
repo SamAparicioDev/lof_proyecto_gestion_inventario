@@ -819,6 +819,17 @@ Proveedores — MISMO patrón que categorías (FR-091), con dos diferencias que 
 **Checkpoint**: El interruptor refleja el tema activo en todo momento, en escritorio y en celular
 
 ---
+## Phase 45: El historial muestra la hora, no solo el día (FR-045)
+
+**Goal**: Que se pueda ordenar y explicar dos hechos del mismo día (FR-045)
+
+**Independent Test**: El historial de un producto, el de costos y la actividad reciente muestran DD/MM/AAAA, HH:MM en hora de Bogotá
+
+- [x] T299 [US7] `formatoFechaHora` imprime hora y minuto (24h, sin segundos). Convertía al huso correcto y luego tiraba la hora, que es lo que más falta hace en sus seis usos: historial de movimientos, historial de costos, último movimiento del producto y del listado, fecha de confirmación de una salida y actividad reciente. El buzón de solicitudes deja de formatear a mano y pasa al mismo helper. Los reportes NO cambian: truncan a solo día en UTC para que pantalla y archivo exportado muestren el mismo número (SC-007). **Segunda solicitud llegada por el buzón de US36**
+
+**Checkpoint**: Dos movimientos del mismo día se distinguen y se ordenan a simple vista
+
+---
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -910,7 +921,7 @@ persona: orden estricto de fases 1→10.
 
 ## Notes
 
-- Total: **273 tareas** (las 172 del plan original más las historias pedidas sobre la marcha, US14…US38 y la decisión de costo de la Phase 38); recuento original abajo: **172 tareas** (Setup 7, Foundational 20, US1 11, US2 8, US3 12, US5 8, US4 8, US6 5, US7 5, US8 8, Polish 6, US9 11, Experiencia de uso 4, US10 4, US11 6, US12 6, US13 10); **MVP = 66 tareas** (T001–T066). Siete bloques se agregaron fuera del plan original, a pedido directo del dueño del proyecto: US8/carga masiva (T091-T098, ver research R15), US9/roles y permisos (T099-T109, ver research R16), la Phase 13 de experiencia de uso (T110-T113, cierra huecos detectados usando el sistema en vivo), US10/panel (T114-T117), US11/exportación universal (T118-T123), US12/costo con historial (T124-T129) y US13/filtrado de listados (T130-T139, 2026-08-12). US36/buzón de solicitudes del super administrador (T273-T282, 2026-08-21) es el primer bloque que NO es del negocio del inventario: es la herramienta con la que el dueño anota y refina lo que vendrá después, y por eso vive fuera de la matriz de permisos. US37/inventario inmóvil (T284-T290) y US38/valorización a una fecha (T291-T297, ambas 2026-08-22) son los dos primeros bloques de SOLO LECTURA: ni una tabla, ni un permiso, ni un endpoint de escritura — responden preguntas nuevas sobre datos que el registro inmutable de movimientos (FR-046) y el de costos (FR-072) ya guardaban desde el primer día.
+- Total: **274 tareas** (las 172 del plan original más las historias pedidas sobre la marcha, US14…US38 y la decisión de costo de la Phase 38); recuento original abajo: **172 tareas** (Setup 7, Foundational 20, US1 11, US2 8, US3 12, US5 8, US4 8, US6 5, US7 5, US8 8, Polish 6, US9 11, Experiencia de uso 4, US10 4, US11 6, US12 6, US13 10); **MVP = 66 tareas** (T001–T066). Siete bloques se agregaron fuera del plan original, a pedido directo del dueño del proyecto: US8/carga masiva (T091-T098, ver research R15), US9/roles y permisos (T099-T109, ver research R16), la Phase 13 de experiencia de uso (T110-T113, cierra huecos detectados usando el sistema en vivo), US10/panel (T114-T117), US11/exportación universal (T118-T123), US12/costo con historial (T124-T129) y US13/filtrado de listados (T130-T139, 2026-08-12). US36/buzón de solicitudes del super administrador (T273-T282, 2026-08-21) es el primer bloque que NO es del negocio del inventario: es la herramienta con la que el dueño anota y refina lo que vendrá después, y por eso vive fuera de la matriz de permisos. US37/inventario inmóvil (T284-T290) y US38/valorización a una fecha (T291-T297, ambas 2026-08-22) son los dos primeros bloques de SOLO LECTURA: ni una tabla, ni un permiso, ni un endpoint de escritura — responden preguntas nuevas sobre datos que el registro inmutable de movimientos (FR-046) y el de costos (FR-072) ya guardaban desde el primer día.
 - [P] = archivos distintos sin dependencias pendientes dentro de su fase
 - Cada checkpoint de historia es un incremento demostrable e independientemente testeable
 - Toda tarea de backend respeta la regla de dependencia y las convenciones de [docs/arquitectura.md](../../docs/arquitectura.md); TSDoc con `FR-###` obligatorio en casos de uso, puertos y controladores
