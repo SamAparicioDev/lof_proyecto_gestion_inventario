@@ -5,20 +5,18 @@
  * diseño de Nocturne (`Trazo Inventarios.dc.html`) lo mueve al bloque de usuario, al final
  * del sidebar (`#sideuser`). Necesita interactividad (el click) → Client Component.
  *
- * `soloIcono` (auditoría de responsividad, 2026-08-11): en mobile/tablet (<=900px) todo
- * `#sideuser` se oculta por espacio (`globals.css`) y con él se perdía la ÚNICA forma de
- * cerrar sesión en esos anchos — hallazgo real, no cosmético. `(app)/layout.tsx` renderiza
- * una segunda instancia de este botón con `soloIcono` fuera de `#sideuser`, visible solo en
- * ese breakpoint vía `#cerrar-sesion-movil`. Mismo componente/lógica, sin duplicar el
- * manejador de logout — solo cambia lo que se pinta (`.btn-icon` de Nocturne en vez de
- * texto, con `aria-label` porque no queda texto visible que lo describa).
+ * Tuvo una variante `soloIcono` entre 2026-08-11 y 2026-08-21: con `#sideuser` oculto en
+ * mobile, era la única forma de cerrar sesión en esos anchos. Se retiró con `MenuMovil`
+ * (US34/T283), que da cabida al bloque de sesión ENTERO —perfil, tema y cierre— dentro del
+ * panel desplegable. Una variante que ya no renderiza nadie es una rama que el siguiente que
+ * lea el archivo tiene que descartar a mano (Principio V).
  */
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { SignOut } from '@phosphor-icons/react/dist/ssr';
 import { cerrarSesion } from '@/lib/api/auth';
 
-export function BotonCerrarSesion({ soloIcono = false }: { soloIcono?: boolean }) {
+export function BotonCerrarSesion() {
   const router = useRouter();
   const [cerrando, setCerrando] = useState(false);
 
@@ -36,21 +34,6 @@ export function BotonCerrarSesion({ soloIcono = false }: { soloIcono?: boolean }
   }
 
   const etiqueta = cerrando ? 'Cerrando sesión…' : 'Cerrar sesión';
-
-  if (soloIcono) {
-    return (
-      <button
-        type="button"
-        className="btn btn-ghost btn-icon"
-        onClick={manejarCerrarSesion}
-        disabled={cerrando}
-        aria-label={etiqueta}
-        title={etiqueta}
-      >
-        <SignOut size={16} />
-      </button>
-    );
-  }
 
   return (
     <button

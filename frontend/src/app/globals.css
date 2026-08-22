@@ -379,24 +379,39 @@ select.input option { background: #232532; color: #e9e9ed; }
      al final de la página (igual que ya pasa en `/login`, fuera de este shell) — bug real
      encontrado y corregido en la tanda de responsividad, 2026-08-11. */
   #shell { grid-template-columns: 1fr !important; align-content: start; }
+
+  /* La barra lateral pasa a ser una CABECERA: logotipo a la izquierda, campana y menú a la
+     derecha. `sticky` (no `static`, como hasta 2026-08-21) para que siga accesible al bajar por
+     un listado largo y, sobre todo, para que sea el contenedor posicionado del panel del menú.
+     El borde pasa de derecho a inferior: en una barra que ocupa todo el ancho, un borde a la
+     derecha no separa nada de nada. */
   #sidebar {
-    position: static !important; height: auto !important;
-    flex-direction: row !important; align-items: center !important; overflow-x: auto;
+    position: sticky !important; top: 0; z-index: 40;
+    height: auto !important;
+    flex-direction: row !important; align-items: center !important;
+    gap: 8px !important;
+    background: var(--color-bg);
+    border-right: 0 !important;
+    border-bottom: 1px solid var(--color-divider);
   }
-  #navlist { flex-direction: row !important; flex: 1; overflow-x: auto; }
-  /* Selector corregido: `NavegacionLateral` (navegacion-lateral.tsx) renderiza cada item
-     como <Link> (etiqueta <a>), nunca <button> — la regla original nunca podía matchear,
-     así que las etiquetas de texto NUNCA se ocultaban en mobile/tablet, desbordando la
-     barra horizontal (bug real encontrado en la tanda de responsividad, 2026-08-11). */
-  #navlist a span.nav-label { display: none; }
-  /* El bloque de usuario completo (avatar/nombre/rol) se oculta por espacio, pero el botón
-     "Cerrar sesión" que vivía dentro NO puede desaparecer con él: en mobile/tablet no había
-     ninguna otra forma de cerrar sesión (bug real encontrado en la tanda de responsividad,
-     2026-08-11). `boton-cerrar-sesion.tsx` ahora renderiza una segunda instancia
-     (`soloIcono`, ver `(app)/layout.tsx`) fuera de `#sideuser`, oculta en escritorio con la
-     utilidad `hidden` de Tailwind y mostrada aquí solo en este breakpoint. */
+  #sidebar > :first-child { margin-right: auto; }
+
+  /* La navegación y el bloque de usuario se ocultan ENTEROS: en este ancho viven dentro del
+     panel de `MenuMovil`, con sus etiquetas de texto y sin scroll horizontal. Antes `#navlist`
+     se quedaba como una tira de iconos con `overflow-x:auto` anidada dentro de otra: trece
+     enlaces no caben en un teléfono, y nada indicaba que hubiera más a la derecha. */
+  #navlist { display: none !important; }
   #sideuser { display: none !important; }
-  #cerrar-sesion-movil { display: flex !important; }
+  #menu-movil { display: block !important; }
+
+  /* La campana se encoge a su icono. Su botón trae `width:100%` inline —correcto en la columna
+     de escritorio, donde ocupa toda la barra— y en una FILA eso la hacía crecer hasta dejar sin
+     sitio a todo lo demás: era la razón concreta por la que en un teléfono solo se veían el
+     logotipo y los avisos. Su etiqueta se oculta aquí y no con la regla de `#navlist`, porque la
+     campana vive fuera de la lista de navegación. */
+  #campana-lateral { flex: none; }
+  #campana-lateral .btn { width: auto !important; }
+  #campana-lateral .nav-label { display: none; }
   main { grid-column: 1 !important; }
 }
 

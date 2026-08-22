@@ -18,10 +18,11 @@
  *     (FR-003); la autoridad real son los guards del backend. La barra lateral lleva `no-imprimir` (`globals.css`, FR-043 — T071/T072): al
  *     imprimir un reporte desde `/reportes/*`, la vista impresa muestra solo el contenido
  *     del reporte, nunca la navegación de la app.
- *     En mobile/tablet (<=900px, `globals.css`) `#sideuser` completo se oculta por espacio;
- *     `#cerrar-sesion-movil` (auditoría de responsividad, 2026-08-11) es la segunda
- *     instancia de `BotonCerrarSesion` que queda visible ahí — sin ella no había NINGUNA
- *     forma de cerrar sesión en esos anchos, un hallazgo real de esa auditoría.
+ *     En mobile/tablet (<=900px, `globals.css`) la barra se convierte en una cabecera con el
+ *     logotipo, la campana y un MENÚ DESPLEGABLE (`MenuMovil`, US34/T283): `#navlist` y
+ *     `#sideuser` se ocultan ahí y todo —navegación, perfil, tema y cierre de sesión— vive
+ *     dentro del panel. Reemplaza a la tira horizontal de iconos, que dejó de caber cuando el
+ *     menú creció y escondía la aplicación entera detrás de un scroll invisible.
  *  4. Expone el perfil ya resuelto a los Client Components vía `ProveedorSesion` (T026),
  *     evitando que cada uno vuelva a pedir `GET /api/auth/perfil` por su cuenta.
  */
@@ -38,6 +39,7 @@ import { CampanaNotificaciones } from '@/componentes/layout/campana-notificacion
 import { NavegacionLateral } from '@/componentes/layout/navegacion-lateral';
 import { BotonCerrarSesion } from '@/componentes/layout/boton-cerrar-sesion';
 import { BotonTema } from '@/componentes/layout/boton-tema';
+import { MenuMovil } from '@/componentes/layout/menu-movil';
 
 const RUTA_CAMBIAR_PASSWORD = '/cambiar-password';
 
@@ -69,9 +71,9 @@ export default async function LayoutApp({ children }: { children: React.ReactNod
               su bandeja saldría siempre vacía, y un botón que nunca puede tener contenido
               enseña a ignorar los botones. Ocultarlo es UX, no control de acceso (FR-003):
               quien fuerce la URL recibe la misma bandeja vacía del servidor. */}
-          {recibeAvisos(perfil.permisos) && <CampanaNotificaciones />}
+          <div id="campana-lateral">{recibeAvisos(perfil.permisos) && <CampanaNotificaciones />}</div>
 
-          <NavegacionLateral permisos={perfil.permisos} />
+          <NavegacionLateral permisos={perfil.permisos} esSuperAdmin={perfil.esSuperAdmin} />
 
           <div id="sideuser" className="mt-auto flex flex-col gap-2">
             {/* El bloque de usuario es el enlace a los datos personales (US14): es donde el
@@ -104,11 +106,17 @@ export default async function LayoutApp({ children }: { children: React.ReactNod
             <BotonCerrarSesion />
           </div>
 
-          {/* Oculto en escritorio (Tailwind `hidden`); `globals.css` lo muestra solo en
-              <=900px, cuando `#sideuser` de arriba desaparece — ver comentario del punto 3. */}
-          <div id="cerrar-sesion-movil" className="hidden">
-            <BotonCerrarSesion soloIcono />
-          </div>
+          {/* Oculto en escritorio (Tailwind `hidden`); `globals.css` lo muestra solo en <=900px,
+              donde REEMPLAZA a `#navlist` y `#sideuser` en vez de convivir con ellos. Sustituye al
+              antiguo `#cerrar-sesion-movil`, que era un parche: dejaba alcanzable el cierre de
+              sesión pero no los datos personales ni el tema, y no resolvía el problema de fondo
+              —que la navegación entera no cabía en la barra— (US34/T283, 2026-08-21). */}
+          <MenuMovil
+            permisos={perfil.permisos}
+            esSuperAdmin={perfil.esSuperAdmin}
+            nombreCompleto={perfil.nombreCompleto}
+            nombreRol={perfil.rol.nombre}
+          />
         </aside>
 
         <main className="flex min-w-0 flex-col gap-5 px-[30px] py-[26px]" style={{ gridColumn: '2' }}>{children}</main>

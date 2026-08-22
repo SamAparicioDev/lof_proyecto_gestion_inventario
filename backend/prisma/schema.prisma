@@ -365,6 +365,9 @@ model Usuario {
   // US35: avisos que esta persona provocó, y los que ha marcado como leídos.
   notificacionesOriginadas  Notificacion[]           @relation("NotificacionOrigen")
   notificacionesLeidas      NotificacionLectura[]    @relation("NotificacionLeidaPor")
+  // US36: el buzón de solicitudes — solo el super administrador escribe aquí.
+  solicitudesCreadas        SolicitudFuncionalidad[] @relation("SolicitudCreadaPor")
+  solicitudesGestionadas    SolicitudFuncionalidad[] @relation("SolicitudEstadoCambiadoPor")
 
   @@map("usuarios")
 }
@@ -1131,4 +1134,55 @@ model NotificacionLectura {
   @@id([notificacionId, usuarioId])
   @@index([usuarioId])
   @@map("notificaciones_lecturas")
+}
+
+// ============================================================================
+// Buzón de solicitudes del super administrador (US36, FR-148…FR-157)
+// ============================================================================
+
+/**
+ * Los tres estados de una solicitud (FR-154). COMPLETADA significa «implementado Y desplegado»,
+ * no «el código compila» — el contrato lo fija porque la base de datos no puede verificarlo.
+ */
+enum EstadoSolicitud {
+  PENDIENTE
+  COMPLETADA
+  DESCARTADA
+
+  @@map("estado_solicitud")
+}
+
+/**
+ * Un pedido de algo que al sistema le falta, anotado por el super administrador (FR-149).
+ * NO tiene ninguna FK hacia productos, documentos ni movimientos, y nada del negocio la
+ * referencia: es un cuaderno con estado que vive AL LADO del sistema, no dentro de su modelo
+ * (FR-156). Tampoco se borra — lo abandonado pasa a DESCARTADA, para que la próxima vez no se
+ * vuelva a pedir desde cero.
+ */
+model SolicitudFuncionalidad {
+  id             BigInt    @id @default(autoincrement())
+  titulo         String    @db.VarChar(150)
+  /// El texto del autor, TAL CUAL lo escribió. Refinar NUNCA lo toca (FR-152).
+  descripcion    String    @db.Text
+  /**
+   * Lo que produjo el modelo a partir de `descripcion`. Nulo mientras no se haya refinado.
+   * Se reemplaza por completo en cada refinado, jamás se fusiona con el anterior (FR-153).
+   */
+  promptRefinado String?   @map("prompt_refinado") @db.Text
+  refinadoEn     DateTime? @map("refinado_en") @db.Timestamptz(6)
+
+  estado EstadoSolicitud @default(PENDIENTE)
+
+  creadaPorId BigInt   @map("creada_por_id")
+  creadaPor   Usuario  @relation("SolicitudCreadaPor", fields: [creadaPorId], references: [id])
+  creadaEn    DateTime @default(now()) @map("creada_en") @db.Timestamptz(6)
+
+  // Auditoría del último cambio de estado (FR-045). Nula mientras siga como nació.
+  estadoCambiadoPorId BigInt?   @map("estado_cambiado_por_id")
+  estadoCambiadoPor   Usuario?  @relation("SolicitudEstadoCambiadoPor", fields: [estadoCambiadoPorId], references: [id])
+  estadoCambiadoEn    DateTime? @map("estado_cambiado_en") @db.Timestamptz(6)
+
+  // La lista se lee "lo más reciente primero" y se filtra por estado (FR-157).
+  @@index([estado, creadaEn])
+  @@map("solicitudes_funcionalidad")
 }

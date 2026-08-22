@@ -157,6 +157,10 @@ const TABLAS_DE_NEGOCIO = [
   // una prueba de entrega por avisos que esa prueba nunca creó.
   'notificaciones_lecturas',
   'notificaciones',
+  // US36: cuelga de `usuarios` por `creada_por_id`/`estado_cambiado_por_id`, así que va antes.
+  // Explícita por la misma razón que las anteriores: un buzón heredado de otra suite falsearía
+  // el contador de pendientes de una prueba que nunca creó esas solicitudes.
+  'solicitudes_funcionalidad',
   'usuarios',
 ] as const;
 

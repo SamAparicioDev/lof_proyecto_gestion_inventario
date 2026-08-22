@@ -723,6 +723,50 @@ pendiente; la otra ve aparecer los avisos, abre uno y aterriza exactamente en es
 
 ---
 
+### User Story 36 - Pedirle al sistema lo que le falta (Priority: P3)
+
+El dueño del sistema descubre lo que falta usándolo: un filtro que no está, un dato que obliga a
+mirar dos pantallas, un reporte que nadie pidió al principio. Hoy eso vive en su cabeza, en un
+mensaje suelto o en una nota que se pierde, y cuando llega el momento de implementarlo hay que
+reconstruir de memoria qué era exactamente lo que se quería. Las siete historias que entraron
+fuera del plan original llegaron así, y cada una costó una conversación de arqueología antes de
+poder escribir la primera línea.
+
+**Why this priority**: no es una función del negocio del inventario — no mueve stock, no toca un
+documento y ningún operario la ve. Es la herramienta con la que el dueño gobierna la evolución de
+su propio sistema, y por eso va al final de la fila. Pero el costo de no tenerla ya se pagó: un
+pedido que se reconstruye de memoria se especifica dos veces y a veces se implementa mal la
+primera.
+
+**Independent Test**: el super administrador anota tres pedidos, refina uno de ellos, copia el
+prompt resultante y ve los tres en su lista con el estado correcto; ningún otro rol —ni el
+Administrador— encuentra el módulo en el menú ni logra alcanzar sus endpoints.
+
+**Acceptance Scenarios**:
+
+1. **Given** que entro como super administrador, **When** abro el buzón y escribo un pedido en mis
+   propias palabras, **Then** queda guardado como PENDIENTE con mi nombre y la fecha, sin pedirme
+   ningún formato.
+2. **Given** un usuario Administrador con TODOS los permisos marcados, **When** busca el módulo o
+   llama sus endpoints directamente, **Then** no lo ve en el menú y la API le responde 403: este
+   módulo no se concede desde la pantalla de roles.
+3. **Given** un pedido guardado, **When** pulso "refinar", **Then** obtengo un prompt de
+   implementación estructurado —qué se pide, para quién, criterios observables y qué quedó sin
+   definir— y lo copio de un gesto.
+4. **Given** un pedido ya refinado, **When** edito mi descripción y vuelvo a refinar, **Then** el
+   prompt se regenera y mi texto original sigue intacto y visible.
+5. **Given** que el servicio de IA está apagado o falla, **When** creo o consulto pedidos,
+   **Then** todo el buzón funciona con normalidad y solo el botón de refinar avisa en español que
+   no está disponible.
+6. **Given** un pedido cuya funcionalidad ya se implementó y desplegó, **When** se marca como
+   COMPLETADA, **Then** sale de los pendientes conservando quién la marcó y cuándo.
+7. **Given** un pedido que decido no hacer, **When** lo marco DESCARTADA, **Then** deja de contar
+   como pendiente sin desaparecer del historial.
+8. **Given** una lista con pedidos en los tres estados, **When** filtro por estado, **Then** veo
+   exactamente los de ese estado y los pendientes son los que están esperando trabajo de verdad.
+
+---
+
 ### Edge Cases
 
 - **Salida mayor al disponible**: debe rechazarse siempre, incluida la carrera entre dos usuarios simultáneos sobre el mismo producto (solo una confirmación puede ganar).
@@ -744,6 +788,11 @@ pendiente; la otra ve aparecer los avisos, abre uno y aterriza exactamente en es
 - **Salida pendiente cuya disponibilidad desaparece** (otro usuario consumió el stock): al intentar confirmarla, se rechaza indicando el disponible actual.
 - **SKU repetido dentro del mismo archivo de carga masiva**: la primera ocurrencia se procesa; las repeticiones posteriores del mismo SKU en el archivo se reportan como fila inválida (evita aplicar dos altas/actualizaciones contradictorias del mismo producto en una sola corrida).
 - **Carga masiva con cantidad inicial pero el catálogo sí se actualizó**: si registrar el stock inicial falla por una causa ajena a los datos del archivo (ej. corte de conexión), los productos quedan creados/actualizados igual; el archivo se puede volver a subir para aplicar el stock pendiente sin duplicar el producto (ver data-model.md § Carga masiva de inventario).
+- **Navegación en celular** (US34): a partir de cierto número de módulos, la barra lateral NO puede degradarse a una fila de iconos. Con trece enlaces —lo que ve un super administrador— a 375 px se necesitan unos 520 px, y el resultado era que solo quedaban visibles el logotipo y la campana (que además se llevaba el ancho sobrante por su ancho al 100%), con el resto de la aplicación tras un desplazamiento horizontal invisible. Se resuelve con un menú desplegable, que además admite el enlace número catorce sin cambiar nada.
+- **Buzón con la IA caída** (US36): crear, listar, filtrar y cambiar de estado siguen funcionando; solo el refinado avisa que no está disponible (FR-155). Un buzón que no deja anotar porque el modelo no responde es peor que no tener buzón: la idea se pierde igual.
+- **Pedido sin refinar** (US36): se puede completar o descartar igual. Refinar es una ayuda para redactar, no un trámite obligatorio; un pedido de una línea que ya se entiende no necesita pasar por el modelo.
+- **Pedido completado que vuelve a hacer falta** (US36): se reabre a PENDIENTE en vez de crearse otro, para que el historial de estados cuente lo que realmente pasó (FR-153).
+- **Refinado que sale vago** (US36): es el modo de fallo esperado de un modelo rápido, y por eso la plantilla obliga a una sección de lo que quedó sin definir (FR-151). Un prompt que declara sus huecos es utilizable; uno que suena completo y no lo está cuesta un ciclo de implementación.
 
 ## Requirements *(mandatory)*
 
@@ -943,7 +992,7 @@ que recordar por separado.
 - **FR-134**: El asistente DEBE ejercer EXACTAMENTE los permisos de quien pregunta. Cada consulta que hace por dentro pasa por las mismas comprobaciones que la pantalla equivalente, de modo que un Operario no obtiene por chat lo que no obtiene por menú. NUNCA DEBE consultar la base de datos por su cuenta: eso se saltaría `PermisosGuard` y convertiría el asistente en una fuga.
 - **FR-135**: Toda CIFRA de una respuesta DEBE provenir de una consulta real hecha en ese momento, y la respuesta DEBE citar de dónde sale. El asistente NO DEBE estimar, redondear de memoria ni completar un dato que no obtuvo: ante la duda, dice que no lo sabe. Un inventario vale lo que vale la confianza en sus números.
 - **FR-136**: El asistente DEBE degradar con elegancia: si el servicio del modelo no está configurado, falla o se agota, la pantalla lo dice en español y el RESTO de la aplicación sigue funcionando sin cambios. Es la primera pieza del sistema que depende de un servicio externo y no puede arrastrar al resto. El PROVEEDOR concreto (hoy Google AI Studio) es un detalle de infraestructura detrás del puerto `ModeloConversacional`: cambiarlo NO DEBE tocar qué se puede consultar, con qué permiso ni qué sabe el asistente del negocio.
-- **FR-137**: La interfaz DEBE ser usable en pantallas desde 1024 px de ancho sin desplazamiento HORIZONTAL de página, y en alturas de 768 px sin que un diálogo deje sus botones fuera de alcance. Lo que exceda el ancho se desplaza DENTRO de su contenedor — una tabla ancha se desplaza sola, sin arrastrar la página. Las columnas que identifican una fila DEBEN seguir visibles al desplazarla.
+- **FR-137**: La interfaz DEBE ser usable en pantallas desde 1024 px de ancho sin desplazamiento HORIZONTAL de página, y en alturas de 768 px sin que un diálogo deje sus botones fuera de alcance. Lo que exceda el ancho se desplaza DENTRO de su contenedor — una tabla ancha se desplaza sola, sin arrastrar la página. Las columnas que identifican una fila DEBEN seguir visibles al desplazarla. En anchos de teléfono, la NAVEGACIÓN DEBE seguir alcanzándose ENTERA y con sus etiquetas: una tira de iconos que se desplaza en horizontal no sirve —no cabe cuando el menú crece y nada indica que haya más a la derecha—, así que ahí va un menú desplegable (corregido el 2026-08-21; ver Edge Cases).
 - **FR-138**: El costo de un producto es SIEMPRE el ÚLTIMO registrado. Cuando entra mercancía a un precio distinto del vigente, ese precio REEMPLAZA al anterior y desde ese instante TODAS las existencias del producto se valorizan a él —las que acaban de llegar y las que ya estaban—. El costo NO DEBE promediarse, prorratearse ni ponderarse con las existencias previas. Lo que conserva la historia no es el costo sino su registro (FR-072): desde qué valor, hasta cuál, quién lo cambió y por qué documento.
 
 > **Decisión descartada (2026-08-20): promedio ponderado.** Se llegó a proponer que al recibir
@@ -975,6 +1024,19 @@ que recordar por separado.
 - **FR-146**: Generar un aviso NUNCA DEBE impedir, retrasar ni revertir la operación que lo origina. Si el aviso falla, la recepción, la confirmación o la anulación se completan igual y el fallo queda en el registro del servidor: el hecho de negocio ya ocurrió y negarlo por no poder anunciarlo sería un daño mayor que no anunciarlo.
 - **FR-147**: Un aviso NO es un documento: no se edita, no se exporta y su texto es el del momento en que ocurrió. La bandeja DEBE mostrar una ventana reciente y acotada, no la historia completa del sistema — el archivo permanente de lo que pasó son los movimientos (FR-046) y la auditoría de cada documento (FR-045), no la bandeja.
 
+**Buzón de solicitudes del super administrador (US36)**
+
+- **FR-148**: El buzón de solicitudes DEBE ser exclusivo del SUPER ADMINISTRADOR y resolverse por ROL, no contra la matriz de permisos (US30, FR-129). NO DEBE existir como permiso concedible en la pantalla de roles: no es una capacidad delegable sino la mesa de trabajo del dueño del sistema, y un Administrador con todos los permisos marcados sigue sin verlo.
+- **FR-149**: El sistema DEBE permitir registrar una solicitud con un título y una descripción en texto libre, sin imponer formato al capturarla. Exigir estructura en el momento en que se tiene la idea es la forma más rápida de que la idea no se anote.
+- **FR-150**: Toda solicitud DEBE nacer en estado PENDIENTE, con su autor y su fecha (FR-045).
+- **FR-151**: El sistema DEBE poder refinar una solicitud con asistencia de IA, convirtiendo el texto libre en un PROMPT DE IMPLEMENTACIÓN de estructura fija: qué se pide, para quién, qué ocurre hoy sin eso, criterios de aceptación observables y —obligatoriamente— qué quedó SIN DEFINIR. La sección de huecos no es opcional: es lo que distingue un prompt utilizable de uno que solo suena completo.
+- **FR-152**: El refinado NUNCA DEBE sobrescribir el texto original del autor. Ambos se conservan y se muestran: el original es lo que la persona quiso decir, el prompt es una interpretación de una máquina, y confundirlos hace imposible detectar que el modelo entendió otra cosa.
+- **FR-153**: Refinar DEBE ser opcional y repetible: una solicitud se puede completar o descartar sin haber sido refinada nunca, y volver a refinarse cuantas veces haga falta reemplazando el prompt anterior.
+- **FR-154**: Los estados DEBEN ser PENDIENTE, COMPLETADA y DESCARTADA. Una solicitud pasa a COMPLETADA cuando lo pedido está implementado Y desplegado —no cuando el código compila—, a DESCARTADA cuando se decide no hacerla, y puede volver a PENDIENTE si vuelve a hacer falta. Cada cambio DEBE registrar quién lo hizo y cuándo (FR-045).
+- **FR-155**: La ausencia o el fallo del servicio de IA NO DEBE impedir crear, listar, filtrar ni cambiar de estado ninguna solicitud; solo el refinado se desactiva, avisando en español qué pasó y quién puede arreglarlo (igual que FR-136).
+- **FR-156**: Una solicitud es una NOTA, nunca una orden: nada de lo que se escriba o se refine en este módulo DEBE modificar inventario, documentos, usuarios, roles ni permisos. El módulo escribe únicamente sobre sus propias solicitudes.
+- **FR-157**: La aplicación DEBE permitir filtrar el listado por estado y copiar el prompt refinado en un solo gesto. El prompt existe para salir de la aplicación y llegar a quien implementa; si copiarlo cuesta trabajo, el módulo no cumple su función.
+
 **Auditoría y trazabilidad (transversal)**
 
 - **FR-045**: Toda operación de creación, edición, cambio de estado o anulación DEBE registrar usuario y fecha/hora; los registros con relevancia de inventario DEBEN conservar además el documento asociado.
@@ -999,6 +1061,7 @@ que recordar por separado.
 - **Movimiento de inventario**: registro inmutable de cada afectación de stock; fecha/hora, tipo (entrada/salida/ajuste), producto, cantidad con signo, documento asociado, usuario, cliente/proyecto cuando aplica.
 - **Notificación**: hecho ocurrido del que hay que avisar (US35, FR-139); tipo, título y detalle redactados en el momento, entidad a la que lleva (documento o producto), usuario que lo provocó y fecha/hora. Se guarda UNA vez por hecho, no una por destinatario: quién lo ve se resuelve al consultarlo, contra los permisos vigentes de cada usuario.
 - **Lectura de notificación**: marca de que UN usuario ya leyó UNA notificación (US35, FR-144), con su fecha/hora. Su ausencia es el estado "no leída" — no se borra la notificación al leerla, se anota quién la leyó.
+- **Solicitud de funcionalidad**: pedido de algo que al sistema le falta, anotado por el super administrador (US36, FR-149); título, descripción original en texto libre, prompt refinado opcional con su fecha de generación, estado (Pendiente/Completada/Descartada), autor, fecha de creación y la auditoría de cada cambio de estado. No tiene efecto sobre ningún dato operativo: es la lista de trabajo del sistema sobre sí mismo, no un documento del negocio.
 
 ## Success Criteria *(mandatory)*
 
@@ -1022,6 +1085,7 @@ que recordar por separado.
 - **SC-016**: El 100% de los cambios de costo de producto —vengan de carga masiva, edición manual o recepción de mercancía— queda registrado con costo anterior, costo nuevo, usuario y fecha, y es consultable desde la ficha del producto; el stock de un producto sigue siendo exactamente igual a la suma de sus movimientos después de cualquier cambio de costo.
 - **SC-017**: Cada uno de los 5 listados (inventario, ingresos, salidas, clientes, usuarios) se acota por cualquiera de sus campos filtrables sin recorrer páginas a mano: un filtro devuelve EXACTAMENTE el conjunto esperado (verificado con datos conocidos contra la base real), los filtros activos son visibles y se limpian en un solo paso, y ningún filtro nuevo degrada el tiempo de respuesta por debajo del umbral de SC-008.
 - **SC-018**: Un usuario corrige su propio nombre y correo desde su perfil sin intervención de un Administrador, el cambio se refleja de inmediato en la aplicación sin volver a iniciar sesión, y por esa misma vía le resulta imposible alterar su rol, su estado o su nombre de usuario.
+- **SC-019**: El super administrador anota un pedido en menos de 30 segundos sin pensar en formato, y obtiene de él un prompt de implementación copiable en un gesto; el 100% de los prompts generados incluye criterios de aceptación observables y la sección de lo que quedó sin definir. Ningún otro rol del sistema —incluido un Administrador con la matriz de permisos completa— accede al módulo ni a sus endpoints.
 
 ## Assumptions
 

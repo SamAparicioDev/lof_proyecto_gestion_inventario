@@ -58,6 +58,7 @@ import {
   ArrowSquareOut,
   ChartBar,
   Gauge,
+  NotePencil,
   Package,
   Receipt,
   ShieldCheck,
@@ -86,6 +87,13 @@ export interface ElementoNavegacion {
    * sí podía abrir. El menú escondía una puerta que la aplicación tenía abierta.
    */
   permisosAlternativos?: readonly ClavePermisoUI[];
+  /**
+   * Exclusivo del SUPER ADMINISTRADOR (US36, FR-148). No es un permiso y no puede serlo: este
+   * módulo NO se resuelve contra la matriz, así que no existe casilla en `/roles` que lo conceda.
+   * Un Administrador con los 30 permisos marcados no ve este enlace y recibe 403 si llama a la
+   * ruta — el filtrado de aquí sigue siendo solo UX (FR-003), la autoridad es `SuperAdminGuard`.
+   */
+  soloSuperAdmin?: boolean;
 }
 
 export const ELEMENTOS_NAVEGACION: ElementoNavegacion[] = [
@@ -119,6 +127,9 @@ export const ELEMENTOS_NAVEGACION: ElementoNavegacion[] = [
   { href: '/roles', etiqueta: 'Roles y permisos', icono: ShieldCheck, permiso: PERMISOS.ROLES_GESTIONAR },
   // US15: una sola entrada para TODOS los catálogos de apoyo. Se muestra si la sesión puede
   // administrar ALGUNO de ellos; `/administracion` la lleva a la primera que pueda abrir.
+  // US36: la mesa de trabajo del dueño del sistema. Va al final porque no es del negocio del
+  // inventario, y no lleva permiso porque no hay ninguno que conceder (FR-148).
+  { href: '/solicitudes', etiqueta: 'Solicitudes', icono: NotePencil, soloSuperAdmin: true },
   {
     href: '/administracion',
     etiqueta: 'Administración',
@@ -134,12 +145,19 @@ export const ELEMENTOS_NAVEGACION: ElementoNavegacion[] = [
 /**
  * Elementos del menú que la sesión puede abrir, en el orden del mapa (UX, no seguridad).
  *
- * Tres casos, en este orden: sin permiso declarado se muestra siempre (hoy solo "Panel"); con
- * `permisosAlternativos` basta con tener UNO de ellos (un módulo con varias secciones); con
- * `permiso` hace falta ese exacto.
+ * Cuatro casos, en este orden: `soloSuperAdmin` no mira permisos en absoluto —los concedan todos
+ * o ninguno, decide el rol (US36, FR-148)—; sin permiso declarado se muestra siempre (hoy solo
+ * "Panel"); con `permisosAlternativos` basta con tener UNO de ellos (un módulo con varias
+ * secciones); con `permiso` hace falta ese exacto.
  */
-export function navegacionPermitida(permisos: readonly string[] | undefined | null): ElementoNavegacion[] {
+export function navegacionPermitida(
+  permisos: readonly string[] | undefined | null,
+  esSuperAdmin = false,
+): ElementoNavegacion[] {
   return ELEMENTOS_NAVEGACION.filter((elemento) => {
+    if (elemento.soloSuperAdmin) {
+      return esSuperAdmin;
+    }
     if (elemento.permisosAlternativos) {
       return elemento.permisosAlternativos.some((clave) => tienePermiso(permisos, clave));
     }

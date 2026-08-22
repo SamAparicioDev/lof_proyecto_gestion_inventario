@@ -336,6 +336,76 @@ Son tres permisos normales del catálogo (`modulo = notificaciones`), visibles y
 `/roles` como cualquier otro, y NO reservados (FR-131): suscribir a alguien no le concede ninguna
 capacidad. La descripción que se lee al marcarlos dice explícitamente que hace falta además poder
 ver el módulo — porque una casilla que a veces no hace nada tiene que explicar cuándo.
+## Buzón de solicitudes (`/api/solicitudes`) — solo SUPER ADMINISTRADOR (US36, FR-148…FR-157)
+
+| Método y ruta | Acceso | Query / Body | Respuesta OK |
+|---|---|---|---|
+| `GET /api/solicitudes` | SUPER ADMIN (por rol) | `estado` (`pendiente`\|`completada`\|`descartada`), `pagina`, `porPagina` | `200` `{ datos, total, pagina, porPagina, pendientes }` |
+| `POST /api/solicitudes` | SUPER ADMIN (por rol) | `esquemaCrearSolicitud` | `201` `Solicitud` |
+| `GET /api/solicitudes/:id` | SUPER ADMIN (por rol) | — | `200` `Solicitud` |
+| `PATCH /api/solicitudes/:id` | SUPER ADMIN (por rol) | `esquemaActualizarSolicitud` | `200` `Solicitud` |
+| `PATCH /api/solicitudes/:id/estado` | SUPER ADMIN (por rol) | `esquemaCambiarEstadoSolicitud` | `200` `Solicitud` |
+| `POST /api/solicitudes/:id/refinar` | SUPER ADMIN (por rol) | — | `200` `ResultadoRefinado` |
+
+```json
+{
+  "id": "3f2a…",
+  "titulo": "Filtrar el reporte de consumo por proveedor",
+  "descripcion": "Cuando reviso el consumo de un cliente quiero poder ver solo lo que vino de un proveedor…",
+  "promptRefinado": "## Qué se pide\n…\n## Lo que quedó sin definir\n- …",
+  "refinadoEn": "2026-08-21T15:04:00.000Z",
+  "estado": "pendiente",
+  "creadoPor": { "id": "9c1b…", "nombreCompleto": "Samuel Aparicio" },
+  "creadoEn": "2026-08-21T14:58:00.000Z",
+  "estadoCambiadoPor": null,
+  "estadoCambiadoEn": null
+}
+```
+
+`POST /api/solicitudes/:id/refinar` — el prompt se genera y se GUARDA en la solicitud:
+
+```json
+{ "prompt": "## Qué se pide\n…", "generadoEn": "2026-08-21T15:04:00.000Z", "disponible": true }
+```
+
+Cuando el proveedor no está configurado, falla o está saturado (FR-155):
+
+```json
+{ "prompt": null, "generadoEn": null, "disponible": false, "aviso": "El refinado no está disponible porque…" }
+```
+
+Reglas de la sección:
+
+- **El acceso NO es un permiso** (FR-148): estos seis endpoints se resuelven contra el ROL
+  SUPER ADMINISTRADOR, igual que las capacidades de US30, y NO se declaran en la tabla de permisos.
+  Un Administrador con la matriz completa marcada recibe `403` en los seis. Que no exista la
+  casilla es la garantía: un permiso que no se puede conceder no se concede por error.
+- **`descripcion` es del autor; `promptRefinado` es de la máquina** (FR-152). `PATCH
+  /api/solicitudes/:id` edita título y descripción y NO toca `promptRefinado`; el único que lo
+  escribe es `POST …/refinar`, reemplazando el anterior por completo (FR-153). Nunca se fusionan.
+- **`POST …/refinar` no es idempotente y no pretende serlo**: cada llamada produce un prompt nuevo
+  y sustituye al guardado, con su `refinadoEn`. Volver a refinar tras editar la descripción es el
+  flujo esperado, no un caso raro.
+- **`disponible: false` nunca es un `500`** (FR-155, igual que FR-136 en el asistente): la
+  solicitud existe y se pudo leer; lo que faltó fue el modelo. `aviso` viene YA REDACTADO en
+  español, distingue la causa (clave rechazada, cuota agotada, saturación) y la pantalla lo pinta
+  como aviso, no como prompt. El resto del buzón —crear, listar, filtrar, cambiar estado— sigue
+  respondiendo `200` con el servicio caído.
+- **No hay `DELETE`** a propósito: una solicitud que ya no se va a hacer pasa a `descartada`
+  (FR-154). Borrarla perdería la única traza de que alguna vez se pidió, y la próxima vez volvería
+  a pedirse desde cero. `pendientes` en la respuesta del listado es el contador que importa: lo que
+  de verdad está esperando trabajo.
+- **Las transiciones de estado son libres entre los tres valores** (FR-154), incluida la vuelta de
+  `completada` a `pendiente` cuando la funcionalidad vuelve a hacer falta. Cada cambio escribe
+  `estadoCambiadoPor` y `estadoCambiadoEn` (FR-045). El significado de `completada` es
+  «implementado Y desplegado», no «el código compila» — el contrato no puede verificarlo, así que
+  lo fija aquí para que quien lo marque sepa qué está afirmando.
+- **Este módulo no escribe fuera de sí mismo** (FR-156). No hay ninguna ruta que, desde una
+  solicitud, altere inventario, documentos, usuarios, roles o permisos. Es un cuaderno con estado,
+  no un panel de control.
+- El PROVEEDOR del refinado no aparece en el contrato, igual que en `/api/asistente`: vive detrás
+  del puerto `ModeloConversacional` y cambiarlo no toca estos endpoints.
+
 ## Roles y permisos (`/api/roles`, `/api/permisos`) — solo Administrador (US9, FR-054…FR-059)
 
 | Método y ruta | Permiso | Body (Zod) | Respuesta OK | Errores |

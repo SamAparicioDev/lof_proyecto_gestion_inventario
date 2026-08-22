@@ -523,6 +523,38 @@ es lo que hace que un aviso nuevo no necesite escribir nada por cada destinatari
 Marcar todo como leído es un único `INSERT ... SELECT ... ON CONFLICT DO NOTHING` sobre lo que ese
 usuario puede ver y aún no ha leído.
 
+### solicitudes_funcionalidad (US36, FR-148…FR-157)
+
+| Columna | Tipo | Constraints |
+|---|---|---|
+| `id` | BIGINT PK | |
+| `titulo` | VARCHAR(150) | NOT NULL — de qué va el pedido, en una línea |
+| `descripcion` | TEXT | NOT NULL — el texto libre del autor, TAL CUAL lo escribió (FR-149) |
+| `prompt_refinado` | TEXT | NULL — lo que produjo el modelo; nulo mientras no se haya refinado (FR-153) |
+| `refinado_en` | timestamptz | NULL — cuándo se generó el prompt vigente |
+| `estado` | ENUM `PENDIENTE/COMPLETADA/DESCARTADA` | NOT NULL DEFAULT `PENDIENTE` (FR-150, FR-154) |
+| `creada_por_id` | FK → usuarios | NOT NULL — siempre el super administrador (FR-148) |
+| `creada_en` | timestamptz | NOT NULL DEFAULT now() |
+| `estado_cambiado_por_id` | FK → usuarios | NULL — quién movió el estado por última vez (FR-045) |
+| `estado_cambiado_en` | timestamptz | NULL |
+
+**Dos columnas de texto que nunca se mezclan.** `descripcion` es lo que quiso decir una persona;
+`prompt_refinado` es cómo lo interpretó una máquina. Guardarlos por separado no es redundancia: es
+la única forma de detectar que el modelo entendió otra cosa (FR-152). Refinar sustituye
+`prompt_refinado` por completo y actualiza `refinado_en`; jamás toca `descripcion`.
+
+**El estado se mueve libre entre los tres valores**, incluida la vuelta de `COMPLETADA` a
+`PENDIENTE` cuando lo mismo vuelve a hacer falta (FR-154). No hay máquina de estados restrictiva
+aquí a propósito: esta tabla no gobierna stock ni dinero, y una transición prohibida solo
+conseguiría que el dueño del sistema tenga que crear una fila nueva y pierda la historia.
+
+**No se borra nada.** Un pedido que se abandona pasa a `DESCARTADA` (FR-154). Sin `DELETE` no hace
+falta `ON DELETE CASCADE` en ninguna parte, y la lista sigue contando lo que de verdad pasó.
+
+**Fuera del inventario, por construcción.** Esta tabla no tiene ninguna FK hacia productos,
+documentos ni movimientos, y nada la referencia a ella. Es un cuaderno con estado que vive al lado
+del sistema, no dentro de su modelo de negocio (FR-156).
+
 ## Relaciones (resumen)
 
 ```text

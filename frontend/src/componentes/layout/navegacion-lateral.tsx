@@ -25,9 +25,15 @@ function esRutaActiva(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function NavegacionLateral({ permisos }: { permisos: string[] }) {
+export function NavegacionLateral({
+  permisos,
+  esSuperAdmin = false,
+}: {
+  permisos: string[];
+  esSuperAdmin?: boolean;
+}) {
   const pathname = usePathname();
-  const elementos = navegacionPermitida(permisos);
+  const elementos = navegacionPermitida(permisos, esSuperAdmin);
 
   return (
     <nav id="navlist" aria-label="Navegación principal" className="flex flex-col gap-0.5">

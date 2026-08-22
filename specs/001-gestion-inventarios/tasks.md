@@ -739,6 +739,39 @@ Proveedores — MISMO patrón que categorías (FR-091), con dos diferencias que 
 
 ---
 
+## Phase 40: User Story 36 - Pedirle al sistema lo que le falta (Priority: P3)
+
+**Goal**: Que el dueño del sistema anote lo que le falta sin perderlo, lo refine en un prompt de implementación copiable y sepa siempre qué está pendiente de verdad (FR-148…FR-157)
+
+**Independent Test**: El super administrador anota tres pedidos, refina uno, copia el prompt y filtra por estado; un Administrador con la matriz completa no ve el módulo ni alcanza sus endpoints (US36-AS2)
+
+- [x] T273 [US36] Dominio: entidad `SolicitudFuncionalidad` con su enum de estado y las transiciones libres entre los tres valores (FR-154), más el puerto `RepositorioSolicitudes`
+- [x] T274 [US36] Esquemas Zod compartidos (`esquemaCrearSolicitud`, `esquemaActualizarSolicitud`, `esquemaCambiarEstadoSolicitud`) + tipos del contrato en `@trazo/compartido`, con mensajes en español que nombren el campo
+- [x] T275 [US36] Prisma: modelo `SolicitudFuncionalidad` + migración con la tabla y su índice por `estado`. **Sin permisos nuevos**: el acceso es por ROL (FR-148), así que no hay INSERT de permiso que olvidar en producción
+- [x] T276 [US36] Adaptador Prisma `repositorio-solicitudes.prisma.ts`: alta, edición, listado paginado y filtrado por estado con su contador de pendientes, y cambio de estado con su auditoría
+- [x] T277 [US36] Aplicación: casos de uso de crear, listar, editar y cambiar estado, con TSDoc `FR-###`. El texto del autor NUNCA se sobrescribe al refinar (FR-152)
+- [x] T278 [US36] Aplicación: `RefinarSolicitudCasoUso` sobre el puerto `ModeloConversacional` que ya existe — plantilla fija con la sección OBLIGATORIA de lo que quedó sin definir (FR-151), y degradación en español sin `500` cuando el proveedor falta o falla (FR-155)
+- [x] T279 [US36] Guard/decorador de SUPER ADMINISTRADOR reutilizando el criterio de US30, aplicado a los seis endpoints: el módulo NO se declara como permiso concedible (FR-148)
+- [x] T280 [US36] `GET/POST /api/solicitudes`, `GET/PATCH /api/solicitudes/:id`, `PATCH /api/solicitudes/:id/estado`, `POST /api/solicitudes/:id/refinar` — controlador delgado, pipe Zod y contrato de [contracts/api-rest.md](./contracts/api-rest.md) al pie de la letra
+- [x] T281 [US36] Frontend `/solicitudes`: alta rápida, listado con filtro por estado y contador de pendientes, botones de completar/descartar/reabrir, y el prompt refinado con copiar-en-un-gesto (FR-157). El enlace solo aparece para el super administrador
+- [x] T282 [P] [US36] Pruebas: transiciones de estado y plantilla del refinado (unitarias); **acceso denegado a un Administrador con TODOS los permisos marcados** y buzón plenamente operativo con el modelo caído (integración, SC-019) — 11 unitarias + 9 de integración EN VERDE (2026-08-21). La suite de integración cazó un defecto real antes de desplegar: `POST /:id/refinar` respondía 201 (el defecto de NestJS para `@Post`) donde el contrato dice 200, porque no crea ningún recurso — corregido con `@HttpCode(200)`.
+
+**Checkpoint**: El buzón guarda, refina y filtra; nadie salvo el super administrador lo alcanza, y con la IA apagada todo sigue funcionando salvo el botón de refinar
+
+---
+
+## Phase 41: Corrección de responsividad — la navegación en celular (US34, FR-137)
+
+**Goal**: Que desde un teléfono se pueda llegar a TODA la aplicación, no solo a los avisos (US34-AS5)
+
+**Independent Test**: A 375 px, la barra es una cabecera con logotipo, campana y menú; el menú abre un panel con los enlaces ETIQUETADOS, el perfil, el tema y el cierre de sesión, y la página no desplaza en horizontal
+
+- [x] T283 [US34] `MenuMovil` (panel desplegable) reemplaza la tira horizontal de iconos en <=900px: `#navlist` y `#sideuser` se ocultan, la campana se encoge a su icono —su `width:100%` inline era lo que se comía la barra— y el bloque de sesión completo pasa al panel. Se retira `#cerrar-sesion-movil` y la variante `soloIcono` de `BotonCerrarSesion`, que era un parche del síntoma
+
+**Checkpoint**: Un super administrador (13 enlaces) navega la aplicación entera desde un celular
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -830,7 +863,7 @@ persona: orden estricto de fases 1→10.
 
 ## Notes
 
-- Total: **248 tareas** (las 172 del plan original más las historias pedidas sobre la marcha, US14…US35 y la decisión de costo de la Phase 38); recuento original abajo: **172 tareas** (Setup 7, Foundational 20, US1 11, US2 8, US3 12, US5 8, US4 8, US6 5, US7 5, US8 8, Polish 6, US9 11, Experiencia de uso 4, US10 4, US11 6, US12 6, US13 10); **MVP = 66 tareas** (T001–T066). Siete bloques se agregaron fuera del plan original, a pedido directo del dueño del proyecto: US8/carga masiva (T091-T098, ver research R15), US9/roles y permisos (T099-T109, ver research R16), la Phase 13 de experiencia de uso (T110-T113, cierra huecos detectados usando el sistema en vivo), US10/panel (T114-T117), US11/exportación universal (T118-T123), US12/costo con historial (T124-T129) y US13/filtrado de listados (T130-T139, 2026-08-12).
+- Total: **258 tareas** (las 172 del plan original más las historias pedidas sobre la marcha, US14…US36 y la decisión de costo de la Phase 38); recuento original abajo: **172 tareas** (Setup 7, Foundational 20, US1 11, US2 8, US3 12, US5 8, US4 8, US6 5, US7 5, US8 8, Polish 6, US9 11, Experiencia de uso 4, US10 4, US11 6, US12 6, US13 10); **MVP = 66 tareas** (T001–T066). Siete bloques se agregaron fuera del plan original, a pedido directo del dueño del proyecto: US8/carga masiva (T091-T098, ver research R15), US9/roles y permisos (T099-T109, ver research R16), la Phase 13 de experiencia de uso (T110-T113, cierra huecos detectados usando el sistema en vivo), US10/panel (T114-T117), US11/exportación universal (T118-T123), US12/costo con historial (T124-T129) y US13/filtrado de listados (T130-T139, 2026-08-12). US36/buzón de solicitudes del super administrador (T273-T282, 2026-08-21) es el primer bloque que NO es del negocio del inventario: es la herramienta con la que el dueño anota y refina lo que vendrá después, y por eso vive fuera de la matriz de permisos.
 - [P] = archivos distintos sin dependencias pendientes dentro de su fase
 - Cada checkpoint de historia es un incremento demostrable e independientemente testeable
 - Toda tarea de backend respeta la regla de dependencia y las convenciones de [docs/arquitectura.md](../../docs/arquitectura.md); TSDoc con `FR-###` obligatorio en casos de uso, puertos y controladores

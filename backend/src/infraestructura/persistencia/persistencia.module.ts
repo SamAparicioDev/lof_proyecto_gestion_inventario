@@ -55,11 +55,13 @@ import { REPOSITORIO_ORDENES_COMPRA } from '../../dominio/puertos/repositorio-or
 import { SUGERENCIAS_COMPRA } from '../../dominio/puertos/sugerencias-compra';
 import { REPOSITORIO_ROLES } from '../../dominio/puertos/repositorio-roles';
 import { REPOSITORIO_SALIDAS } from '../../dominio/puertos/repositorio-salidas';
+import { REPOSITORIO_SOLICITUDES } from '../../dominio/puertos/repositorio-solicitudes';
 import { ContadoresPrisma } from './contadores.prisma';
 import { PrismaService } from './prisma.service';
 import { RepositorioClientesPrisma } from './repositorio-clientes.prisma';
 import { RepositorioHistorialCostosPrisma } from './repositorio-historial-costos.prisma';
 import { RepositorioNotificacionesPrisma } from './repositorio-notificaciones.prisma';
+import { RepositorioSolicitudesPrisma } from './repositorio-solicitudes.prisma';
 import { RepositorioIngresosPrisma } from './repositorio-ingresos.prisma';
 import { RepositorioMovimientosPrisma } from './repositorio-movimientos.prisma';
 import { RepositorioPermisosPrisma } from './repositorio-permisos.prisma';
@@ -98,6 +100,7 @@ import { UnidadDeTrabajo } from './unidad-de-trabajo';
     { provide: REPOSITORIO_PERMISOS, useClass: RepositorioPermisosPrisma },
     { provide: REPOSITORIO_HISTORIAL_COSTOS, useClass: RepositorioHistorialCostosPrisma },
     { provide: REPOSITORIO_NOTIFICACIONES, useClass: RepositorioNotificacionesPrisma },
+    { provide: REPOSITORIO_SOLICITUDES, useClass: RepositorioSolicitudesPrisma },
   ],
   exports: [
     PrismaService,
@@ -119,6 +122,7 @@ import { UnidadDeTrabajo } from './unidad-de-trabajo';
     REPOSITORIO_PERMISOS,
     REPOSITORIO_HISTORIAL_COSTOS,
     REPOSITORIO_NOTIFICACIONES,
+    REPOSITORIO_SOLICITUDES,
   ],
 })
 export class PersistenciaModule {}

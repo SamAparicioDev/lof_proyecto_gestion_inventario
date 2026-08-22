@@ -39,11 +39,13 @@ import { ArranqueModule } from './infraestructura/arranque/arranque.module';
 import { PersistenciaModule } from './infraestructura/persistencia/persistencia.module';
 import { JwtAuthGuard } from './interfaces/http/comunes/guards/jwt-auth.guard';
 import { PermisosGuard } from './interfaces/http/comunes/guards/permisos.guard';
+import { SuperAdminGuard } from './interfaces/http/comunes/guards/super-admin.guard';
 import { AuthModule } from './interfaces/http/auth/auth.module';
 import { ClientesModule } from './interfaces/http/clientes/clientes.module';
 import { IngresosModule } from './interfaces/http/ingresos/ingresos.module';
 import { InventarioModule } from './interfaces/http/inventario/inventario.module';
 import { NotificacionesModule } from './interfaces/http/notificaciones/notificaciones.module';
+import { SolicitudesModule } from './interfaces/http/solicitudes/solicitudes.module';
 import { PanelModule } from './interfaces/http/panel/panel.module';
 import { ProductosModule } from './interfaces/http/productos/productos.module';
 import { ReportesModule } from './interfaces/http/reportes/reportes.module';
@@ -100,11 +102,15 @@ import { UsuariosModule } from './interfaces/http/usuarios/usuarios.module';
     // US35: la bandeja de avisos. Solo lectura — la emisión vive en los módulos que cambian
     // el estado (ingresos, salidas, inventario).
     NotificacionesModule,
+    // US36: el buzón del super administrador — sus seis endpoints se resuelven por ROL.
+    SolicitudesModule,
   ],
   controllers: [ControladorSalud],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: PermisosGuard },
+    // US36: corre después de los otros dos y solo mira los endpoints con @SoloSuperAdmin().
+    { provide: APP_GUARD, useClass: SuperAdminGuard },
   ],
 })
 export class AppModule {}
