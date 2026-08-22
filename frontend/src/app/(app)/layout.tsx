@@ -38,7 +38,7 @@ import { recibeAvisos } from '@/lib/permisos';
 import { CampanaNotificaciones } from '@/componentes/layout/campana-notificaciones';
 import { NavegacionLateral } from '@/componentes/layout/navegacion-lateral';
 import { BotonCerrarSesion } from '@/componentes/layout/boton-cerrar-sesion';
-import { BotonTema } from '@/componentes/layout/boton-tema';
+import { InterruptorTema } from '@/componentes/layout/interruptor-tema';
 import { MenuMovil } from '@/componentes/layout/menu-movil';
 
 const RUTA_CAMBIAR_PASSWORD = '/cambiar-password';
@@ -102,7 +102,7 @@ export default async function LayoutApp({ children }: { children: React.ReactNod
             </Link>
             {/* US19 (FR-108): el tema se cambia desde donde ya están los controles de la
                 sesión, que es el sitio del que el usuario se acuerda cuando lo busca. */}
-            <BotonTema />
+            <InterruptorTema />
             <BotonCerrarSesion />
           </div>
 

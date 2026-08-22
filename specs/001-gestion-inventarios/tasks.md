@@ -808,6 +808,17 @@ Proveedores — MISMO patrón que categorías (FR-091), con dos diferencias que 
 
 ---
 
+## Phase 44: El tema se cambia con un interruptor, no con un botón (US19, FR-108)
+
+**Goal**: Que el control del tema diga en qué modo se está, no a cuál se iría (FR-108)
+
+**Independent Test**: El control se ve como interruptor, su posición coincide con el tema activo al cargar y al alternar, y funciona con teclado
+
+- [x] T298 [US19] `InterruptorTema` reemplaza a `BotonTema` en los tres sitios donde vivía (pie de la barra lateral, menú desplegable de celular y `/login`), con una clase `.switch` nueva en la capa propia de `globals.css` siguiendo el idioma de `.radio`/`.seg` de Nocturne: `<input type="checkbox" role="switch">` real y escondido, hermano estilizado. La etiqueta pasa a ser fija ("Modo claro") y el icono acompaña al estado ACTUAL, no al siguiente. **Primera solicitud llegada por el buzón de US36**, refinada con el módulo y entregada como prompt
+
+**Checkpoint**: El interruptor refleja el tema activo en todo momento, en escritorio y en celular
+
+---
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -899,7 +910,7 @@ persona: orden estricto de fases 1→10.
 
 ## Notes
 
-- Total: **272 tareas** (las 172 del plan original más las historias pedidas sobre la marcha, US14…US38 y la decisión de costo de la Phase 38); recuento original abajo: **172 tareas** (Setup 7, Foundational 20, US1 11, US2 8, US3 12, US5 8, US4 8, US6 5, US7 5, US8 8, Polish 6, US9 11, Experiencia de uso 4, US10 4, US11 6, US12 6, US13 10); **MVP = 66 tareas** (T001–T066). Siete bloques se agregaron fuera del plan original, a pedido directo del dueño del proyecto: US8/carga masiva (T091-T098, ver research R15), US9/roles y permisos (T099-T109, ver research R16), la Phase 13 de experiencia de uso (T110-T113, cierra huecos detectados usando el sistema en vivo), US10/panel (T114-T117), US11/exportación universal (T118-T123), US12/costo con historial (T124-T129) y US13/filtrado de listados (T130-T139, 2026-08-12). US36/buzón de solicitudes del super administrador (T273-T282, 2026-08-21) es el primer bloque que NO es del negocio del inventario: es la herramienta con la que el dueño anota y refina lo que vendrá después, y por eso vive fuera de la matriz de permisos. US37/inventario inmóvil (T284-T290) y US38/valorización a una fecha (T291-T297, ambas 2026-08-22) son los dos primeros bloques de SOLO LECTURA: ni una tabla, ni un permiso, ni un endpoint de escritura — responden preguntas nuevas sobre datos que el registro inmutable de movimientos (FR-046) y el de costos (FR-072) ya guardaban desde el primer día.
+- Total: **273 tareas** (las 172 del plan original más las historias pedidas sobre la marcha, US14…US38 y la decisión de costo de la Phase 38); recuento original abajo: **172 tareas** (Setup 7, Foundational 20, US1 11, US2 8, US3 12, US5 8, US4 8, US6 5, US7 5, US8 8, Polish 6, US9 11, Experiencia de uso 4, US10 4, US11 6, US12 6, US13 10); **MVP = 66 tareas** (T001–T066). Siete bloques se agregaron fuera del plan original, a pedido directo del dueño del proyecto: US8/carga masiva (T091-T098, ver research R15), US9/roles y permisos (T099-T109, ver research R16), la Phase 13 de experiencia de uso (T110-T113, cierra huecos detectados usando el sistema en vivo), US10/panel (T114-T117), US11/exportación universal (T118-T123), US12/costo con historial (T124-T129) y US13/filtrado de listados (T130-T139, 2026-08-12). US36/buzón de solicitudes del super administrador (T273-T282, 2026-08-21) es el primer bloque que NO es del negocio del inventario: es la herramienta con la que el dueño anota y refina lo que vendrá después, y por eso vive fuera de la matriz de permisos. US37/inventario inmóvil (T284-T290) y US38/valorización a una fecha (T291-T297, ambas 2026-08-22) son los dos primeros bloques de SOLO LECTURA: ni una tabla, ni un permiso, ni un endpoint de escritura — responden preguntas nuevas sobre datos que el registro inmutable de movimientos (FR-046) y el de costos (FR-072) ya guardaban desde el primer día.
 - [P] = archivos distintos sin dependencias pendientes dentro de su fase
 - Cada checkpoint de historia es un incremento demostrable e independientemente testeable
 - Toda tarea de backend respeta la regla de dependencia y las convenciones de [docs/arquitectura.md](../../docs/arquitectura.md); TSDoc con `FR-###` obligatorio en casos de uso, puertos y controladores

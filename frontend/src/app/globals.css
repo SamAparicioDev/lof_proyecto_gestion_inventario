@@ -430,6 +430,55 @@ select.input option { background: #232532; color: #e9e9ed; }
   overflow-y: auto;
 }
 
+/* — interruptor (.switch) — capa PROPIA, nunca dentro del bloque VENDORED.
+   Nocturne no trae control de encendido/apagado: sus parientes más cercanos son `.radio` y
+   `.seg`, que eligen ENTRE opciones. Este se agrega aquí siguiendo su MISMO idioma —un
+   `<input>` real escondido y un hermano estilizado que pinta el estado— para que herede sin
+   esfuerzo el foco, el teclado y el soporte de lectores de pantalla del control nativo. Un
+   `<div>` con `onClick` se vería igual y no sería un interruptor para nadie que no use el ratón.
+
+   Todos los valores salen de los tokens (`--color-*`, `--radius-*`), así que el modo claro lo
+   recolorea solo. Es deliberado que el propio control del tema no tenga un solo color a mano. */
+.switch {
+  display: inline-flex; align-items: center; gap: 10px;
+  cursor: pointer; font-size: 13px; user-select: none;
+  /* La MISMA caja que un `.btn.btn-ghost`, que es su vecino en la barra lateral: mismo relleno
+     vertical, el `padding-inline` de `.btn-ghost` y un borde transparente que ocupa el mismo
+     píxel que el suyo. Sin esto el interruptor arranca seis píxeles a la derecha del icono de
+     abajo, que es de esas desalineaciones que no se saben nombrar pero se ven. */
+  padding: var(--space-2) var(--space-1);
+  border: 1px solid transparent;
+}
+.switch input {
+  position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none;
+}
+.switch .via {
+  position: relative; flex: none;
+  width: 34px; height: 19px; border-radius: 999px;
+  background: color-mix(in srgb, var(--color-text) 18%, transparent);
+  border: 1px solid var(--color-divider);
+  transition: background 140ms ease, border-color 140ms ease;
+}
+.switch .via::after {
+  content: ''; position: absolute; top: 2px; left: 2px;
+  width: 13px; height: 13px; border-radius: 50%;
+  background: var(--color-text);
+  transition: transform 140ms ease, background 140ms ease;
+}
+.switch:hover .via { border-color: var(--color-accent); }
+.switch input:checked + .via {
+  background: var(--color-accent); border-color: var(--color-accent);
+}
+.switch input:checked + .via::after {
+  transform: translateX(15px); background: var(--color-accent-100, #fff);
+}
+.switch input:focus-visible + .via { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+/* Quien pidió no ver animaciones no las ve: el interruptor salta de estado, que sigue siendo
+   perfectamente legible. */
+@media (prefers-reduced-motion: reduce) {
+  .switch .via, .switch .via::after { transition: none; }
+}
+
 /* Tarjeta del panel de control que ES un enlace (US10/T116,
    `componentes/panel/tarjeta-cifra.tsx`): cada cifra del panel navega al listado ya filtrado
    por ese criterio (FR-061), así que la tarjeta entera es interactiva — y Nocturne exige que

@@ -13,7 +13,7 @@ import { Suspense } from 'react';
 import { LogoLof } from '@/componentes/comunes/logo-lof';
 import type { Metadata } from 'next';
 import { FormularioLogin } from '@/componentes/auth/formulario-login';
-import { BotonTema } from '@/componentes/layout/boton-tema';
+import { InterruptorTema } from '@/componentes/layout/interruptor-tema';
 
 export const metadata: Metadata = {
   title: 'Iniciar sesión — LOF',
@@ -28,7 +28,7 @@ export default function PaginaLogin() {
       {/* US19: el control también aquí — quien prefiere claro no debería tener que iniciar
           sesión en oscuro para poder cambiarlo después. */}
       <div className="absolute right-4 top-4">
-        <BotonTema soloIcono />
+        <InterruptorTema />
       </div>
 
       <div className="flex w-full max-w-[380px] flex-col gap-5">

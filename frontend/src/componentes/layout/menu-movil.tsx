@@ -37,7 +37,7 @@ import { List, X } from '@phosphor-icons/react';
 import { navegacionPermitida } from '@/lib/navegacion';
 import { iniciales } from '@/lib/formato';
 import { BotonCerrarSesion } from './boton-cerrar-sesion';
-import { BotonTema } from './boton-tema';
+import { InterruptorTema } from './interruptor-tema';
 
 export function MenuMovil({
   permisos,
@@ -175,7 +175,7 @@ export function MenuMovil({
                 <div className="text-muted text-[11px]">{nombreRol}</div>
               </div>
             </Link>
-            <BotonTema />
+            <InterruptorTema />
             <BotonCerrarSesion />
           </div>
         </div>
